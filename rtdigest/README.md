@@ -19,7 +19,7 @@ Other properties stay roughly the same:
 
 ## Usage
 
-Entire library is a [single header file](/include/rtdigest.h).
+Entire library is a [single header file](/rtdigest/include/rtdigest.h).
 
 API is very simple:
 * constructor: takes max clusters count and extra buffer size as parameters. These parameters allow making CPU/memory/accuracy tradeoffs;
@@ -39,13 +39,13 @@ Facebook's [folly implementation](https://github.com/facebook/folly/blob/master/
 
 This chart shows 4th degree scaling two-tail function:
 
-![two-tail 4th degree function](/tests/data/pow4_two_side.png)
+![two-tail 4th degree function](/rtdigest/tests/data/pow4_two_side.png)
 
 [interactive chart](https://www.desmos.com/calculator/oivhqztran)
 
 Additionally, we can shift the plateu to improve accuracy at that quantile (0.99 in this case): 
 
-![p99-focused 4th degree function](/tests/data/pow4_q99.png)
+![p99-focused 4th degree function](/rtdigest/tests/data/pow4_q99.png)
 
 [interactive chart](https://www.desmos.com/calculator/ubccsunfpd).
 
@@ -94,10 +94,10 @@ There's no detailed study done, just the basic check that performance is in the 
 ```make precision```
 
 Precision test measures the relative width of the interval. The test consists of two parts:
-* [c++ app](/tests/rtdigest_precision.cpp) which generates data and logs the outcome;
-* [R plot](/tests/precision_plot.r) which plots the images below
+* [c++ app](/rtdigest/tests/rtdigest_precision.cpp) which generates data and logs the outcome;
+* [R plot](/rtdigest/tests/precision_plot.r) which plots the images below
 
-![normal](/tests/data/precision_normal.png)
+![normal](/rtdigest/tests/data/precision_normal.png)
 
 Some observations:
 * Interval width shrinks as the number of clusters increase;
