@@ -10,3 +10,7 @@ Requires [b63](https://github.com/okuvshynov/b63) and runs on Apple M1. R with g
 ## rtdigest
 
 T-Digest implementation which keeps track of min/max instead of mean, thus can return the interval for the quantile.
+
+## bswap
+
+Experimenting with partial byte swaps
