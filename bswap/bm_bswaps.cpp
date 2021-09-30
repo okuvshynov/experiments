@@ -2,69 +2,56 @@
 
 #include <b63/b63.h>
 #include <b63/counters/osx_kperf.h>
+#include <b63/counters/cycles.h>
 
 #include <cstdint>
 #include <vector>
 
-B63_BENCHMARK(bswaps_shifts, n) {
-  std::vector<uint64_t> v;
-  uint64_t res = 0;
-  B63_SUSPEND {
-    for (int i = 0; i < 1001002; i++) {
-      v.push_back(i);
-    }
-  }
+B63_BASELINE(naive, n) {
+  int res = 0;
   for (int i = 0; i < n; i++) {
-    for (auto vv: v) {
-      bswap8b(reinterpret_cast<uint8_t*>(&vv), 1);
-      res += vv;
-      bswap8b(reinterpret_cast<uint8_t*>(&vv), 2);
-      res += vv;
-      bswap8b(reinterpret_cast<uint8_t*>(&vv), 3);
-      res += vv;
-      bswap8b(reinterpret_cast<uint8_t*>(&vv), 4);
-      res += vv;
-      bswap8b(reinterpret_cast<uint8_t*>(&vv), 6);
-      res += vv;
-      bswap8b(reinterpret_cast<uint8_t*>(&vv), 7);
-      res += vv;
-      bswap8b(reinterpret_cast<uint8_t*>(&vv), 8);
-      res += vv;
-    }
+    uint8_t y[16] = {2, 9, 4, 5, 11, 12, 10, 1, 8, 13, 3, 6, 7, 0, 0, 0};
+    res += topswops_naive(y);
   }
   B63_KEEP(res);
-
 }
 
-
-B63_BENCHMARK(bswaps_naive, n) {
-  std::vector<uint64_t> v;
-  uint64_t res = 0;
-  B63_SUSPEND {
-    for (int i = 0; i < 1001002; i++) {
-      v.push_back(i);
-    }
-  }
+B63_BENCHMARK(unrolled, n) {
+  int res = 0;
   for (int i = 0; i < n; i++) {
-    for (auto vv: v) {
-      bswap_naive(reinterpret_cast<uint8_t*>(&vv), 1);
-      res += vv;
-      bswap_naive(reinterpret_cast<uint8_t*>(&vv), 2);
-      res += vv;
-      bswap_naive(reinterpret_cast<uint8_t*>(&vv), 3);
-      res += vv;
-      bswap_naive(reinterpret_cast<uint8_t*>(&vv), 4);
-      res += vv;
-      bswap_naive(reinterpret_cast<uint8_t*>(&vv), 6);
-      res += vv;
-      bswap_naive(reinterpret_cast<uint8_t*>(&vv), 7);
-      res += vv;
-      bswap_naive(reinterpret_cast<uint8_t*>(&vv), 8);
-      res += vv;
-    }
+    uint8_t y[16] = {2, 9, 4, 5, 11, 12, 10, 1, 8, 13, 3, 6, 7, 0, 0, 0};
+    res += topswops_unrolled(y);
   }
   B63_KEEP(res);
+}
 
+B63_BENCHMARK(unrolled_, n) {
+  int res = 0;
+  for (int i = 0; i < n; i++) {
+    uint8_t y[16] = {2, 9, 4, 5, 11, 12, 10, 1, 8, 13, 3, 6, 7, 0, 0, 0};
+    res += topswops_unrolled_(y);
+  }
+  B63_KEEP(res);
+}
+
+B63_BENCHMARK(neon2, n) {
+  load_neon_table();
+  int res = 0;
+  for (int i = 0; i < n; i++) {
+    uint8_t y[16] = {2, 9, 4, 5, 11, 12, 10, 1, 8, 13, 3, 6, 7, 0, 0, 0};
+    res += topswops_neon2(y);
+  }
+  B63_KEEP(res);
+}
+
+B63_BENCHMARK(neon, n) {
+  load_neon_table();
+  int res = 0;
+  for (int i = 0; i < n; i++) {
+    uint8_t y[16] = {2, 9, 4, 5, 11, 12, 10, 1, 8, 13, 3, 6, 7, 0, 0, 0};
+    res += topswops_neon(y);
+  }
+  B63_KEEP(res);
 }
 
 int main(int argc, char **argv) {
