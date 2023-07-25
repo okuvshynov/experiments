@@ -5,7 +5,6 @@ from contextlib import nullcontext
 tokens = [''] + [*'ABCDEFGHIJKLMNOPQRSTUVWXYZ']
 shifts = {token: index for index, token in enumerate(tokens) if token != ''}
 
-
 def cursor_decode(value):
     res = []
     offset = 0

@@ -2,7 +2,6 @@ import os
 import pickle
 import numpy as np
 import torch
-import sys
 
 def cursor_encode(value):
     res = ''
@@ -12,22 +11,11 @@ def cursor_encode(value):
         res += d + c
     return res
 
-def add_cursor(value):
-    delim = '<'
-    curr = ''
-    for ch in value[::-1]:
-        curr += ch + delim
-        delim += '<'
-    
-    return curr[:len(curr) - len(delim) + 1]
-
-
 def prepare(mode='', digits=4, samples=10000):
     if mode not in ['', 'inverted', 'cursor']:
         print('mode mush be "inverted" or "cursor"')
         exit(1)
 
-    
     data = ''
     masks = []
     mn = 10 ** (digits - 1)
@@ -85,10 +73,10 @@ def prepare(mode='', digits=4, samples=10000):
     train_masks = np.array(train_masks, dtype=np.uint16)
     val_masks = np.array(val_masks, dtype=np.uint16)
 
-    train_ids.tofile(os.path.join(os.path.dirname(__file__), 'train.bin'))
-    val_ids.tofile(os.path.join(os.path.dirname(__file__), 'val.bin'))
-    train_masks.tofile(os.path.join(os.path.dirname(__file__), 'train_masks.bin'))
-    val_masks.tofile(os.path.join(os.path.dirname(__file__), 'val_masks.bin'))
+    train_ids.tofile(os.path.join(os.path.dirname(__file__), 'data', 'train.bin'))
+    val_ids.tofile(os.path.join(os.path.dirname(__file__), 'data', 'val.bin'))
+    train_masks.tofile(os.path.join(os.path.dirname(__file__), 'data', 'train_masks.bin'))
+    val_masks.tofile(os.path.join(os.path.dirname(__file__), 'data', 'val_masks.bin'))
 
     # save the meta information as well, to help us encode/decode later
     meta = {
@@ -97,8 +85,6 @@ def prepare(mode='', digits=4, samples=10000):
         'stoi': stoi,
     }
 
-    with open(os.path.join(os.path.dirname(__file__), 'meta.pkl'), 'wb') as f:
+    with open(os.path.join(os.path.dirname(__file__), 'data', 'meta.pkl'), 'wb') as f:
         pickle.dump(meta, f)
 
-mode = sys.argv[1] if len(sys.argv) > 1 else ''
-prepare(mode=mode, digits=5)

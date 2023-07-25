@@ -9,9 +9,7 @@ import torch
 
 from model import GPTConfig, GPT
 from calc_test import Evaluator
-
-eval_only = False # if True, script exits right after the first eval
-init_from = 'scratch' # 'scratch' or 'resume'
+from prepare import prepare
 
 # data
 dataset = 'addition'
@@ -47,6 +45,7 @@ invert_eval = False
 masked = True
 calc_iters = 200
 digits = 5
+mode = 'cursor' # 'cursor', 'inverted' or ''
 
 out_dir = 'out-addition'
 eval_interval = 250 # keep frequent because we'll overfit
@@ -69,6 +68,9 @@ device_type = 'cuda' if 'cuda' in device else 'cpu' # for later use in torch.aut
 # note: float16 data type will automatically use a GradScaler
 ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[dtype]
 ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
+
+# preparing data
+prepare(mode=mode, digits=digits)
 
 # poor man's data loader
 data_dir = os.path.join('data')
@@ -111,38 +113,14 @@ evaluator = Evaluator(meta_path)
 # model init
 model_args = dict(n_layer=n_layer, n_head=n_head, n_embd=n_embd, block_size=block_size,
                   bias=bias, vocab_size=None, dropout=dropout) # start with model_args from command line
-if init_from == 'scratch':
-    # init a new model from scratch
-    print("Initializing a new model from scratch")
-    # determine the vocab size we'll use for from-scratch training
-    if meta_vocab_size is None:
-        print("defaulting to vocab_size of GPT-2 to 50304 (50257 rounded up for efficiency)")
-    model_args['vocab_size'] = meta_vocab_size if meta_vocab_size is not None else 50304
-    gptconf = GPTConfig(**model_args)
-    model = GPT(gptconf)
-elif init_from == 'resume':
-    print(f"Resuming training from {out_dir}")
-    # resume training from a checkpoint.
-    ckpt_path = os.path.join(out_dir, 'ckpt.pt')
-    checkpoint = torch.load(ckpt_path, map_location=device)
-    checkpoint_model_args = checkpoint['model_args']
-    # force these config attributes to be equal otherwise we can't even resume training
-    # the rest of the attributes (e.g. dropout) can stay as desired from command line
-    for k in ['n_layer', 'n_head', 'n_embd', 'block_size', 'bias', 'vocab_size']:
-        model_args[k] = checkpoint_model_args[k]
-    # create the model
-    gptconf = GPTConfig(**model_args)
-    model = GPT(gptconf)
-    state_dict = checkpoint['model']
-    # fix the keys of the state dictionary :(
-    # honestly no idea how checkpoints sometimes get this prefix, have to debug more
-    unwanted_prefix = '_orig_mod.'
-    for k,v in list(state_dict.items()):
-        if k.startswith(unwanted_prefix):
-            state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
-    model.load_state_dict(state_dict)
-    iter_num = checkpoint['iter_num']
-    best_val_loss = checkpoint['best_val_loss']
+# init a new model from scratch
+print("Initializing a new model from scratch")
+# determine the vocab size we'll use for from-scratch training
+if meta_vocab_size is None:
+    print("defaulting to vocab_size of GPT-2 to 50304 (50257 rounded up for efficiency)")
+model_args['vocab_size'] = meta_vocab_size if meta_vocab_size is not None else 50304
+gptconf = GPTConfig(**model_args)
+model = GPT(gptconf)
 
 # crop down the model block size if desired, using model surgery
 if block_size < model.config.block_size:
@@ -231,9 +209,6 @@ while True:
         eval_rate = evaluator.run(model, ctx=ctx, device=device, invert=invert_eval, iters=calc_iters, digits=digits)
         print(f'{eval_rate} correct rate')
         correct_rates.append((iter_num, eval_rate))
-
-    if iter_num == 0 and eval_only:
-        break
 
     # forward backward update, with optional gradient accumulation to simulate larger batch size
     # and using the GradScaler if data type is float16
