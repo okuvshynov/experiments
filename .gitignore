@@ -1,2 +1,6 @@
 */_out/*
 **/_build/**
+calc/data/*.bin
+calc/data/*.pkl
+calc/**/*.pt
+**/__pycache__/**
