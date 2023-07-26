@@ -73,6 +73,7 @@ def prepare(mode='', digits=4, samples=10000):
     train_masks = np.array(train_masks, dtype=np.uint16)
     val_masks = np.array(val_masks, dtype=np.uint16)
 
+    os.makedirs(os.path.join(os.path.dirname(__file__), 'data'), exist_ok=True)
     train_ids.tofile(os.path.join(os.path.dirname(__file__), 'data', 'train.bin'))
     val_ids.tofile(os.path.join(os.path.dirname(__file__), 'data', 'val.bin'))
     train_masks.tofile(os.path.join(os.path.dirname(__file__), 'data', 'train_masks.bin'))
