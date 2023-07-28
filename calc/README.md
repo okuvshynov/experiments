@@ -9,4 +9,6 @@ Also optionally masking loss for output only, so that we propagate the loss only
 
 Based on https://github.com/karpathy/nanoGPT
 
+inverting idea comes from https://arxiv.org/abs/2307.03381
+
 Licence: MIT

@@ -1,6 +1,3 @@
-import matplotlib.pyplot as plt
-from collections.abc import Iterable
-from numbers import Number
 import math
 
 def percentile(n, percentile):
@@ -32,9 +29,6 @@ def _boxplot_chart(numbers, mn, mx, width=80):
     res = [' '] * width
     if len(numbers) == 0:
         return res
-    if len(numbers) == 1:
-        res[scale(numbers[0])] = '|'
-        return res
 
     min_num, max_num, p25, p50, p75 = compute_stats(numbers)
     p25i = scale(p25)
@@ -58,6 +52,7 @@ def _boxplot_chart(numbers, mn, mx, width=80):
         res[p50i] = ':'
     else:
         # we have at least 2 symbols for 3 marks. In this case, p50 might get overwritten
+        # TODO: this is confusing if p50 is overwritten but p25 and p75 are far from each other 
         res[p50i] = ':'
         res[p25i] = '['
         res[p75i] = ']'
@@ -68,36 +63,47 @@ def _boxplot_chart(numbers, mn, mx, width=80):
 def _boxplot_line(numbers, mn, mx, title='', chart_width=80, left_margin=20):
     chart = _boxplot_chart(numbers, mn, mx, width=chart_width)
     if title != '':
-        title = f'{title}: '
-    #left = f'{title}{mn:.3g}('[-left_margin:]
-    #left = f"{left:>{left_margin}}"
-    #right = f'){mx:<3g}'
-    
+        title = f'{title}|'
+
     left = f'{title}'[-left_margin:]
     left = f"{left:>{left_margin}}"
-    right = ''
+    right = '|'
     return left + ''.join(chart) + right
 
-def boxplot(numbers, mn, mx, title='', width=80):
-    return _boxplot_line(numbers, mn, mx, title=title)
+def _axis_str(mn, mx, chart_width=80, left_margin=20):
+    mn_text, mx_text = f'{mn:.3g}|', f'{mx:.3g}'
+    return f'{mn_text:>{left_margin}}' + '_' * chart_width + f'|{mx_text}'
 
-def boxplots(numbers, chart_width=80):
+def boxplot(numbers, title='', chart_width=80, axis=True, left_margin=20):
+    mn = min(numbers)
+    mx = max(numbers)
+    res = _boxplot_line(numbers, mn, mx, title=title)
+
+    if axis:
+        return [_axis_str(mn, mx, chart_width=chart_width, left_margin=left_margin), res]
+    return [res]
+ 
+def boxplots(numbers, chart_width=80, axis=True, left_margin=20):
     mn = min(min(v) for v in numbers.values())
     mx = max(max(v) for v in numbers.values())
+    res = []
+    if axis:
+        res.append(_axis_str(mn, mx, chart_width=chart_width, left_margin=left_margin))
     for title, values in numbers.items():
-        print(_boxplot_line(values, mn, mx, title=title))
+        res.append(_boxplot_line(values, mn, mx, title=title, chart_width=chart_width, left_margin=left_margin))
+    return res
 
 if __name__ == '__main__':
-    # plt.boxplot([]) <- empty
-    # plt.boxplot([1]) <- single line, no box/whiskers
-    # plt.boxplot([1,2]) <- whiskers at 1, 2, box interpolated
-    # plt.boxplot([1,2,3]) <- whiskers at 1, 3, box interpolated, median at 2
-    #plt.boxplot([1, 2, 100])
-    #plt.show()
     data = {
         'A': [1, 2,3 ,4, 100],
         'B': [-10, -5, -1, -2, -3, -1],
-        'C': [10, 20, 30, 40, 50, 60]
+        'C': [10, 20, 30, 40, 50, 60],
+        'D': [0, 10, 50, 60, 50, 50, 50, 50],
+        'E': [-5, -4, -3, -2, -1, -1, -1, -1, -1, 1],
+        'F': [1]
     }
-    boxplots(data)
-    print(boxplot([1,2], 0, 4, title='2 poindsjkfhkajsdhflkajsdhflkasdjhfts'))
+    for l in boxplots(data):
+        print(l)
+    
+    for l in boxplot([1,2], title='2 poindsjkfhkajsdhflkajsdhflkasdjhfts'):
+        print(l)
