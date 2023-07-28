@@ -1,24 +1,5 @@
 import math
 
-def percentile(n, percentile):
-    index = percentile * (len(n) - 1) / 100
-    if (len(n) - 1) % 100 == 0:
-        return sorted(n)[int(index)]
-    else:
-        lower = sorted(n)[int(index)]
-        upper = sorted(n)[int(index) + 1]
-        interpolation = index - int(index)
-        return lower + (upper - lower) * interpolation
-
-def compute_stats(numbers):
-    numbers = sorted(numbers)  # It's better to sort the numbers only once
-    min_num = numbers[0]
-    max_num = numbers[-1]
-    p25 = percentile(numbers, 25)
-    p50 = percentile(numbers, 50)
-    p75 = percentile(numbers, 75)
-
-    return min_num, max_num, p25, p50, p75
 
 # returns boxplot from 1 series in a list of size 'width'
 def _boxplot_chart(numbers, mn, mx, width=80):
@@ -30,7 +11,7 @@ def _boxplot_chart(numbers, mn, mx, width=80):
     if len(numbers) == 0:
         return res
 
-    min_num, max_num, p25, p50, p75 = compute_stats(numbers)
+    min_num, max_num, p25, p50, p75 = _compute_stats(numbers)
     p25i = scale(p25)
     p75i = scale(p75)
     p50i = scale(p50)
@@ -59,20 +40,23 @@ def _boxplot_chart(numbers, mn, mx, width=80):
 
     return res
 
-# returns line together with title, boundaries and chart
 def _boxplot_line(numbers, mn, mx, title='', chart_width=80, left_margin=20):
     chart = _boxplot_chart(numbers, mn, mx, width=chart_width)
-    if title != '':
+    if left_margin <= 0:
+        left = ''
+    else:
         title = f'{title}|'
-
-    left = f'{title}'[-left_margin:]
-    left = f"{left:>{left_margin}}"
+        left = f'{title}'[-left_margin:]
+        left = f"{left:>{left_margin}}"
+    
     right = '|'
     return left + ''.join(chart) + right
 
 def _axis_str(mn, mx, chart_width=80, left_margin=20):
-    mn_text, mx_text = f'{mn:.3g}|', f'{mx:.3g}'
-    return f'{mn_text:>{left_margin}}' + '_' * chart_width + f'|{mx_text}'
+    mn_text, mx_text = f' {mn:.3g}|'[-left_margin:], f'{mx:.3g}'
+    if left_margin <= 0:
+        return '_' * chart_width + f'|{mx_text}'
+    return '~' * (left_margin - len(mn_text)) + mn_text + '~' * chart_width + f'|{mx_text}'
 
 def boxplot(numbers, title='', chart_width=80, axis=True, left_margin=20):
     mn = min(numbers)
@@ -83,7 +67,7 @@ def boxplot(numbers, title='', chart_width=80, axis=True, left_margin=20):
         return [_axis_str(mn, mx, chart_width=chart_width, left_margin=left_margin), res]
     return [res]
  
-def boxplots(numbers, chart_width=80, axis=True, left_margin=20):
+def boxplot_table(numbers, chart_width=80, axis=True, left_margin=20):
     mn = min(min(v) for v in numbers.values())
     mx = max(max(v) for v in numbers.values())
     res = []
@@ -93,17 +77,39 @@ def boxplots(numbers, chart_width=80, axis=True, left_margin=20):
         res.append(_boxplot_line(values, mn, mx, title=title, chart_width=chart_width, left_margin=left_margin))
     return res
 
+def _percentile(n, percentile):
+    index = percentile * (len(n) - 1) / 100
+    if (len(n) - 1) % 100 == 0:
+        return sorted(n)[int(index)]
+    else:
+        lower = sorted(n)[int(index)]
+        upper = sorted(n)[int(index) + 1]
+        interpolation = index - int(index)
+        return lower + (upper - lower) * interpolation
+
+def _compute_stats(numbers):
+    numbers = sorted(numbers)  # It's better to sort the numbers only once
+    min_num = numbers[0]
+    max_num = numbers[-1]
+    p25 = _percentile(numbers, 25)
+    p50 = _percentile(numbers, 50)
+    p75 = _percentile(numbers, 75)
+
+    return min_num, max_num, p25, p50, p75
+
 if __name__ == '__main__':
     data = {
-        'A': [1, 2,3 ,4, 100],
+        'A': [1, 2, 3,4, 100],
         'B': [-10, -5, -1, -2, -3, -1],
         'C': [10, 20, 30, 40, 50, 60],
         'D': [0, 10, 50, 60, 50, 50, 50, 50],
         'E': [-5, -4, -3, -2, -1, -1, -1, -1, -1, 1],
         'F': [1]
     }
-    for l in boxplots(data):
+    for l in boxplot_table(data, chart_width=80, left_margin=20):
         print(l)
+
+    print()
     
     for l in boxplot([1,2], title='2 poindsjkfhkajsdhflkajsdhflkasdjhfts'):
         print(l)
