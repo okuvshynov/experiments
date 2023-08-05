@@ -11,11 +11,14 @@ import torch.nn as nn
 from torch.nn import functional as F
 import io
 
+torch.manual_seed(18887)
+
 width = 2
 n_layers = 2
 lr = 0.0001
-
-torch.manual_seed(18887)
+batch_size = 8
+X = torch.rand(batch_size, width)
+target = torch.rand(batch_size, width)
 
 # assume we loaded weights for 2 layers
 weights = [torch.rand(width, width), torch.rand(width, width)]
@@ -44,24 +47,6 @@ class Model(nn.Module):
         
     def forward(self, x):
         return self.net(x)
-
-batch_size = 1
-X = torch.rand(batch_size, width)
-target = torch.rand(batch_size, width)
-
-# combined model
-model = Model()
-y = model(X)
-opt = torch.optim.SGD(model.parameters(), lr=lr)
-opt.zero_grad()
-loss1 = F.mse_loss(target, y)
-loss1.backward()
-#print(model.net[0].weight.grad)
-#print(model.net[2].weight.grad)
-opt.step()
-
-#print(model.net[0].weight.data)
-#print(model.net[2].weight.data)
 
 class Chunk:
     def __init__(self, module):
@@ -112,20 +97,39 @@ class Chunk:
 
         return x.grad
 
-chunks = [Chunk(Layer(w)) for w in weights]
 
+# combined model
+model = Model()
+y = model(X)
+opt = torch.optim.SGD(model.parameters(), lr=lr)
+opt.zero_grad()
+loss1 = F.mse_loss(target, y)
+loss1.backward()
+opt.step()
+
+# TODO: HOW DO WE MAKE IT DROP-IN REPLACEMENT FOR A MODEL?
+# something you can just pass to existing training procedure 
+# chunked model
+chunks = [Chunk(Layer(w)) for w in weights]
 curr = X
 
+# forward pass. We don't really need grad here
+# but we don't do eval() either, as layers like dropout
+# operate differently at training/eval modes
 for chunk in chunks:
     curr = chunk.forward(curr)
 
+# compute the loss function. Curr here will require gradient computed
 loss = F.mse_loss(target, curr)
 loss.backward()
 
+# compute gradients and adjust weights in reverse order
 curr_grad = curr.grad
 for chunk in reversed(chunks):
     curr_grad = chunk.backward(curr_grad)
 
+
 # check that weights are same after one optimizer step
+# in combined model and by-chunk
 print(torch.all(torch.isclose(model.net[0].weight.data, chunks[0].load_module().net.weight.data)).item())
 print(torch.all(torch.isclose(model.net[2].weight.data, chunks[1].load_module().net.weight.data)).item())
