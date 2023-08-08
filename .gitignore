@@ -4,3 +4,4 @@ calc/data/*.bin
 calc/data/*.pkl
 calc/**/*.pt
 **/__pycache__/**
+split_model/data/**
