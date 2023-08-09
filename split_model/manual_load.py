@@ -1,6 +1,7 @@
 import pickle
 import sys
 import collections
+import torch
 
 def load_torch_pickle(fpath):
     class DummyObj:
@@ -16,7 +17,7 @@ def load_torch_pickle(fpath):
 
     with open(fpath, 'rb') as f:
         def persistent_load(saved_id):
-            print(f'persistent_load {saved_id}')
+            #print(f'persistent_load {saved_id}')
             typename, storage_type, key, location, numel = saved_id
             return None
         
@@ -25,7 +26,11 @@ def load_torch_pickle(fpath):
         unpickler.persistent_load = persistent_load
 
         result = unpickler.load()
-        print(result)
+        return list(result.keys())
 
 
-load_torch_pickle(sys.argv[1])
+keys = load_torch_pickle(sys.argv[1])
+print(keys)
+
+model_list = [(k, t.shape) for k, t in torch.load(sys.argv[2]).items()]
+print(model_list)
