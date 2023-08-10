@@ -6,16 +6,17 @@ import zipfile
 from collections import OrderedDict
 import json
 import time
+import os
 
 from phantom_model import Transformer as PhantomTransformer, ModelArgs as PhantomModelArgs
 
+llama2_7b_path = sys.argv[1]
+params_path = os.path.join(llama2_7b_path, "params.json")
+weights_path = os.path.join(llama2_7b_path, "consolidated.00.pth")
 
 # use ones from llama2.c
 sys.path.insert(0, '../llama2.c')
 from model import Transformer, ModelArgs
-
-# sys.argv[1] - path to consolidated.00.pth
-# sys.argv[2] - path to params.json
 
 def load_torch_pickle(file):
     class DummyObj:
@@ -42,7 +43,7 @@ def load_torch_pickle(file):
 
 def prepare_llama_config():
     vocab_size = 32000
-    with open(sys.argv[2], 'r') as conf_file:
+    with open(params_path, 'r') as conf_file:
         config = json.loads(conf_file.read())
     
     config['vocab_size'] = vocab_size
@@ -63,7 +64,7 @@ def load_phantom_llama7b():
 def llama7b_torch():
     model = load_llama7b()
 
-    state_dict = torch.load(sys.argv[1])
+    state_dict = torch.load(weights_path)
     
     model.load_state_dict(state_dict, strict=False)
     #print(model)
@@ -71,7 +72,7 @@ def llama7b_torch():
 
 
 def load_phantom_module_list():
-    with zipfile.ZipFile(sys.argv[1]) as checkpoint_zip:
+    with zipfile.ZipFile(weights_path) as checkpoint_zip:
         with checkpoint_zip.open('consolidated/data.pkl', 'r') as pickle_file:
             return load_torch_pickle(pickle_file)
 
@@ -79,7 +80,7 @@ def load_phantom_module_list():
 def populate_phantom_state_dict(module_subset):
     state_dict = OrderedDict()
 
-    with zipfile.ZipFile(sys.argv[1]) as checkpoint_zip:
+    with zipfile.ZipFile(weights_path) as checkpoint_zip:
         for i, module_name in module_subset:
             with checkpoint_zip.open(f'consolidated/data/{i}', 'r') as data_file:
                 buf = data_file.read()
@@ -130,7 +131,7 @@ def llama7b_phantom():
     #print(model)
     return model
 
-device = 'mps'
+device = 'cpu'
 
 batch_size = 1
 X = torch.arange(500 * batch_size).view(batch_size, 500).to(device)
@@ -140,7 +141,6 @@ model = llama7b_phantom().to(device)
 print(f'loaded phantom model in {time.time() - start} seconds')
 start = time.time()
 phantom_y = model(X)
-torch.set_printoptions(profile="full", precision=10)
 print(phantom_y)
 print(f'evaluated phantom model in {time.time() - start} seconds')
 
@@ -182,3 +182,11 @@ output for default torch model and phantom model is same: False
 # Looks like the output is not exactly the same but very close - 
 # I wonder if it's device/precision thing. 
 # Let's check with running both on CPU  
+
+### When both running on CPU we got match.
+
+"""
+...
+evaluated model in 135.04086709022522 seconds
+output for default torch model and phantom model is same: True
+"""

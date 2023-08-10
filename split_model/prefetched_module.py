@@ -16,7 +16,7 @@ class PrefetchedFn(Function):
         input_id = random_id()
         torch.save(input, intermediate_path(input_id))
         ctx.save_for_backward(module_id, input_id, freqs_cos, freqs_sin)
-        module = torch.load(intermediate_path(module_id), map_location=torch.device('mps'))
+        module = torch.load(intermediate_path(module_id), map_location=torch.device('cpu'))
         output = module(input, freqs_cos, freqs_sin)
         return output
 
