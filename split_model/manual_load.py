@@ -25,18 +25,12 @@ def load_torch_pickle(file):
 
     class DummyUnpickler(pickle.Unpickler):
         def find_class(self, module, name):
-            #print(f'custom_find_class {module} {name}')
             if name == 'OrderedDict':
                 return collections.OrderedDict
             return DummyObj
-
-    def persistent_load(saved_id):
-        #print(f'persistent_load {saved_id}')
-        typename, storage_type, key, location, numel = saved_id
-        return None
         
     unpickler = DummyUnpickler(file)
-    unpickler.persistent_load = persistent_load
+    unpickler.persistent_load = lambda _: None
     result = unpickler.load()
 
     return list(result.keys())
@@ -49,27 +43,13 @@ def prepare_llama_config():
     config['vocab_size'] = vocab_size
     return config
 
-def load_llama7b():
-
-    model_conf = ModelArgs(**prepare_llama_config())
-    model = Transformer(model_conf)
-    return model
-
-def load_phantom_llama7b():
-    model_conf = PhantomModelArgs(**prepare_llama_config())
-    model = PhantomTransformer(model_conf)
-    return model
-
 ## loading with torch (default mode)
 def llama7b_torch():
-    model = load_llama7b()
-
-    state_dict = torch.load(weights_path)
-    
+    model_conf = ModelArgs(**prepare_llama_config())
+    model = Transformer(model_conf)
+    state_dict = torch.load(weights_path)    
     model.load_state_dict(state_dict, strict=False)
-    #print(model)
     return model
-
 
 def load_phantom_module_list():
     with zipfile.ZipFile(weights_path) as checkpoint_zip:
@@ -89,37 +69,32 @@ def populate_phantom_state_dict(module_subset):
 
 def llama7b_phantom():
     modules = load_phantom_module_list()
-    model = load_phantom_llama7b()
+    print(f'Loaded {len(modules)} module metadata')
+    model_conf = PhantomModelArgs(**prepare_llama_config())
+    model = PhantomTransformer(model_conf)
+    print('Created blank model')
 
     # first manually populate layers one by one
     for i, phantom_layer in enumerate(model.layers):
+        print(f'processing transformer block {i}')
         prefix = f'layers.{i}.'
         relevant_modules = [(j, k[len(prefix):]) for j, k in enumerate(modules) if k.startswith(prefix)]
-        #print(f'{i} {relevant_modules}')
-        
-        ## we need to 
+
         # a. load these into dictionary
         state_dict = populate_phantom_state_dict(relevant_modules)
-        #print(state_dict)
+        
         # b. fix shapes manually
         # c. load_state_dict
         phantom_layer.populate_state_dict(state_dict)
         
-    # now we need to populate everything except layers using strict=False
+    # now we need to populate everything except transformer block layers with strict=False
     remaining_modules = [(j, k) for j, k in enumerate(modules) if not k.startswith('layers.')]
-    #print(remaining_modules)
-
     state_dict = populate_phantom_state_dict(remaining_modules)
     def fix_shapes_rec(module, prefix=''):
         nonlocal state_dict
         if hasattr(module, 'weight'):
             key = f'{prefix}weight'
-            if key in state_dict.keys():
-                loaded_shape = state_dict[key].shape
-                #print(f'found {key} with shapes {module.weight.shape} and {loaded_shape}.')
-                state_dict[key] = state_dict[key].reshape(module.weight.shape)
-            else:
-                print(f'not found {key}')
+            state_dict[key] = state_dict[key].reshape(module.weight.shape)
 
         for name, child in module._modules.items():
             if child is not None:
@@ -128,28 +103,24 @@ def llama7b_phantom():
 
     fix_shapes_rec(model)
     model.load_state_dict(state_dict, strict=False)
-    #print(model)
+    print('populated all weights to model')
+
     return model
 
 device = 'cpu'
-
 batch_size = 1
 X = torch.arange(500 * batch_size).view(batch_size, 500).to(device)
 
+## Running phantom
 start = time.time()
 model = llama7b_phantom().to(device)
 print(f'loaded phantom model in {time.time() - start} seconds')
 start = time.time()
 phantom_y = model(X)
 print(phantom_y)
-print(f'evaluated phantom model in {time.time() - start} seconds')
+print(f'evaluated phantom model on batch_size={batch_size} in {time.time() - start} seconds')
 
-
-"""
-trying to put whole model to mps produces RuntimeError: MPS backend out of memory:
-model = llama7b_torch().to('mps')
-print(model(X))
-"""
+## Running default
 X = X.to('cpu')
 start = time.time()
 model = llama7b_torch().to('cpu')
@@ -164,8 +135,9 @@ same_y = torch.allclose(phantom_y.cpu(), default_y.cpu())
 print(f'output for default torch model and phantom model is same: {same_y}')
 
 
-# Output from Apple M2 @ 24Gb RAM running on MPS and CPU:
 """
+Output from Apple M2 @ 24Gb RAM running on MPS and CPU:
+
 % python split_model/manual_load.py ../llama-2-7b/consolidated.00.pth ../llama-2-7b/params.json
 loaded phantom model in 88.39778780937195 seconds
 tensor([[[-7.7749,  0.2068,  3.7988,  ..., -2.6116, -3.5703, -1.7604]]],
@@ -177,15 +149,13 @@ tensor([[[-7.7749,  0.2068,  3.7988,  ..., -2.6116, -3.5703, -1.7604]]],
 evaluated model in 129.28788685798645 seconds
 output for default torch model and phantom model is same: False
 
-"""
 
-# Looks like the output is not exactly the same but very close - 
-# I wonder if it's device/precision thing. 
-# Let's check with running both on CPU  
+Looks like the output is not exactly the same but very close - 
+I wonder if it's device/precision thing. 
+Let's check with running both on CPU  
 
-### When both running on CPU we got match.
+When both running on CPU we got match.
 
-"""
 ...
 evaluated model in 135.04086709022522 seconds
 output for default torch model and phantom model is same: True
