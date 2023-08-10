@@ -16,7 +16,7 @@ class PrefetchedFn(Function):
         input_id = random_id()
         torch.save(input, intermediate_path(input_id))
         ctx.save_for_backward(module_id, input_id, freqs_cos, freqs_sin)
-        module = torch.load(intermediate_path(module_id))
+        module = torch.load(intermediate_path(module_id), map_location=torch.device('mps'))
         output = module(input, freqs_cos, freqs_sin)
         return output
 
@@ -50,7 +50,6 @@ class PrefetchedModule(Module):
             if hasattr(module, 'weight'):
                 key = f'{prefix}weight'
                 loaded_shape = state_dict[key].shape
-                print(f'found {key} with shapes {module.weight.shape} and {loaded_shape}.')
                 state_dict[key] = state_dict[key].reshape(module.weight.shape)
 
             for name, child in module._modules.items():
