@@ -11,7 +11,6 @@ import json
 sys.path.insert(0, '../llama2.c')
 from model import Transformer, ModelArgs
 
-
 # sys.argv[1] - path to consolidated.00.pth
 # sys.argv[2] - path to params.json
 
@@ -22,7 +21,7 @@ def load_torch_pickle(file):
 
     class DummyUnpickler(pickle.Unpickler):
         def find_class(self, module, name):
-            print(f'custom_find_class {module} {name}')
+            #print(f'custom_find_class {module} {name}')
             if name == 'OrderedDict':
                 return collections.OrderedDict
             return DummyObj
@@ -43,19 +42,14 @@ def load_state_dict():
     manual_state_dict = OrderedDict()
 
     with zipfile.ZipFile(sys.argv[1]) as checkpoint_zip:
-        print(checkpoint_zip.namelist())
         with checkpoint_zip.open('consolidated/data.pkl', 'r') as pickle_file:
             module_list = load_torch_pickle(pickle_file)
         for i, module_name in enumerate(module_list):
-            print(i, module_name)
             with checkpoint_zip.open(f'consolidated/data/{i}', 'r') as data_file:
                 # TODO: is it float16 of bfloat16?
-                data = np.frombuffer(data_file.read(), dtype=np.float16)
-            manual_state_dict[module_name] = torch.tensor(data)
-            print(module_name, manual_state_dict[module_name].shape)
+                buf = data_file.read()
+            manual_state_dict[module_name] = torch.tensor(torch.UntypedStorage.from_buffer(buf, dtype=torch.bfloat16, byte_order='little'), dtype=torch.bfloat16)
     return manual_state_dict
-
-
 
 def load_llama7b():
     vocab_size = 32000
@@ -74,18 +68,18 @@ def llama7b_torch():
 
     state_dict = torch.load(sys.argv[1])
     
-    # model definition is a little different
-    del state_dict['rope.freqs']
-    
-    model.load_state_dict(state_dict)
+    model.load_state_dict(state_dict, strict=False)
     print(model)
+    return model
 
 
 ## loading manually
 def llama7b_manual():
-    model = load_llama7b()
-
+    print('loading state dict')
     state_dict = load_state_dict()
+    print(f'loaded state_dict with {len(state_dict)} entries')
+    print('loading model')
+    model = load_llama7b()
 
     def fix_shapes_rec(module, prefix=''):
         nonlocal state_dict
@@ -102,10 +96,13 @@ def llama7b_manual():
 
     fix_shapes_rec(model)
 
-    # model definition is a little different
-    del state_dict['rope.freqs']
-
-    model.load_state_dict(state_dict)
+    model.load_state_dict(state_dict, strict=False)
     print(model)
+    return model
 
-llama7b_manual()
+
+X = torch.arange(500).view(1, 500)
+
+model = llama7b_torch()
+
+print(model(X))
