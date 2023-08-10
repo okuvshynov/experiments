@@ -61,6 +61,5 @@ class PrefetchedModule(Module):
         module.load_state_dict(state_dict)
         torch.save(module, intermediate_path(self.module_id))
 
-    ## maybe no need for forward hook at all? 
     def forward(self, input, freqs_cos, freqs_sin):
         return PrefetchedFn.apply(self.module_id, input, freqs_cos, freqs_sin)
