@@ -111,18 +111,76 @@ def llama7b_manual():
     print(model)
     return model
 
+def load_phantom_module_list():
+    with zipfile.ZipFile(sys.argv[1]) as checkpoint_zip:
+        with checkpoint_zip.open('consolidated/data.pkl', 'r') as pickle_file:
+            return load_torch_pickle(pickle_file)
+
+# module subset is a list of tuples ('submodule.path', id_in_original_state_dict)
+def populate_phantom_state_dict(module_subset):
+    state_dict = OrderedDict()
+
+    with zipfile.ZipFile(sys.argv[1]) as checkpoint_zip:
+        for i, module_name in module_subset:
+            with checkpoint_zip.open(f'consolidated/data/{i}', 'r') as data_file:
+                buf = data_file.read()
+            state_dict[module_name] = torch.tensor(torch.UntypedStorage.from_buffer(buf, dtype=torch.bfloat16, byte_order='little'), dtype=torch.bfloat16)
+    return state_dict
+
 def llama7b_phantom():
+    modules = load_phantom_module_list()
     model = load_phantom_llama7b()
+
+    # first manually populate layers one by one
+    for i, phantom_layer in enumerate(model.layers):
+        prefix = f'layers.{i}.'
+        relevant_modules = [(j, k[len(prefix):]) for j, k in enumerate(modules) if k.startswith(prefix)]
+        print(f'{i} {relevant_modules}')
+        
+        ## we need to 
+        # a. load these into dictionary
+        state_dict = populate_phantom_state_dict(relevant_modules)
+        print(state_dict)
+        # b. fix shapes manually
+        # c. load_state_dict
+        phantom_layer.populate_state_dict(state_dict)
+        
+    # now we need to populate everything except layers using strict=False
+    remaining_modules = [(j, k) for j, k in enumerate(modules) if not k.startswith('layers.')]
+    print(remaining_modules)
+
+    state_dict = populate_phantom_state_dict(remaining_modules)
     def fix_shapes_rec(module, prefix=''):
-        print(f'looking into module: {module}')
+        nonlocal state_dict
+        if hasattr(module, 'weight'):
+            key = f'{prefix}weight'
+            if key in state_dict.keys():
+                loaded_shape = state_dict[key].shape
+                print(f'found {key} with shapes {module.weight.shape} and {loaded_shape}.')
+                state_dict[key] = state_dict[key].reshape(module.weight.shape)
+            else:
+                print(f'not found {key}')
+
         for name, child in module._modules.items():
             if child is not None:
                 child_prefix = prefix + name + '.'
                 fix_shapes_rec(child, child_prefix)
 
     fix_shapes_rec(model)
+    model.load_state_dict(state_dict, strict=False)
+    print(model)
+    return model
 
-llama7b_phantom()
+
+X = torch.arange(500).view(1, 500).to('cpu')
+
+start = time.time()
+model = llama7b_phantom().to('cpu')
+print(f'loaded model in {time.time() - start} seconds')
+start = time.time()
+print(model(X))
+print(f'evaluated model in {time.time() - start} seconds')
+
 
 """
 This produces RuntimeError: MPS backend out of memory 
