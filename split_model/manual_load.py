@@ -4,8 +4,11 @@ import collections
 import torch
 import zipfile
 from collections import OrderedDict
-import numpy as np
 import json
+import time
+
+from phantom_model import Transformer as PhantomTransformer, ModelArgs as PhantomModelArgs
+
 
 # use ones from llama2.c
 sys.path.insert(0, '../llama2.c')
@@ -46,7 +49,6 @@ def load_state_dict():
             module_list = load_torch_pickle(pickle_file)
         for i, module_name in enumerate(module_list):
             with checkpoint_zip.open(f'consolidated/data/{i}', 'r') as data_file:
-                # TODO: is it float16 of bfloat16?
                 buf = data_file.read()
             manual_state_dict[module_name] = torch.tensor(torch.UntypedStorage.from_buffer(buf, dtype=torch.bfloat16, byte_order='little'), dtype=torch.bfloat16)
     return manual_state_dict
@@ -61,6 +63,15 @@ def load_llama7b():
     model = Transformer(model_conf)
     return model
 
+def load_phantom_llama7b():
+    vocab_size = 32000
+    with open(sys.argv[2], 'r') as conf_file:
+        config = json.loads(conf_file.read())
+    
+    config['vocab_size'] = vocab_size
+    model_conf = PhantomModelArgs(**config)
+    model = PhantomTransformer(model_conf)
+    return model
 
 ## loading with torch (default mode)
 def llama7b_torch():
@@ -100,9 +111,49 @@ def llama7b_manual():
     print(model)
     return model
 
+def llama7b_phantom():
+    model = load_phantom_llama7b()
+    def fix_shapes_rec(module, prefix=''):
+        print(f'looking into module: {module}')
+        for name, child in module._modules.items():
+            if child is not None:
+                child_prefix = prefix + name + '.'
+                fix_shapes_rec(child, child_prefix)
 
-X = torch.arange(500).view(1, 500)
+    fix_shapes_rec(model)
 
-model = llama7b_torch()
+llama7b_phantom()
 
+"""
+This produces RuntimeError: MPS backend out of memory 
+X = torch.arange(500).view(1, 500).to('mps')
+model = llama7b_torch().to('mps')
 print(model(X))
+"""
+
+X = torch.arange(500).view(1, 500).to('cpu')
+
+start = time.time()
+model = llama7b_torch().to('cpu')
+print(f'loaded model in {time.time() - start} seconds')
+
+"""
+start = time.time()
+print(model(X))
+print(f'evaluated model in {time.time() - start} seconds')
+"""
+
+# Output from Apple M2 @ 24Gb RAM running on CPU:
+"""
+loaded model in 93.34452700614929 seconds
+tensor([[[-7.7749,  0.2068,  3.7988,  ..., -2.6116, -3.5703, -1.7604]]],
+       grad_fn=<UnsafeViewBackward0>)
+evaluated model in 132.63551712036133 seconds
+
+"""
+
+# try same with no_grad:
+with torch.no_grad():
+    start = time.time()
+    print(model(X))
+    print(f'evaluated model in {time.time() - start} seconds')

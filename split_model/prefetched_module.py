@@ -36,6 +36,7 @@ class PrefetchedModule(Module):
         super().__init__()
         self.module_id = random_id()
         torch.save(module, intermediate_path(self.module_id))
+        # somewhere here we unload module? and call gc.collect?
 
     def loaded_inner(self):
         return torch.load(intermediate_path(self.module_id))
