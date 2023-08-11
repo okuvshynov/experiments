@@ -60,9 +60,10 @@ def llama7b_phantom():
     model = PhantomTransformer(model_conf)
     print('Created blank model')
 
+    sys.stdout.write('processing transformer blocks ')
     # first manually populate layers one by one
     for i, phantom_layer in enumerate(model.layers):
-        print(f'processing transformer block {i}')
+        sys.stdout.write('.')
         prefix = f'layers.{i}.'
         relevant_modules = [(j, k[len(prefix):]) for j, k in enumerate(modules) if k.startswith(prefix)]
 
@@ -72,6 +73,7 @@ def llama7b_phantom():
         # b. fix shapes manually
         # c. load_state_dict
         phantom_layer.populate_state_dict(state_dict)
+    print(' DONE')
         
     # now we need to populate everything except transformer block layers with strict=False
     remaining_modules = [(j, k) for j, k in enumerate(modules) if not k.startswith('layers.')]
