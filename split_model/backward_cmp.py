@@ -4,14 +4,12 @@ import torch
 from phantom_loader import llama7b_phantom
 from plain_loader import llama7b_torch
 
-device = 'cpu'
-batch_size = 1
+batch_size = 32
 length = 50
 
-X = torch.arange(length * batch_size).view(batch_size, length).to(device)
-Y = X + 1
-
-def phantom_backwards():
+def phantom_backwards(device='cpu'):
+    X = torch.arange(length * batch_size).view(batch_size, length).to(device)
+    Y = X + 1
     start = time.time()
     model = llama7b_phantom().to(device)
     print(f'loaded phantom model in {time.time() - start} seconds')
@@ -38,7 +36,10 @@ def phantom_backwards():
     weight_after = layer_13.attention.wq.weight.clone()
     return weight_before, weight_after
 
-def plain_backwards():
+def plain_backwards(device='cpu'):
+    X = torch.arange(length * batch_size).view(batch_size, length).to(device)
+    Y = X + 1
+
     start = time.time()
     model = llama7b_torch().to(device)
     print(f'loaded plain model in {time.time() - start} seconds')
@@ -63,7 +64,8 @@ def plain_backwards():
     weight_after = model.layers[13].attention.wq.weight.clone()
     return weight_before, weight_after
 
-wb_phantom, wa_phantom = phantom_backwards()
+wb_phantom, wa_phantom = phantom_backwards('mps')
+wb_phantom, wa_phantom = phantom_backwards('cpu')
 wb_plain, wa_plain = plain_backwards()
 
 same_before = torch.allclose(wb_phantom.cpu(), wb_plain.cpu())
@@ -72,6 +74,9 @@ same_after = torch.allclose(wa_phantom.cpu(), wa_plain.cpu())
 print(f'{same_after} and {same_before}')
 
 """
+cpu:
+ 
+for batch_size = 1 on m2@24Gb RAM
 loaded phantom model in 89.78139281272888 seconds
 phantom forward pass in 10.826918840408325 seconds
 phantom backward pass in 63.627501010894775 seconds
@@ -79,4 +84,13 @@ loaded plain model in 101.10796880722046 seconds
 plain forward pass in 127.43440103530884 seconds
 plain backward pass in 156.21902322769165 seconds
 True and True
+
+for batch_size = 1 on apple m1@16Gb RAM
+loaded phantom model in 103.29575395584106 seconds
+phantom forward pass in 10.221296072006226 seconds
+phantom backward pass in 65.4597909450531 seconds
+loaded plain model in 309.6808431148529 seconds
+plain forward pass in 120.3576111793518 seconds
+zsh: killed     python split_model/backward_cmp.py ../llama/llama-2-7b
+
 """
