@@ -1,6 +1,4 @@
 import torch
-from torch.autograd import Function
-from torch.nn import Module
 import os
 
 import subprocess
@@ -10,7 +8,7 @@ def backwards_call(params):
     path = f'{os.path.dirname(__file__)}/backwards_manually.py'
     subprocess.call(['python', path] + params)
 
-class PrefetchedFn(Function):
+class PrefetchedFn(torch.autograd.Function):
     @staticmethod
     def forward(ctx, module_id, input, freqs_cos, freqs_sin):
         input_id = random_id()
@@ -36,8 +34,7 @@ class PrefetchedFn(Function):
         backwards_call(params)
         return None, torch.load(intermediate_path(grad_input_id)), None, None
 
-
-class PrefetchedModule(Module):
+class PrefetchedModule(torch.nn.Module):
     def __init__(self, module):
         super().__init__()
         self.module_id = random_id()
