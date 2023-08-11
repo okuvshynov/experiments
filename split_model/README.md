@@ -84,4 +84,4 @@ tensor([[-0.0023, -0.0076, -0.0122,  ...,  0.0090, -0.0032, -0.0090],
 [ ] optimization - prefetch the phantom, save asyncronously
 [ ] integration test
 [ ] stateful optimizer
-[ ] export back to normal llama
+[ ] export back to normal llama format.

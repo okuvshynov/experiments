@@ -5,7 +5,7 @@ import subprocess
 from utils import intermediate_path, random_id
 
 def backwards_call(params):
-    path = f'{os.path.dirname(__file__)}/backwards_manually.py'
+    path = f'{os.path.dirname(__file__)}/backprop_service.py'
     subprocess.call(['python', path] + params)
 
 class PrefetchedFn(torch.autograd.Function):

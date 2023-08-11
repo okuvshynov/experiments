@@ -1,3 +1,5 @@
+# this should be renamed to something like backprop_service
+
 import torch
 import sys
 
@@ -9,6 +11,8 @@ lr = 100.0
 
 module = torch.load(intermediate_path(module_id))
 input = torch.load(intermediate_path(input_id))
+
+# TODO: this can be precomputed, no need to pass around
 freqs_cos = torch.load(intermediate_path(freqs_cos_id))
 freqs_sin = torch.load(intermediate_path(freqs_sin_id))
 input.requires_grad = True
