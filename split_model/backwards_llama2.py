@@ -37,7 +37,6 @@ assert(length * batch_size < vocab_size)
 
 X = torch.arange(length * batch_size).view(batch_size, length).to(device)
 Y = X + 1
-#print(X, Y)
 
 start = time.time()
 model = llama7b_torch().to(device)
@@ -47,6 +46,7 @@ print(model.layers[13].attention.wq.weight)
 
 start = time.time()
 
+# insane LR to check weight difference in 1 iteration
 opt = torch.optim.SGD(model.parameters(), lr=100.0)
 
 logits = model(X, Y)

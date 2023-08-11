@@ -20,7 +20,6 @@ class PrefetchedFn(Function):
         output = module(input, freqs_cos, freqs_sin)
         return output
 
-    # TODO backwards call is wrong here
     # as a first step just pass cos/sin as well. later we should just load them to backward service
     @staticmethod
     def backward(ctx, grad_output):
@@ -55,7 +54,6 @@ class PrefetchedModule(Module):
             nonlocal state_dict
             if hasattr(module, 'weight'):
                 key = f'{prefix}weight'
-                loaded_shape = state_dict[key].shape
                 state_dict[key] = state_dict[key].reshape(module.weight.shape)
 
             for name, child in module._modules.items():
