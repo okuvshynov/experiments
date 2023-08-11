@@ -3,9 +3,7 @@ import sys
 import collections
 import torch
 import zipfile
-from collections import OrderedDict
 import json
-import time
 import os
 
 from phantom_model import Transformer as PhantomTransformer, ModelArgs as PhantomModelArgs
@@ -13,10 +11,14 @@ from phantom_model import Transformer as PhantomTransformer, ModelArgs as Phanto
 llama2_7b_path = sys.argv[1]
 params_path = os.path.join(llama2_7b_path, "params.json")
 weights_path = os.path.join(llama2_7b_path, "consolidated.00.pth")
+vocab_size = 32000
 
-# use ones from llama2.c
-sys.path.insert(0, '../llama2.c')
-from model import Transformer, ModelArgs
+def prepare_llama_config():
+    with open(params_path, 'r') as conf_file:
+        config = json.loads(conf_file.read())
+    
+    config['vocab_size'] = vocab_size
+    return config
 
 def load_torch_pickle(file):
     class DummyObj:
@@ -24,7 +26,7 @@ def load_torch_pickle(file):
             pass
 
     class DummyUnpickler(pickle.Unpickler):
-        def find_class(self, module, name):
+        def find_class(self, _module, name):
             if name == 'OrderedDict':
                 return collections.OrderedDict
             return DummyObj
@@ -35,22 +37,6 @@ def load_torch_pickle(file):
 
     return list(result.keys())
 
-def prepare_llama_config():
-    vocab_size = 32000
-    with open(params_path, 'r') as conf_file:
-        config = json.loads(conf_file.read())
-    
-    config['vocab_size'] = vocab_size
-    return config
-
-## loading with torch (default mode)
-def llama7b_torch():
-    model_conf = ModelArgs(**prepare_llama_config())
-    model = Transformer(model_conf)
-    state_dict = torch.load(weights_path)    
-    model.load_state_dict(state_dict, strict=False)
-    return model
-
 def load_phantom_module_list():
     with zipfile.ZipFile(weights_path) as checkpoint_zip:
         with checkpoint_zip.open('consolidated/data.pkl', 'r') as pickle_file:
@@ -58,7 +44,7 @@ def load_phantom_module_list():
 
 # module subset is a list of tuples ('submodule.path', id_in_original_state_dict)
 def populate_phantom_state_dict(module_subset):
-    state_dict = OrderedDict()
+    state_dict = collections.OrderedDict()
 
     with zipfile.ZipFile(weights_path) as checkpoint_zip:
         for i, module_name in module_subset:
@@ -106,57 +92,3 @@ def llama7b_phantom():
     print('populated all weights to model')
 
     return model
-
-device = 'cpu'
-batch_size = 1
-X = torch.arange(500 * batch_size).view(batch_size, 500).to(device)
-
-## Running phantom
-start = time.time()
-model = llama7b_phantom().to(device)
-print(f'loaded phantom model in {time.time() - start} seconds')
-start = time.time()
-phantom_y = model(X)
-print(phantom_y)
-print(f'evaluated phantom model on batch_size={batch_size} in {time.time() - start} seconds')
-
-## Running default
-X = X.to('cpu')
-start = time.time()
-model = llama7b_torch().to('cpu')
-print(f'loaded model in {time.time() - start} seconds')
-start = time.time()
-default_y = model(X)
-print(default_y)
-print(f'evaluated model in {time.time() - start} seconds')
-
-same_y = torch.allclose(phantom_y.cpu(), default_y.cpu())
-
-print(f'output for default torch model and phantom model is same: {same_y}')
-
-
-"""
-Output from Apple M2 @ 24Gb RAM running on MPS and CPU:
-
-% python split_model/manual_load.py ../llama-2-7b/consolidated.00.pth ../llama-2-7b/params.json
-loaded phantom model in 88.39778780937195 seconds
-tensor([[[-7.7749,  0.2068,  3.7988,  ..., -2.6116, -3.5703, -1.7604]]],
-       device='mps:0', grad_fn=<LinearBackward0>)
-evaluated phantom model in 13.354475975036621 seconds
-loaded model in 93.51274299621582 seconds
-tensor([[[-7.7749,  0.2068,  3.7988,  ..., -2.6116, -3.5703, -1.7604]]],
-       grad_fn=<UnsafeViewBackward0>)
-evaluated model in 129.28788685798645 seconds
-output for default torch model and phantom model is same: False
-
-
-Looks like the output is not exactly the same but very close - 
-I wonder if it's device/precision thing. 
-Let's check with running both on CPU  
-
-When both running on CPU we got match.
-
-...
-evaluated model in 135.04086709022522 seconds
-output for default torch model and phantom model is same: True
-"""
