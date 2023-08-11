@@ -21,15 +21,21 @@ class PrefetchedFn(Function):
         return output
 
     # TODO backwards call is wrong here
+    # as a first step just pass cos/sin as well. later we should just load them to backward service
     @staticmethod
     def backward(ctx, grad_output):
         module_id, input_id, freqs_cos, freqs_sin = ctx.saved_tensors
         grad_output_id = random_id()
         grad_input_id = random_id()
-        params = [f'{t.item()}' for t in [module_id, input_id, grad_output_id, grad_input_id]]
+        freqs_sin_id = random_id()
+        freqs_cos_id = random_id()
+        params = [f'{t.item()}' for t in [module_id, input_id, grad_output_id, grad_input_id, freqs_cos_id, freqs_sin_id]]
         torch.save(grad_output, intermediate_path(grad_output_id))
+        torch.save(freqs_cos, intermediate_path(freqs_cos_id))
+        torch.save(freqs_sin, intermediate_path(freqs_sin_id))
+        
         backwards_call(params)
-        return None, torch.load(intermediate_path(grad_input_id))
+        return None, torch.load(intermediate_path(grad_input_id)), None, None
 
 
 class PrefetchedModule(Module):

@@ -37,14 +37,17 @@ assert(length * batch_size < vocab_size)
 
 X = torch.arange(length * batch_size).view(batch_size, length).to(device)
 Y = X + 1
-print(X, Y)
+#print(X, Y)
 
 start = time.time()
 model = llama7b_torch().to(device)
 print(f'loaded model in {time.time() - start} seconds')
+
+print(model.layers[13].attention.wq.weight)
+
 start = time.time()
 
-opt = torch.optim.SGD(model.parameters(), lr=0.00001)
+opt = torch.optim.SGD(model.parameters(), lr=100.0)
 
 logits = model(X, Y)
 print(logits.shape)
@@ -54,3 +57,5 @@ loss = model.last_loss
 opt.zero_grad()
 loss.backward()
 opt.step()
+
+print(model.layers[13].attention.wq.weight)
