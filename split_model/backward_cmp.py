@@ -1,5 +1,6 @@
 import time
 import torch
+import sys
 
 from phantom_loader import llama7b_phantom
 from plain_loader import llama7b_torch
@@ -7,11 +8,13 @@ from plain_loader import llama7b_torch
 batch_size = 32
 length = 50
 
+model_path = sys.argv[1]
+
 def phantom_backwards(device='cpu'):
     X = torch.arange(length * batch_size).view(batch_size, length).to(device)
     Y = X + 1
     start = time.time()
-    model = llama7b_phantom().to(device)
+    model = llama7b_phantom(model_path).to(device)
     print(f'loaded phantom model in {time.time() - start} seconds')
 
     start = time.time()
@@ -41,7 +44,7 @@ def plain_backwards(device='cpu'):
     Y = X + 1
 
     start = time.time()
-    model = llama7b_torch().to(device)
+    model = llama7b_torch(model_path).to(device)
     print(f'loaded plain model in {time.time() - start} seconds')
 
     start = time.time()

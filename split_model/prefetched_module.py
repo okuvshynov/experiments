@@ -51,7 +51,7 @@ class PrefetchedModule(torch.nn.Module):
     def loaded_inner(self):
         return torch.load(intermediate_path(self.module_id))
     
-    def populate_state_dict(self, state_dict):
+    def from_state_dict(self, state_dict):
         module = self.loaded_inner()
 
         # fix shapes before loading
@@ -69,6 +69,9 @@ class PrefetchedModule(torch.nn.Module):
         fix_shapes_rec(module)
         module.load_state_dict(state_dict)
         torch.save(module, intermediate_path(self.module_id))
+
+    def to_state_dict(self):
+        return self.loaded_inner().state_dict()
 
     def forward(self, input, freqs_cos, freqs_sin):
         return PrefetchedFn.apply(self.module_id, input, freqs_cos, freqs_sin)
