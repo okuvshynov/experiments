@@ -1,3 +1,9 @@
+# This is partial load/save functionality for llama2 models.
+# In contrast with model.py, which has model definition itself and can run 
+# other model with different settings, this one is specifically focusing on 
+# loading/saving the model as it is shared by Meta. 
+# It relies on specific data types, etc.
+
 import pickle
 import sys
 import collections

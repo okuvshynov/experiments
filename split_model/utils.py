@@ -6,6 +6,7 @@ def intermediate_path(id):
         id = id.item()
     return f'{os.path.dirname(__file__)}/data/saved_{id}.pt'
 
+# TODO: cuda is probbaly wrong here, need to test
 def save_rng_state(device='cpu'):
     if device == 'cpu':
         import torch

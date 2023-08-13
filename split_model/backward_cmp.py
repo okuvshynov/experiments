@@ -1,3 +1,6 @@
+# this is an integration test which compares phantom mode vs regular torch execution
+# we run forward/backward pass and compare outputs and weights after one optimizer step.
+
 import time
 import torch
 import sys
