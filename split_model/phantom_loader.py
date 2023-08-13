@@ -16,6 +16,7 @@ def prepare_llama_config(params_path):
         config = json.loads(conf_file.read())
     
     config['vocab_size'] = vocab_size
+    config['dropout'] = 0.5
     return config
 
 def load_torch_pickle(file):

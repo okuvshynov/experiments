@@ -2,7 +2,7 @@ import torch
 import os
 
 import subprocess
-from utils import intermediate_path, random_id
+from utils import intermediate_path, save_rng_state
 
 def backwards_call(device, params):
     path = f'{os.path.dirname(__file__)}/backprop_service.py'
@@ -13,14 +13,24 @@ def device_map(device):
         return 'mps'
     return str(device)
 
+global_id_auto = 0
+
+def next_id():
+    global global_id_auto
+    res = torch.tensor(global_id_auto)
+    global_id_auto += 1
+    return res
+
 class PrefetchedFn(torch.autograd.Function):
     @staticmethod
     def forward(ctx, module_id, input, freqs_cos, freqs_sin):
         device = device_map(input.device)
 
-        input_id = random_id()
+        input_id = next_id()
         torch.save(input, intermediate_path(input_id))
-        ctx.save_for_backward(module_id, input_id, freqs_cos, freqs_sin)
+
+        # we need to save rng state here as well to do second forward pass exactly the same
+        ctx.save_for_backward(module_id, input_id, freqs_cos, freqs_sin, save_rng_state(device))
         module = torch.load(intermediate_path(module_id), map_location=torch.device(device))
         output = module(input, freqs_cos, freqs_sin)
         return output
@@ -28,16 +38,18 @@ class PrefetchedFn(torch.autograd.Function):
     # as a first step just pass cos/sin as well. later we should just load them to backward service
     @staticmethod
     def backward(ctx, grad_output):
-        module_id, input_id, freqs_cos, freqs_sin = ctx.saved_tensors
+        module_id, input_id, freqs_cos, freqs_sin, rng_state = ctx.saved_tensors
         device = device_map(grad_output.device)
-        grad_output_id = random_id()
-        grad_input_id = random_id()
-        freqs_sin_id = random_id()
-        freqs_cos_id = random_id()
-        params = [f'{t.item()}' for t in [module_id, input_id, grad_output_id, grad_input_id, freqs_cos_id, freqs_sin_id]]
+        grad_output_id = next_id()
+        grad_input_id = next_id()
+        freqs_sin_id = next_id()
+        freqs_cos_id = next_id()
+        rng_state_id = next_id()
+        params = [f'{t.item()}' for t in [module_id, input_id, grad_output_id, grad_input_id, freqs_cos_id, freqs_sin_id, rng_state_id]]
         torch.save(grad_output, intermediate_path(grad_output_id))
         torch.save(freqs_cos, intermediate_path(freqs_cos_id))
         torch.save(freqs_sin, intermediate_path(freqs_sin_id))
+        torch.save(rng_state, intermediate_path(rng_state_id))
         
         backwards_call(device, params)
         return None, torch.load(intermediate_path(grad_input_id), map_location=torch.device(device)), None, None
@@ -45,7 +57,7 @@ class PrefetchedFn(torch.autograd.Function):
 class PrefetchedModule(torch.nn.Module):
     def __init__(self, module):
         super().__init__()
-        self.module_id = random_id()
+        self.module_id = next_id()
         torch.save(module, intermediate_path(self.module_id))
 
     def loaded_inner(self):
