@@ -20,10 +20,10 @@ python split_model/greedy_gen.py ../llama-2-7b/
 [x] export back to normal llama format.
 [x] make dropout work. use get_rng_state to make forward/backward pass match.
 [x] tokenizer + generation of something readable
+[ ] optimization - prefetch the phantom, save asyncronously, measure utilization, etc.
 [ ] fix 'eval' mode for phantom layers - dropout is not respected.
 [ ] training: fine-tune on a real dataset
 [ ] get rid of dependency on llama.c on test 
-[ ] optimization - prefetch the phantom, save asyncronously, measure utilization, etc.
 [ ] larger llama2 (15/70)?
 [ ] training: test on large fast machine with cuda
 ```
