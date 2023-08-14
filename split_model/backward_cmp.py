@@ -11,15 +11,16 @@ from plain_loader import llama7b_torch
 batch_size = 32
 length = 50
 seed = 123001
+dropout = 0.1
 
 model_path = sys.argv[1]
 
 def phantom_backwards(device='cpu'):
-    torch.random.manual_seed(seed)
     X = torch.arange(length * batch_size).view(batch_size, length).to(device)
     Y = X + 1
+
     start = time.time()
-    model = llama7b_phantom(model_path).to(device)
+    model = llama7b_phantom(model_path, dropout=dropout).to(device)
     print(f'loaded phantom model in {time.time() - start} seconds')
 
     start = time.time()
@@ -27,10 +28,11 @@ def phantom_backwards(device='cpu'):
     opt = torch.optim.SGD(model.parameters(), lr=100.0)
 
     start = time.time()
+
+    torch.random.manual_seed(seed)
     logits = model(X, Y)
     print(f'phantom forward pass in {time.time() - start} seconds')
     layer_13 = model.layers[13].loaded_inner()
-    #print(layer_13.attention.wq.weight)
     weight_before = layer_13.attention.wq.weight.clone()
 
     start = time.time()
@@ -45,12 +47,11 @@ def phantom_backwards(device='cpu'):
     return weight_before, weight_after, logits.clone()
 
 def plain_backwards(device='cpu'):
-    torch.random.manual_seed(seed)
     X = torch.arange(length * batch_size).view(batch_size, length).to(device)
     Y = X + 1
 
     start = time.time()
-    model = llama7b_torch(model_path).to(device)
+    model = llama7b_torch(model_path, dropout=dropout).to(device)
     print(f'loaded plain model in {time.time() - start} seconds')
 
     start = time.time()
@@ -58,9 +59,9 @@ def plain_backwards(device='cpu'):
     opt = torch.optim.SGD(model.parameters(), lr=100.0)
 
     start = time.time()
+    torch.random.manual_seed(seed)
     logits = model(X, Y)
     print(f'plain forward pass in {time.time() - start} seconds')
-    #print(layer_13.attention.wq.weight)
     weight_before = model.layers[13].attention.wq.weight.clone()
 
     start = time.time()

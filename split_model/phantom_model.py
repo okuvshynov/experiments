@@ -1,5 +1,10 @@
 # based on model.py from https://github.com/karpathy/llama2.c by Andrej Karpathy, MIT licenced
 
+# modifications by okuvshynov include:
+# - no weight tying 
+# - using phantom offloadable layers
+# - simplify init/generation as we only use it for fine-tuning experiments
+
 import math
 from dataclasses import dataclass
 from typing import Optional, Tuple
@@ -215,9 +220,6 @@ class Transformer(nn.Module):
         self.norm = RMSNorm(params.dim, eps=params.norm_eps)
         self.output = nn.Linear(params.dim, params.vocab_size, bias=False)
 
-        # share the unembedding parameters with the embedding parameters
-        self.tok_embeddings.weight = self.output.weight # https://paperswithcode.com/method/weight-tying
-
         # some useful precompute for the RoPE relative positional embeddings
         freqs_cos, freqs_sin = precompute_freqs_cis(self.params.dim // self.params.n_heads, self.params.max_seq_len)
         self.register_buffer("freqs_cos", freqs_cos, persistent=False)
@@ -247,35 +249,3 @@ class Transformer(nn.Module):
             self.last_loss = None
 
         return logits
-
-    @torch.inference_mode()
-    def generate(self, idx, max_new_tokens, temperature=1.0, top_k=None):
-        """
-        Take a conditioning sequence of indices idx (LongTensor of shape (b,t)) and complete
-        the sequence max_new_tokens times, feeding the predictions back into the model each time.
-        Most likely you'll want to make sure to be in model.eval() mode of operation for this.
-        Also note this is a super inefficient version of sampling with no key/value cache.
-        """
-        for _ in range(max_new_tokens):
-            # if the sequence context is growing too long we must crop it at block_size
-            idx_cond = idx if idx.size(1) <= self.params.max_seq_len else idx[:, -self.params.max_seq_len:]
-            # forward the model to get the logits for the index in the sequence
-            logits = self(idx_cond)
-            logits = logits[:, -1, :] # crop to just the final time step
-            if temperature == 0.0:
-                # "sample" the single most likely index
-                _, idx_next = torch.topk(logits, k=1, dim=-1)
-            else:
-                # pluck the logits at the final step and scale by desired temperature
-                logits = logits / temperature
-                # optionally crop the logits to only the top k options
-                if top_k is not None:
-                    v, _ = torch.topk(logits, min(top_k, logits.size(-1)))
-                    logits[logits < v[:, [-1]]] = -float('Inf')
-                # apply softmax to convert logits to (normalized) probabilities
-                probs = F.softmax(logits, dim=-1)
-                idx_next = torch.multinomial(probs, num_samples=1)
-            # append sampled index to the running sequence and continue
-            idx = torch.cat((idx, idx_next), dim=1)
-
-        return idx
