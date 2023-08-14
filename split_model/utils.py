@@ -12,6 +12,7 @@ def save_rng_state(device='cpu'):
         import torch
         return torch.random.get_rng_state()
     elif device.startswith('cuda'):
+        import torch.cuda
         return torch.cuda.get_rng_state(device=int(device.split(':')[1]))
     elif device.startswith('mps'):
         import torch.mps
@@ -24,6 +25,7 @@ def restore_rng_state(rng_state, device='cpu'):
         import torch
         torch.random.set_rng_state(rng_state)
     elif device.startswith('cuda'):
+        import torch.cuda
         torch.cuda.set_rng_state(rng_state, device=int(device.split(':')[1]))
     elif device.startswith('mps'):
         import torch.mps

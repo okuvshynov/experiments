@@ -1,5 +1,10 @@
 ### testing 
 
+Testing requires for now:
+1. llama2.c (+ commend out weight-tying there)
+2. llama from meta (repo with code)
+3. llama2 weights + tokenizer
+
 ```
 python split_model/backward_cmp.py ../llama-2-7b/
 python split_model/greedy_gen.py ../llama-2-7b/

@@ -14,6 +14,7 @@ seed = 123001
 dropout = 0.1
 
 model_path = sys.argv[1]
+device = sys.argv[2] if len(sys.argv) > 2 else 'cpu'
 
 def phantom_backwards(device='cpu'):
     X = torch.arange(length * batch_size).view(batch_size, length).to(device)
@@ -89,8 +90,9 @@ print(f'{txt(same_before)} weights before')
 print(f'{txt(same_after)} weights after')
 print(f'{txt(same_y)} out logits')
 
-print('Running phantom on MPS')
-_, _, _ = phantom_backwards('mps')
+if device != 'cpu':
+    print(f'Running phantom on {device}')
+    _, _, _ = phantom_backwards(device)
 
 
 """

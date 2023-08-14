@@ -8,14 +8,15 @@ from tokenizer import Tokenizer
 from phantom_loader import llama7b_phantom
 
 model_path = sys.argv[1]
+device = sys.argv[2] if len(sys.argv) > 2 else 'cpu'
 
 tokenizer_path = os.path.join(model_path, 'tokenizer.model')
 tokenizer = Tokenizer(tokenizer_path)
 
-model = llama7b_phantom(sys.argv[1], dropout=0.0).to('mps')
+model = llama7b_phantom(sys.argv[1], dropout=0.0).to(device)
 
 def greedy_gen(prompt, max_new_tokens=50):
-    tokens = torch.tensor(tokenizer.encode(prompt, True, False)).view(1, -1).to('mps')
+    tokens = torch.tensor(tokenizer.encode(prompt, True, False)).view(1, -1).to(device)
     model.eval()
     for _ in range(max_new_tokens):
         logits = model(tokens)
