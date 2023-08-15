@@ -47,14 +47,28 @@ def get_batch(data, batch_size):
     return x.to(device), y.to(device)
 
 X, y = get_batch(train, batch_size)
-print(X, y)
 
 model = llama7b_phantom(model_path, dropout=dropout).to(device)
+
+# very inefficient
+def val_loss():
+    model.eval()
+    with torch.no_grad():
+        losses = []
+        for i in range(200):
+            X, y = get_batch(val, batch_size)
+            logits = model(X, y)
+            losses.append(model.last_loss)
+            print(f'val loss = {model.last_loss}')
+
+    model.train()
 
 opt = torch.optim.SGD(model.parameters(), lr=lr)
 
 torch.random.manual_seed(seed)
 for i in range(iters):
+    if (i % 2 == 0):
+        val_loss()
     start = time.time()
     X, y = get_batch(train, batch_size)
     print(f'got data batch: {time.time() - start}, {X.shape}, {y.shape}')
@@ -67,4 +81,5 @@ for i in range(iters):
     loss.backward()
     opt.step()
     print(f'backprop done: {time.time() - start}')
+
 
