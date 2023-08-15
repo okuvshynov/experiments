@@ -4,9 +4,11 @@ import os
 def intermediate_path(id):
     if torch.is_tensor(id):
         id = id.item()
-    return f'{os.path.dirname(__file__)}/data/saved_{id}.pt'
+    folder = f'{os.path.dirname(__file__)}/data'
+    if not os.path.exists(folder):
+        os.makedirs(folder)
+    return f'{folder}/saved_{id}.pt'
 
-# TODO: cuda is probbaly wrong here, need to test
 def save_rng_state(device='cpu'):
     if device == 'cpu':
         import torch
