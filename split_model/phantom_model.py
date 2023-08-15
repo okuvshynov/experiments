@@ -13,7 +13,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from prefetched_module import PrefetchedModule
+from blackbox import Blackbox
 
 @dataclass
 class ModelArgs:
@@ -216,7 +216,7 @@ class Transformer(nn.Module):
         self.dropout = nn.Dropout(params.dropout)
         self.layers = torch.nn.ModuleList()
         for layer_id in range(params.n_layers):
-            self.layers.append(PrefetchedModule(TransformerBlock(layer_id, params)))
+            self.layers.append(Blackbox(TransformerBlock(layer_id, params)))
         self.norm = RMSNorm(params.dim, eps=params.norm_eps)
         self.output = nn.Linear(params.dim, params.vocab_size, bias=False)
 

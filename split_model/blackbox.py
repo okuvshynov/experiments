@@ -21,7 +21,7 @@ def next_id():
     global_id_auto += 1
     return res
 
-class PrefetchedFn(torch.autograd.Function):
+class BlackboxFn(torch.autograd.Function):
     @staticmethod
     def forward(ctx, module_id, input, freqs_cos, freqs_sin):
         device = device_map(input.device)
@@ -54,7 +54,7 @@ class PrefetchedFn(torch.autograd.Function):
         backwards_call(device, params)
         return None, torch.load(intermediate_path(grad_input_id), map_location=torch.device(device)), None, None
 
-class PrefetchedModule(torch.nn.Module):
+class Blackbox(torch.nn.Module):
     def __init__(self, module):
         super().__init__()
         self.module_id = next_id()
@@ -86,4 +86,4 @@ class PrefetchedModule(torch.nn.Module):
         return self.loaded_inner().state_dict()
 
     def forward(self, input, freqs_cos, freqs_sin):
-        return PrefetchedFn.apply(self.module_id, input, freqs_cos, freqs_sin)
+        return BlackboxFn.apply(self.module_id, input, freqs_cos, freqs_sin)
