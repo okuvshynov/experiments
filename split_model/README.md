@@ -20,9 +20,10 @@ python split_model/test_gen.py ../llama-2-7b/
 [x] export back to normal llama format.
 [x] make dropout work. use get_rng_state to make forward/backward pass match.
 [x] tokenizer + generation of something readable
-[ ] optimization - prefetch the phantom, save asyncronously, measure utilization, etc.
-[ ] fix 'eval' mode for phantom layers - dropout is not respected.
-[ ] training: fine-tune on a real dataset
+[x] fix 'eval' mode for phantom layers - dropout is not respected.
+[?] training: fine-tune on a real dataset
+[x] test on cuda
+[ ] optimizations - prefetch the phantom, save asyncronously, measure utilization, etc.
 [ ] get rid of dependency on llama.c on test 
 [ ] larger llama2 (15/70)?
 [ ] training: test on large fast machine with cuda
