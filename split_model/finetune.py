@@ -23,6 +23,7 @@ dropout = 0.05
 batch_size = 2
 seed = 1997
 iters = 100
+eval_iters = 1
 
 lr = 0.000001
 
@@ -55,7 +56,7 @@ def val_loss():
     model.eval()
     with torch.no_grad():
         losses = []
-        for i in range(200):
+        for i in range(eval_iters):
             X, y = get_batch(val, batch_size)
             logits = model(X, y)
             losses.append(model.last_loss)
@@ -66,10 +67,12 @@ def val_loss():
 opt = torch.optim.SGD(model.parameters(), lr=lr)
 
 torch.random.manual_seed(seed)
+start = time.time()
 for i in range(iters):
+    print(f'iter {i} @ {time.time() - start:.3g}')
     if (i % 2 == 0):
         val_loss()
-    start = time.time()
+    print(f'iter {i} validation done @ {time.time() - start:.3g}')
     X, y = get_batch(train, batch_size)
     print(f'got data batch: {time.time() - start}, {X.shape}, {y.shape}')
     logits = model(X, y)

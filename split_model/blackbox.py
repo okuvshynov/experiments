@@ -23,7 +23,7 @@ def next_id():
 
 class BlackboxFn(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, module_id, input, freqs_cos, freqs_sin):
+    def forward(ctx, module_id, input, freqs_cos, freqs_sin, is_training):
         device = device_map(input.device)
 
         input_id = next_id()
@@ -32,6 +32,8 @@ class BlackboxFn(torch.autograd.Function):
         # we need to save rng state here as well to do second forward pass exactly the same
         ctx.save_for_backward(module_id, input_id, freqs_cos, freqs_sin, save_rng_state(device))
         module = torch.load(intermediate_path(module_id), map_location=torch.device(device))
+        if not is_training:
+            module.eval()
         output = module(input, freqs_cos, freqs_sin)
         return output
 
@@ -52,7 +54,7 @@ class BlackboxFn(torch.autograd.Function):
         torch.save(rng_state, intermediate_path(rng_state_id))
         
         backwards_call(device, params)
-        return None, torch.load(intermediate_path(grad_input_id), map_location=torch.device(device)), None, None
+        return None, torch.load(intermediate_path(grad_input_id), map_location=torch.device(device)), None, None, None
 
 class Blackbox(torch.nn.Module):
     def __init__(self, module):
@@ -86,4 +88,4 @@ class Blackbox(torch.nn.Module):
         return self.loaded_inner().state_dict()
 
     def forward(self, input, freqs_cos, freqs_sin):
-        return BlackboxFn.apply(self.module_id, input, freqs_cos, freqs_sin)
+        return BlackboxFn.apply(self.module_id, input, freqs_cos, freqs_sin, self.training)
