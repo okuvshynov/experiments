@@ -6,8 +6,8 @@ Testing requires for now:
 3. llama2 weights + tokenizer
 
 ```
-python split_model/backward_cmp.py ../llama-2-7b/
-python split_model/greedy_gen.py ../llama-2-7b/
+python split_model/test_backprop.py ../llama-2-7b/
+python split_model/test_gen.py ../llama-2-7b/
 
 ```
 

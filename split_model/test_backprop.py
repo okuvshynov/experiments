@@ -8,7 +8,7 @@ import sys
 from phantom_loader import llama7b_phantom
 from plain_loader import llama7b_torch
 
-batch_size = 32
+batch_size = 1
 length = 50
 seed = 123001
 dropout = 0.1

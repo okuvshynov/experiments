@@ -9,7 +9,7 @@ from utils import intermediate_path, restore_rng_state
 
 device, module_id, input_id, grad_output_id, grad_input_id, freqs_cos_id, freqs_sin_id, rng_state_id = sys.argv[1:]
 
-lr = 100.0
+lr = 0.000001
 
 #start = time.time()
 module = torch.load(intermediate_path(module_id), map_location=torch.device(device))
