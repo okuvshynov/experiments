@@ -13,28 +13,28 @@ seed = 123001
 dropout = 0.1
 iters = 10
 
-model_path = sys.argv[1]
-device = 'mps'
+if __name__ == '__main__':
+    model_path = sys.argv[1]
+    device = 'mps'
 
-X = torch.arange(length * batch_size).view(batch_size, length).to(device)
-Y = X + 1
-
-start = time.time()
-model = llama7b_phantom(model_path, dropout=dropout).to(device)
-print(f'loaded phantom model in {time.time() - start} seconds')
-
-opt = torch.optim.SGD(model.parameters(), lr=1.0)
-
-torch.random.manual_seed(seed)
-
-for _ in range(iters):
-    start = time.time()
-    logits = model(X, Y)
-    print(f'forward pass in {time.time() - start} seconds')
+    X = torch.arange(length * batch_size).view(batch_size, length).to(device)
+    Y = X + 1
 
     start = time.time()
-    opt.zero_grad()
-    loss = model.last_loss
-    loss.backward()
-    opt.step()
-    print(f'backward pass in {time.time() - start} seconds')
+    model = llama7b_phantom(model_path, dropout=dropout).to(device)
+    print(f'loaded phantom model in {time.time() - start} seconds')
+
+    opt = torch.optim.SGD(model.parameters(), lr=100.0)
+
+    torch.random.manual_seed(seed)
+    for _ in range(iters):
+        start = time.time()
+        logits = model(X, Y)
+        print(f'forward pass in {time.time() - start} seconds')
+
+        start = time.time()
+        opt.zero_grad()
+        loss = model.last_loss
+        loss.backward()
+        opt.step()
+        print(f'backward pass in {time.time() - start} seconds')

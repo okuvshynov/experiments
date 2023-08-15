@@ -45,6 +45,7 @@ def phantom_backwards(device='cpu'):
 
     layer_13 = model.layers[13].loaded_inner()
     weight_after = layer_13.attention.wq.weight.clone()
+    print(weight_after)
     return weight_before, weight_after, logits.clone()
 
 def plain_backwards(device='cpu'):
@@ -73,26 +74,28 @@ def plain_backwards(device='cpu'):
     print(f'plain backward pass in {time.time() - start} seconds')
 
     weight_after = model.layers[13].attention.wq.weight.clone()
+    print(weight_after)
     return weight_before, weight_after, logits.clone()
 
-print('Running phantom on CPU')
-wb_phantom, wa_phantom, y_phantom = phantom_backwards('cpu')
+if __name__ == '__main__':
+    print('Running phantom on CPU')
+    wb_phantom, wa_phantom, y_phantom = phantom_backwards('cpu')
 
-print('Running plain on CPU')
-wb_plain, wa_plain, y_plain = plain_backwards()
+    print('Running plain on CPU')
+    wb_plain, wa_plain, y_plain = plain_backwards()
 
-same_before = torch.allclose(wb_phantom.cpu(), wb_plain.cpu())
-same_after = torch.allclose(wa_phantom.cpu(), wa_plain.cpu())
-same_y = torch.allclose(y_phantom.cpu(), y_plain.cpu())
-txt = lambda ok: '[ OK ]' if ok else '[FAIL]'
+    same_before = torch.allclose(wb_phantom.cpu(), wb_plain.cpu())
+    same_after = torch.allclose(wa_phantom.cpu(), wa_plain.cpu())
+    same_y = torch.allclose(y_phantom.cpu(), y_plain.cpu())
+    txt = lambda ok: '[ OK ]' if ok else '[FAIL]'
 
-print(f'{txt(same_before)} weights before')
-print(f'{txt(same_after)} weights after')
-print(f'{txt(same_y)} out logits')
+    print(f'{txt(same_before)} weights before')
+    print(f'{txt(same_after)} weights after')
+    print(f'{txt(same_y)} out logits')
 
-if device != 'cpu':
-    print(f'Running phantom on {device}')
-    _, _, _ = phantom_backwards(device)
+    if device != 'cpu':
+        print(f'Running phantom on {device}')
+        _, _, _ = phantom_backwards(device)
 
 
 """

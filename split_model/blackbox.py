@@ -3,10 +3,7 @@ import os
 
 import subprocess
 from utils import intermediate_path, save_rng_state
-
-def backwards_call(device, params):
-    path = f'{os.path.dirname(__file__)}/backprop_service.py'
-    subprocess.call(['python', path, device] + params)
+from backprop_service import Backprop
 
 def device_map(device):
     if str(device).startswith('mps'):
@@ -20,6 +17,14 @@ def next_id():
     res = torch.tensor(global_id_auto)
     global_id_auto += 1
     return res
+
+
+def backwards_call(device, params):
+    if not hasattr(backwards_call, 'backprop'):
+        backwards_call.backprop = Backprop()
+        
+    params = [device] + params
+    backwards_call.backprop.run(params)
 
 class BlackboxFn(torch.autograd.Function):
     @staticmethod
