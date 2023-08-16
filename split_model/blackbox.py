@@ -38,7 +38,6 @@ class BlackboxFn(torch.autograd.Function):
         output = module(input, freqs_cos, freqs_sin)
         return output
 
-    # as a first step just pass cos/sin as well. later we should just load them to backward service
     @staticmethod
     def backward(ctx, grad_output):
         module_id, input_id, freqs_cos, freqs_sin, rng_state = ctx.saved_tensors

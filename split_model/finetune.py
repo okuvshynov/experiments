@@ -24,65 +24,64 @@ batch_size = 2
 seed = 1997
 iters = 100
 eval_iters = 1
+lr = 1e-5
 
-lr = 0.000001
+if __name__ == '__main__':
+    torch.random.manual_seed(seed)
+    tokenizer_path = os.path.join(model_path, 'tokenizer.model')
 
-tokenizer_path = os.path.join(model_path, 'tokenizer.model')
+    tokenizer = Tokenizer(tokenizer_path)
+    tokens = tokenizer.encode(text, True, True)
 
-tokenizer = Tokenizer(tokenizer_path)
-tokens = tokenizer.encode(text, True, True)
+    n = len(tokens)
+    idx = int(n * split)
 
-n = len(tokens)
-idx = int(n * split)
+    train = tokens[:idx]
+    val = tokens[idx:]
 
-train = tokens[:idx]
-val = tokens[idx:]
+    print(f'loaded datasets: train[{len(train)}], val[{len(val)}]')
 
-print(f'loaded datasets: train[{len(train)}], val[{len(val)}]')
+    model = llama7b_phantom(model_path, dropout=dropout).to(device)
 
-# dataset is either train or val
-def get_batch(data, batch_size):
-    index = torch.randint(len(data) - seq_len, (batch_size,))
-    x = torch.stack([torch.tensor(data[i:i + seq_len]).to(torch.int64) for i in index])
-    y = torch.stack([torch.tensor(data[i + 1:i + seq_len + 1]).to(torch.int64) for i in index])
-    return x.to(device), y.to(device)
+    # dataset is either train or val
+    def get_batch(data, batch_size):
+        index = torch.randint(len(data) - seq_len, (batch_size,))
+        x = torch.stack([torch.tensor(data[i:i + seq_len]).to(torch.int64) for i in index])
+        y = torch.stack([torch.tensor(data[i + 1:i + seq_len + 1]).to(torch.int64) for i in index])
+        return x.to(device), y.to(device)
 
-X, y = get_batch(train, batch_size)
+    # very inefficient
+    def val_loss():
+        model.eval()
+        with torch.no_grad():
+            losses = []
+            for i in range(eval_iters):
+                X, y = get_batch(val, batch_size)
+                logits = model(X, y)
+                losses.append(model.last_loss)
+                print(f'val loss = {model.last_loss}')
 
-model = llama7b_phantom(model_path, dropout=dropout).to(device)
+        model.train()
 
-# very inefficient
-def val_loss():
-    model.eval()
-    with torch.no_grad():
-        losses = []
-        for i in range(eval_iters):
-            X, y = get_batch(val, batch_size)
-            logits = model(X, y)
-            losses.append(model.last_loss)
-            print(f'val loss = {model.last_loss}')
 
-    model.train()
-
-opt = torch.optim.SGD(model.parameters(), lr=lr)
-
-torch.random.manual_seed(seed)
-start = time.time()
-for i in range(iters):
-    print(f'iter {i} @ {time.time() - start:.3g}')
-    if (i % 2 == 0):
-        val_loss()
-    print(f'iter {i} validation done @ {time.time() - start:.3g}')
     X, y = get_batch(train, batch_size)
-    print(f'got data batch: {time.time() - start}, {X.shape}, {y.shape}')
-    logits = model(X, y)
-    print(f'forward done: {time.time() - start}')
-
-    opt.zero_grad()
-    loss = model.last_loss
-    print(f'batch loss: {loss.item()}')
-    loss.backward()
-    opt.step()
-    print(f'backprop done: {time.time() - start}')
+    opt = torch.optim.SGD(model.parameters(), lr=lr)
 
 
+    start = time.time()
+    for i in range(iters):
+        print(f'iter {i} @ {time.time() - start:.3g}')
+        if (i % 2 == 0):
+            val_loss()
+        print(f'iter {i} validation done @ {time.time() - start:.3g}')
+        X, y = get_batch(train, batch_size)
+        print(f'got data batch: {time.time() - start}, {X.shape}, {y.shape}')
+        logits = model(X, y)
+        print(f'forward done: {time.time() - start}')
+
+        opt.zero_grad()
+        loss = model.last_loss
+        print(f'batch loss: {loss.item()}')
+        loss.backward()
+        opt.step()
+        print(f'backprop done: {time.time() - start}')
