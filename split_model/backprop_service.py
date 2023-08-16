@@ -1,11 +1,7 @@
-import time
+import torch
 from multiprocessing import Process, Pipe
 
-import torch
-import sys
-
 from utils import intermediate_path, restore_rng_state
-
 
 lr = 100.0
 
@@ -48,5 +44,4 @@ class Backprop:
 
     def run(self, args):
         self.conn.send(args)
-        resp = self.conn.recv()
-        return
+        _ = self.conn.recv()

@@ -12,6 +12,7 @@ batch_size = 1
 length = 50
 seed = 123001
 dropout = 0.1
+lr = 100.0
 
 model_path = sys.argv[1]
 device = sys.argv[2] if len(sys.argv) > 2 else 'cpu'
@@ -26,7 +27,7 @@ def phantom_backwards(device='cpu'):
 
     start = time.time()
     # insane LR to see difference after 1 iteration with 1 sample
-    opt = torch.optim.SGD(model.parameters(), lr=100.0)
+    opt = torch.optim.SGD(model.parameters(), lr=lr)
 
     start = time.time()
 
@@ -45,7 +46,6 @@ def phantom_backwards(device='cpu'):
 
     layer_13 = model.layers[13].loaded_inner()
     weight_after = layer_13.attention.wq.weight.clone()
-    print(weight_after)
     return weight_before, weight_after, logits.clone()
 
 def plain_backwards(device='cpu'):
@@ -58,7 +58,7 @@ def plain_backwards(device='cpu'):
 
     start = time.time()
     # insane LR to see difference after 1 iteration with 1 sample
-    opt = torch.optim.SGD(model.parameters(), lr=100.0)
+    opt = torch.optim.SGD(model.parameters(), lr=lr)
 
     start = time.time()
     torch.random.manual_seed(seed)
@@ -74,7 +74,6 @@ def plain_backwards(device='cpu'):
     print(f'plain backward pass in {time.time() - start} seconds')
 
     weight_after = model.layers[13].attention.wq.weight.clone()
-    print(weight_after)
     return weight_before, weight_after, logits.clone()
 
 if __name__ == '__main__':
