@@ -26,14 +26,13 @@ def backwards_call(device, params):
 
 class BlackboxFn(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, module_id, input, freqs_cos, freqs_sin, is_training):
+    def forward(ctx, module_id, input, freqs_cos, freqs_sin, is_training, input_id, grad_input_id, grad_output_id):
         device = device_map(input.device)
 
-        input_id = next_id()
         torch.save(input, intermediate_path(input_id))
 
         # we need to save rng state here as well to do second forward pass exactly the same
-        ctx.save_for_backward(module_id, input_id, freqs_cos, freqs_sin, save_rng_state(device))
+        ctx.save_for_backward(module_id, input_id, freqs_cos, freqs_sin, save_rng_state(device), grad_input_id, grad_output_id)
         module = torch.load(intermediate_path(module_id), map_location=torch.device(device))
         if not is_training:
             module.eval()
@@ -43,20 +42,21 @@ class BlackboxFn(torch.autograd.Function):
     # as a first step just pass cos/sin as well. later we should just load them to backward service
     @staticmethod
     def backward(ctx, grad_output):
-        module_id, input_id, freqs_cos, freqs_sin, rng_state = ctx.saved_tensors
+        module_id, input_id, freqs_cos, freqs_sin, rng_state, grad_input_id, grad_output_id = ctx.saved_tensors
         device = device_map(grad_output.device)
-        grad_output_id = next_id()
-        grad_input_id = next_id()
         params = [module_id.item(), input_id.item(), grad_output_id.item(), grad_input_id.item(), freqs_cos.to('cpu'), freqs_sin.to('cpu'), rng_state.to('cpu')]
         torch.save(grad_output, intermediate_path(grad_output_id))
         
         backwards_call(device, params)
-        return None, torch.load(intermediate_path(grad_input_id), map_location=torch.device(device)), None, None, None
+        return None, torch.load(intermediate_path(grad_input_id), map_location=torch.device(device)), None, None, None, None, None, None
 
 class Blackbox(torch.nn.Module):
     def __init__(self, module):
         super().__init__()
         self.module_id = next_id()
+        self.input_id = next_id()
+        self.grad_input_id = next_id()
+        self.grad_output_id = next_id()
         torch.save(module, intermediate_path(self.module_id))
 
     def loaded_inner(self):
@@ -85,4 +85,4 @@ class Blackbox(torch.nn.Module):
         return self.loaded_inner().state_dict()
 
     def forward(self, input, freqs_cos, freqs_sin):
-        return BlackboxFn.apply(self.module_id, input, freqs_cos, freqs_sin, self.training)
+        return BlackboxFn.apply(self.module_id, input, freqs_cos, freqs_sin, self.training, self.input_id, self.grad_input_id, self.grad_output_id)
