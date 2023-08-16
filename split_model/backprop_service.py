@@ -36,18 +36,17 @@ def process_input(ids):
 def backprop_service(pipe):
     while True:
         message = pipe.recv()
-        print(message)
         process_input(message)
-        pipe.send('Y')
+        pipe.send('ACK')
 
 
 class Backprop:
     def __init__(self):
-        self.parent_conn, child_conn = Pipe()
-        p = Process(target=backprop_service, args=(child_conn,))
+        self.conn, child_conn = Pipe()
+        p = Process(target=backprop_service, args=(child_conn,), daemon=True)
         p.start()
 
     def run(self, args):
-        self.parent_conn.send(args)
-        resp = self.parent_conn.recv()
+        self.conn.send(args)
+        resp = self.conn.recv()
         return

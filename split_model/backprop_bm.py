@@ -11,7 +11,7 @@ batch_size = 2
 length = 2048
 seed = 123001
 dropout = 0.1
-iters = 10
+iters = 2
 
 if __name__ == '__main__':
     model_path = sys.argv[1]
