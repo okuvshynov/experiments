@@ -47,7 +47,7 @@ class BlackboxFn(torch.autograd.Function):
         device = device_map(grad_output.device)
         grad_output_id = next_id()
         grad_input_id = next_id()
-        params = [module_id.item(), input_id.item(), grad_output_id.item(), grad_input_id.item(), freqs_cos, freqs_sin, rng_state]
+        params = [module_id.item(), input_id.item(), grad_output_id.item(), grad_input_id.item(), freqs_cos.to('cpu'), freqs_sin.to('cpu'), rng_state.to('cpu')]
         torch.save(grad_output, intermediate_path(grad_output_id))
         
         backwards_call(device, params)

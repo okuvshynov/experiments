@@ -19,7 +19,7 @@ def process_input(ids):
 
     restore_rng_state(rng_state, device)
 
-    output = module(input, freqs_cos, freqs_sin)
+    output = module(input, freqs_cos.to(device), freqs_sin.to(device))
     output.backward(grad_output)
     opt.step()
 
