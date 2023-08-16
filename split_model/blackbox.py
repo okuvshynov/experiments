@@ -47,14 +47,8 @@ class BlackboxFn(torch.autograd.Function):
         device = device_map(grad_output.device)
         grad_output_id = next_id()
         grad_input_id = next_id()
-        freqs_sin_id = next_id()
-        freqs_cos_id = next_id()
-        rng_state_id = next_id()
-        params = [f'{t.item()}' for t in [module_id, input_id, grad_output_id, grad_input_id, freqs_cos_id, freqs_sin_id, rng_state_id]]
+        params = [module_id.item(), input_id.item(), grad_output_id.item(), grad_input_id.item(), freqs_cos, freqs_sin, rng_state]
         torch.save(grad_output, intermediate_path(grad_output_id))
-        torch.save(freqs_cos, intermediate_path(freqs_cos_id))
-        torch.save(freqs_sin, intermediate_path(freqs_sin_id))
-        torch.save(rng_state, intermediate_path(rng_state_id))
         
         backwards_call(device, params)
         return None, torch.load(intermediate_path(grad_input_id), map_location=torch.device(device)), None, None, None
