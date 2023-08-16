@@ -23,13 +23,13 @@ python split_model/test_gen.py ../llama-2-7b/
 [x] fix 'eval' mode for phantom layers - dropout is not respected.
 [?] training: fine-tune on a real dataset
 [x] test on cuda
+[x] rather than comparing to reference implementation save the output.
 [ ] pass learning rate around, not configure in 3 different places.
-[ ] improve loading time as it is important for testing
-[ ] rather than comparing to reference implementation save the output.
 [ ] use shared memory rather than pipe
 [ ] offload embeddings & output linear layer as well.
+[ ] improve loading time as it is important for testing
 [ ] optimizations - prefetch the phantom, save asyncronously, measure utilization, etc.
-[ ] get rid of dependency on llama.c on test 
+[x] get rid of dependency on llama.c on test 
 [ ] larger llama2 (15/70)?
 [ ] training: test on large fast machine with cuda
 ```
