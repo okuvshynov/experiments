@@ -26,6 +26,7 @@ python split_model/test_gen.py ../llama-2-7b/
 [ ] pass learning rate around, not configure in 3 different places.
 [ ] improve loading time as it is important for testing
 [ ] rather than comparing to reference implementation save the output.
+[ ] use shared memory rather than pipe
 [ ] offload embeddings & output linear layer as well.
 [ ] optimizations - prefetch the phantom, save asyncronously, measure utilization, etc.
 [ ] get rid of dependency on llama.c on test 

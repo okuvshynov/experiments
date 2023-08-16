@@ -1,5 +1,5 @@
 import torch
-from multiprocessing import Process, Pipe
+import torch.multiprocessing as mp
 
 from utils import intermediate_path, restore_rng_state
 
@@ -31,8 +31,9 @@ def backprop_service(pipe):
 
 class Backprop:
     def __init__(self):
-        self.conn, child_conn = Pipe()
-        p = Process(target=backprop_service, args=(child_conn,), daemon=True)
+        mp.set_start_method('spawn')
+        self.conn, child_conn = mp.Pipe()
+        p = mp.Process(target=backprop_service, args=(child_conn,), daemon=True)
         p.start()
 
     def run(self, args):
