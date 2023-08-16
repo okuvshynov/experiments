@@ -50,13 +50,11 @@ Loaded 292 module metadata
 Created blank model
 processing transformer blocks ................................ DONE
 populated all weights to model
-loaded phantom model in 102.21748113632202 seconds
-forward pass in 69.36935567855835 seconds
-backward pass in 207.33418202400208 seconds
-forward pass in 77.83041286468506 seconds
-backward pass in 211.1048882007599 seconds
-forward pass in 77.09704279899597 seconds
-backward pass in 204.30037093162537 seconds
+loaded phantom model in 90.93994903564453 seconds
+forward pass in 69.44901394844055 seconds
+backward pass in 192.10568189620972 seconds
+forward pass in 78.87712097167969 seconds
+backward pass in 201.73040509223938 seconds
 ```
 
 Specific things we could improve:

@@ -82,5 +82,4 @@ class Blackbox(torch.nn.Module):
         return self.loaded_inner().state_dict()
 
     def forward(self, input, freqs_cos, freqs_sin):
-        
         return BlackboxFn.apply(self.module_id, input, freqs_cos, freqs_sin, self.training, self.input_id)
