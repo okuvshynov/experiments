@@ -3,7 +3,7 @@ import torch.multiprocessing as mp
 
 from utils import intermediate_path, restore_rng_state
 
-lr = 100.0
+lr = 1e-5
 
 def process_input(ids):
     device, module_id, input_id, grad_output, freqs_cos, freqs_sin, rng_state = ids

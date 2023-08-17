@@ -24,6 +24,8 @@ batch_size = 2
 seed = 1997
 iters = 100
 eval_iters = 1
+# can afford larger batch size for no-grad 
+eval_batch_size = 4
 lr = 1e-5
 
 if __name__ == '__main__':
@@ -50,30 +52,26 @@ if __name__ == '__main__':
         y = torch.stack([torch.tensor(data[i + 1:i + seq_len + 1]).to(torch.int64) for i in index])
         return x.to(device), y.to(device)
 
-    # very inefficient
     def val_loss():
         model.eval()
         with torch.no_grad():
             losses = []
-            for i in range(eval_iters):
-                X, y = get_batch(val, batch_size)
+            for _ in range(eval_iters):
+                X, y = get_batch(val, eval_batch_size)
                 logits = model(X, y)
                 losses.append(model.last_loss)
                 print(f'val loss = {model.last_loss}')
 
         model.train()
 
-
     X, y = get_batch(train, batch_size)
     opt = torch.optim.SGD(model.parameters(), lr=lr)
 
-
     start = time.time()
     for i in range(iters):
-        print(f'iter {i} @ {time.time() - start:.3g}')
+        print(f'start iter {i} @ {time.time() - start:.3g}')
         if (i % 2 == 0):
             val_loss()
-        print(f'iter {i} validation done @ {time.time() - start:.3g}')
         X, y = get_batch(train, batch_size)
         print(f'got data batch: {time.time() - start}, {X.shape}, {y.shape}')
         logits = model(X, y)
