@@ -12,28 +12,29 @@ def backwards_call(device, params):
 
 class BlackboxFn(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, module_id, input, freqs_cos, freqs_sin, is_training, input_id):
+    def forward(ctx, module_id, is_training, input_id, input, *args):
         device = device_map(input.device)
 
         torch.save(input, intermediate_path(input_id))
 
         # we need to save rng state here as well to do second forward pass exactly the same
-        ctx.save_for_backward(module_id, input_id, freqs_cos, freqs_sin, save_rng_state(device))
+        ctx.save_for_backward(module_id, input_id, save_rng_state(device), *args)
         module = torch.load(intermediate_path(module_id), map_location=torch.device(device))
         if not is_training:
             module.eval()
-        output = module(input, freqs_cos, freqs_sin)
+        output = module(input, *args)
         return output
 
     @staticmethod
     def backward(ctx, grad_output):
-        module_id, input_id, freqs_cos, freqs_sin, rng_state = ctx.saved_tensors
+        module_id, input_id, rng_state, *extra = ctx.saved_tensors
         device = device_map(grad_output.device)
+
+        params = [module_id.item(), input_id.item(), grad_output.to('cpu'), rng_state.to('cpu')]
+        extra = [t.to('cpu') for t in extra]
         
-        params = [module_id.item(), input_id.item(), grad_output.to('cpu'), freqs_cos.to('cpu'), freqs_sin.to('cpu'), rng_state.to('cpu')]
-        
-        grad_input = backwards_call(device, params).to(device)
-        return None, grad_input, None, None, None, None, None, None
+        grad_input = backwards_call(device, params + extra).to(device)
+        return None, None, None, grad_input, None, None
 
 class Blackbox(torch.nn.Module):
     def __init__(self, module):
@@ -67,5 +68,5 @@ class Blackbox(torch.nn.Module):
     def to_state_dict(self):
         return self.loaded_inner().state_dict()
 
-    def forward(self, input, freqs_cos, freqs_sin):
-        return BlackboxFn.apply(self.module_id, input, freqs_cos, freqs_sin, self.training, self.input_id)
+    def forward(self, input, *args):
+        return BlackboxFn.apply(self.module_id, self.training, self.input_id, input, *args)

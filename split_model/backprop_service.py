@@ -4,7 +4,7 @@ import torch.multiprocessing as mp
 from utils import intermediate_path, restore_rng_state
 
 def process_input(args):
-    device, module_id, input_id, grad_output, freqs_cos, freqs_sin, rng_state, lr = args
+    lr, device, module_id, input_id, grad_output, rng_state, *extra = args
 
     module = torch.load(intermediate_path(module_id), map_location=torch.device(device))
     input = torch.load(intermediate_path(input_id), map_location=torch.device(device))
@@ -15,7 +15,9 @@ def process_input(args):
 
     restore_rng_state(rng_state, device)
 
-    output = module(input, freqs_cos.to(device), freqs_sin.to(device))
+    extra = [t.to(device) for t in extra]
+
+    output = module(input, *extra)
     output.backward(grad_output.to(device))
     opt.step()
 
@@ -37,5 +39,5 @@ class Backprop:
         p.start()
 
     def run(self, args):
-        self.conn.send(args + [lr])
+        self.conn.send([lr] + args)
         return self.conn.recv()
