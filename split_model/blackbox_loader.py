@@ -77,16 +77,26 @@ def load_llama7b(llama2_7b_path, **kwargs):
         prefix = f'layers.{i}.'
         relevant_modules = [(j, k[len(prefix):]) for j, k in enumerate(modules) if k.startswith(prefix)]
 
-        # a. load these into dictionary
         state_dict = _populate_state_dict(relevant_modules, weights_path)
         
-        # b. fix shapes manually
-        # c. load_state_dict
         layer.from_state_dict(state_dict)
     print(' DONE')
-        
-    # now we need to populate everything except transformer block layers with strict=False
-    remaining_modules = [(j, k) for j, k in enumerate(modules) if not k.startswith('layers.')]
+
+    # output
+    prefix = 'output.'
+    output_module = [(j, k[len(prefix):]) for j, k in enumerate(modules) if k.startswith(prefix)]
+    model.output.from_state_dict(_populate_state_dict(output_module, weights_path))
+    print('done output.')
+    
+    # embed
+    #prefix = 'tok_embeddings.'
+    #embed_module = [(j, k[len(prefix):]) for j, k in enumerate(modules) if k.startswith(prefix)]
+    #model.tok_embeddings.from_state_dict(_populate_state_dict(embed_module, weights_path))
+    #print('done tok_embeddings.')
+
+    #print(model.tok_embeddings.module_id, model.output.module_id)
+
+    remaining_modules = [(j, k) for j, k in enumerate(modules) if (not k.startswith('layers.') and not k.startswith('output.')) ]
     state_dict = _populate_state_dict(remaining_modules, weights_path)
     def fix_shapes_rec(module, prefix=''):
         nonlocal state_dict

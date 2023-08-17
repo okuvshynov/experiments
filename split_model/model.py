@@ -218,7 +218,7 @@ class Transformer(nn.Module):
         for layer_id in range(params.n_layers):
             self.layers.append(Blackbox(TransformerBlock(layer_id, params)))
         self.norm = RMSNorm(params.dim, eps=params.norm_eps)
-        self.output = nn.Linear(params.dim, params.vocab_size, bias=False)
+        self.output = Blackbox(nn.Linear(params.dim, params.vocab_size, bias=False))
 
         # some useful precompute for the RoPE relative positional embeddings
         freqs_cos, freqs_sin = precompute_freqs_cis(self.params.dim // self.params.n_heads, self.params.max_seq_len)

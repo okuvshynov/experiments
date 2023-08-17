@@ -77,6 +77,18 @@ attention - 16777216 elements for each of the 4 linear layers. So total = 167772
 
 For data/activations: TBD
 
+Running on OS X with /usr/bin/time -l -h -p  shows 
+
+```
+5786107904  maximum resident set size
+```
+
+After making output layer also offloadable goes down to 
+```
+5224169472  maximum resident set size
+```
+
+Need to measure second process though.
 
 ### References
 * [llama2.c](https://github.com/karpathy/llama2.c)
