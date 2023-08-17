@@ -8,7 +8,11 @@ def process_input(args):
 
     module = torch.load(intermediate_path(module_id), map_location=torch.device(device))
     input = torch.load(intermediate_path(input_id), map_location=torch.device(device))
-    input.requires_grad = True
+    
+    # no grad for embedding inputs
+    # TODO: better check here
+    if 'float' in str(input.dtype):
+        input.requires_grad = True
 
     opt = torch.optim.SGD(module.parameters(), lr=lr)
     opt.zero_grad()
@@ -23,7 +27,7 @@ def process_input(args):
 
     torch.save(module, intermediate_path(module_id))
     print(f'learner peak rss: {peak_rss()}')
-    return input.grad.to('cpu')
+    return input.grad.to('cpu') if input.requires_grad else None
 
 def backprop_service(pipe):
     while True:

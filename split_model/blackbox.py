@@ -33,7 +33,9 @@ class BlackboxFn(torch.autograd.Function):
         params = [module_id.item(), input_id.item(), grad_output.to('cpu'), rng_state.to('cpu')]
         extra = [t.to('cpu') for t in extra]
         
-        grad_input = backwards_call(device, params + extra).to(device)
+        grad_input = backwards_call(device, params + extra)
+        if grad_input is not None:
+            grad_input = grad_input.to(device)
         return None, None, None, grad_input, None, None
 
 class Blackbox(torch.nn.Module):

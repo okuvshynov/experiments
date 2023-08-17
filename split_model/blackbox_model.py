@@ -202,6 +202,12 @@ class TransformerBlock(nn.Module):
         out = h + self.feed_forward.forward(self.ffn_norm(h))
         return out
 
+class DummyEmbedding(nn.Embedding):
+    def __init__(self, vocab_size, dim):
+        super().__init__(vocab_size, dim)
+        
+    def forward(self, tokens, extra):
+        return super().forward(tokens) * extra.to(tokens.device)
 
 class Transformer(nn.Module):
     last_loss: Optional[torch.Tensor]
@@ -212,7 +218,7 @@ class Transformer(nn.Module):
         self.vocab_size = params.vocab_size
         self.n_layers = params.n_layers
 
-        self.tok_embeddings = nn.Embedding(params.vocab_size, params.dim)
+        self.tok_embeddings = Blackbox(DummyEmbedding(params.vocab_size, params.dim))
         self.dropout = nn.Dropout(params.dropout)
         self.layers = torch.nn.ModuleList()
         for layer_id in range(params.n_layers):
@@ -230,7 +236,10 @@ class Transformer(nn.Module):
 
     def forward(self, tokens: torch.Tensor, targets: Optional[torch.Tensor] = None) -> torch.Tensor:
         _bsz, seqlen = tokens.shape
-        h = self.tok_embeddings(tokens)
+
+        # dummy input to force gradient propagation to blackbox modules
+        dummy = torch.ones((1, 1), requires_grad=True)
+        h = self.tok_embeddings(tokens, dummy)
         h = self.dropout(h)
         freqs_cos = self.freqs_cos[:seqlen]
         freqs_sin = self.freqs_sin[:seqlen]

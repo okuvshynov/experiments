@@ -14,7 +14,7 @@ import os
 import ctypes
 import gc
 
-from model import Transformer, ModelArgs
+from blackbox_model import Transformer, ModelArgs
 from utils import peak_rss
 
 vocab_size = 32000
@@ -82,22 +82,20 @@ def load_llama7b(llama2_7b_path, **kwargs):
         gc.collect()
         print(f'main peak rss after loading layer {i}: {peak_rss()}')
 
-
-    # output
     prefix = 'output.'
     output_module = [(j, k[len(prefix):]) for j, k in enumerate(modules) if k.startswith(prefix)]
     model.output.from_state_dict(_populate_state_dict(output_module, weights_path))
+    gc.collect()
     print(f'main peak rss after output: {peak_rss()}')
     
     # embed
-    #prefix = 'tok_embeddings.'
-    #embed_module = [(j, k[len(prefix):]) for j, k in enumerate(modules) if k.startswith(prefix)]
-    #model.tok_embeddings.from_state_dict(_populate_state_dict(embed_module, weights_path))
-    #print('done tok_embeddings.')
+    prefix = 'tok_embeddings.'
+    embed_module = [(j, k[len(prefix):]) for j, k in enumerate(modules) if k.startswith(prefix)]
+    model.tok_embeddings.from_state_dict(_populate_state_dict(embed_module, weights_path))
+    gc.collect()
+    print(f'main peak rss after embeddings: {peak_rss()}')
 
-    #print(model.tok_embeddings.module_id, model.output.module_id)
-
-    remaining_modules = [(j, k) for j, k in enumerate(modules) if (not k.startswith('layers.') and not k.startswith('output.')) ]
+    remaining_modules = [(j, k) for j, k in enumerate(modules) if (not (k.startswith('layers.') or (k.startswith('output.')) or (k.startswith('tok_embeddings.')))) ]
     state_dict = _populate_state_dict(remaining_modules, weights_path)
     def fix_shapes_rec(module, prefix=''):
         nonlocal state_dict

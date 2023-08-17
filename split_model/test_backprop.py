@@ -41,7 +41,8 @@ def blackbox_backwards(device='cpu'):
     print(f'forward pass in {time.time() - start} seconds')
     print(f'main peak rss: {peak_rss()}')
     layer_13 = model.layers[13].loaded_inner()
-    weight_before = layer_13.attention.wq.weight.clone()
+    weight_before = layer_13.attention.wq.weight[:test_data_dim, :test_data_dim].clone()
+    emb_before = model.tok_embeddings.loaded_inner().weight[:test_data_dim, :test_data_dim].clone()
 
     start = time.time()
     opt.zero_grad()
@@ -52,8 +53,9 @@ def blackbox_backwards(device='cpu'):
     print(f'main peak rss: {peak_rss()}')
 
     layer_13 = model.layers[13].loaded_inner()
-    weight_after = layer_13.attention.wq.weight.clone()
-    return weight_before, weight_after, logits.clone()
+    weight_after = layer_13.attention.wq.weight[:test_data_dim, :test_data_dim].clone()
+    emb_after = model.tok_embeddings.loaded_inner().weight[:test_data_dim, :test_data_dim].clone()
+    return weight_before, weight_after, logits[0, :length, :test_data_dim].clone(), emb_before, emb_after
 
 def plain_backwards(device='cpu'):
     from plain_loader import llama7b_torch
@@ -70,7 +72,8 @@ def plain_backwards(device='cpu'):
     torch.random.manual_seed(seed)
     logits = model(X, Y)
     print(f'plain forward pass in {time.time() - start} seconds')
-    weight_before = model.layers[13].attention.wq.weight.clone()
+    weight_before = model.layers[13].attention.wq.weight[:test_data_dim, :test_data_dim].clone()
+    emb_before = model.tok_embeddings.weight[:test_data_dim, :test_data_dim].clone()
 
     start = time.time()
     opt.zero_grad()
@@ -79,48 +82,57 @@ def plain_backwards(device='cpu'):
     opt.step()
     print(f'plain backward pass in {time.time() - start} seconds')
 
-    weight_after = model.layers[13].attention.wq.weight.clone()
-    return weight_before, weight_after, logits.clone()
+    weight_after = model.layers[13].attention.wq.weight[:test_data_dim, :test_data_dim].clone()
+    emb_after = model.tok_embeddings.weight[:test_data_dim, :test_data_dim].clone()
+    return weight_before, weight_after, logits[0, :length, :test_data_dim].clone(), emb_before, emb_after
 
 def reference_compare(save_test_data=True):
     print('Running blackbox on CPU')
-    wb, wa, y = blackbox_backwards('cpu')
+    wb, wa, y, emb_before, emb_after = blackbox_backwards('cpu')
 
     print('Running plain on CPU')
-    wb_plain, wa_plain, y_plain = plain_backwards()
+    wb_plain, wa_plain, y_plain, emb_before_plain, emb_after_plain  = plain_backwards()
     if save_test_data:
-        torch.save(wb_plain[:test_data_dim, :test_data_dim].clone(), 'split_model/test_data/sample_weights_before.pt')
-        torch.save(wa_plain[:test_data_dim, :test_data_dim].clone(), 'split_model/test_data/sample_weights_after.pt')
-        torch.save(y_plain[0, :length, :test_data_dim].clone(), 'split_model/test_data/logits.pt')
+        torch.save(wb_plain, 'split_model/test_data/sample_weights_before.pt')
+        torch.save(wa_plain, 'split_model/test_data/sample_weights_after.pt')
+        torch.save(emb_before_plain, 'split_model/test_data/sample_emb_before.pt')
+        torch.save(emb_after_plain, 'split_model/test_data/sample_emb_after.pt')
+        torch.save(y_plain, 'split_model/test_data/logits.pt')
 
     same_before = torch.allclose(wb.cpu(), wb_plain.cpu())
     same_after = torch.allclose(wa.cpu(), wa_plain.cpu())
     same_y = torch.allclose(y.cpu(), y_plain.cpu())
+    same_emb_before = torch.allclose(emb_before.cpu(), emb_before_plain.cpu())
+    same_emb_after = torch.allclose(emb_after.cpu(), emb_after_plain.cpu())
     txt = lambda ok: '[ OK ]' if ok else '[FAIL]'
 
     print(f'{txt(same_before)} weights before')
     print(f'{txt(same_after)} weights after')
+    print(f'{txt(same_emb_before)} emb weights before')
+    print(f'{txt(same_emb_after)} emb weights after')
     print(f'{txt(same_y)} out logits')
 
 def test_data_compare():
     print('Running on CPU')
-    wb, wa, y = blackbox_backwards('cpu')
+    wb, wa, y, emb_before, emb_after = blackbox_backwards('cpu')
 
     wb_plain = torch.load('split_model/test_data/sample_weights_before.pt')
     wa_plain = torch.load('split_model/test_data/sample_weights_after.pt')
     y_plain = torch.load('split_model/test_data/logits.pt')
-
-    wb = wb[:test_data_dim, :test_data_dim]
-    wa = wa[:test_data_dim, :test_data_dim]
-    y = y[0, :length, :test_data_dim]
+    emb_before_plain = torch.load('split_model/test_data/sample_emb_before.pt')
+    emb_after_plain = torch.load('split_model/test_data/sample_emb_after.pt')
 
     same_before = torch.allclose(wb.cpu(), wb_plain.cpu())
     same_after = torch.allclose(wa.cpu(), wa_plain.cpu())
     same_y = torch.allclose(y.cpu(), y_plain.cpu())
+    same_emb_before = torch.allclose(emb_before.cpu(), emb_before_plain.cpu())
+    same_emb_after = torch.allclose(emb_after.cpu(), emb_after_plain.cpu())
     txt = lambda ok: '[ OK ]' if ok else '[FAIL]'
 
     print(f'{txt(same_before)} weights before')
     print(f'{txt(same_after)} weights after')
+    print(f'{txt(same_emb_before)} emb weights before')
+    print(f'{txt(same_emb_after)} emb weights after')
     print(f'{txt(same_y)} out logits')
 
 if __name__ == '__main__':
