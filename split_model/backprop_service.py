@@ -1,7 +1,7 @@
 import torch
 import torch.multiprocessing as mp
 
-from utils import intermediate_path, restore_rng_state
+from utils import intermediate_path, restore_rng_state, peak_rss
 
 def process_input(args):
     lr, device, module_id, input_id, grad_output, rng_state, *extra = args
@@ -22,6 +22,7 @@ def process_input(args):
     opt.step()
 
     torch.save(module, intermediate_path(module_id))
+    print(f'learner peak rss: {peak_rss()}')
     return input.grad.to('cpu')
 
 def backprop_service(pipe):

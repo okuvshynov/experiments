@@ -7,6 +7,7 @@ import sys
 
 from blackbox_loader import load_llama7b
 import backprop_service
+from utils import peak_rss
 
 batch_size = 1
 length = 50
@@ -21,6 +22,8 @@ model_path = sys.argv[1]
 mode = sys.argv[2] if len(sys.argv) > 2 else 'data'
 
 def blackbox_backwards(device='cpu'):
+    print(f'main peak rss: {peak_rss()}')
+    
     X = torch.arange(length * batch_size).view(batch_size, length).to(device)
     Y = X + 1
 
@@ -34,7 +37,9 @@ def blackbox_backwards(device='cpu'):
 
     torch.random.manual_seed(seed)
     logits = model(X, Y)
+
     print(f'forward pass in {time.time() - start} seconds')
+    print(f'main peak rss: {peak_rss()}')
     layer_13 = model.layers[13].loaded_inner()
     weight_before = layer_13.attention.wq.weight.clone()
 
@@ -44,6 +49,7 @@ def blackbox_backwards(device='cpu'):
     loss.backward()
     opt.step()
     print(f'backward pass in {time.time() - start} seconds')
+    print(f'main peak rss: {peak_rss()}')
 
     layer_13 = model.layers[13].loaded_inner()
     weight_after = layer_13.attention.wq.weight.clone()

@@ -12,8 +12,10 @@ import zipfile
 import json
 import os
 import ctypes
+import gc
 
 from model import Transformer, ModelArgs
+from utils import peak_rss
 
 vocab_size = 32000
 
@@ -67,26 +69,25 @@ def load_llama7b(llama2_7b_path, **kwargs):
     print(f'Loaded {len(modules)} module metadata')
     model_conf = ModelArgs(**_prepare_llama_config(params_path, **kwargs))
     model = Transformer(model_conf)
-    print('Created blank model')
+    print(f'main peak rss: {peak_rss()}')
 
-    sys.stdout.write('processing transformer blocks ')
     # first manually populate layers one by one
     for i, layer in enumerate(model.layers):
-        sys.stdout.write('.')
-        sys.stdout.flush()
         prefix = f'layers.{i}.'
         relevant_modules = [(j, k[len(prefix):]) for j, k in enumerate(modules) if k.startswith(prefix)]
 
         state_dict = _populate_state_dict(relevant_modules, weights_path)
         
         layer.from_state_dict(state_dict)
-    print(' DONE')
+        gc.collect()
+        print(f'main peak rss after loading layer {i}: {peak_rss()}')
+
 
     # output
     prefix = 'output.'
     output_module = [(j, k[len(prefix):]) for j, k in enumerate(modules) if k.startswith(prefix)]
     model.output.from_state_dict(_populate_state_dict(output_module, weights_path))
-    print('done output.')
+    print(f'main peak rss after output: {peak_rss()}')
     
     # embed
     #prefix = 'tok_embeddings.'

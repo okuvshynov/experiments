@@ -1,5 +1,6 @@
 import torch
 import os
+import resource
 
 def device_map(device):
     if str(device).startswith('mps'):
@@ -47,3 +48,6 @@ def restore_rng_state(rng_state, device='cpu'):
         torch.mps.set_rng_state(rng_state)
     else:
         raise ValueError(f"Unsupported device: {device}")
+    
+def peak_rss():
+    return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss // (1024 * 1024)
