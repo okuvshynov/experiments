@@ -6,7 +6,7 @@ import sys
 import time
 import torch
 
-from phantom_loader import llama7b_phantom
+from blackbox_loader import load_llama7b
 
 import backprop_service
 
@@ -47,7 +47,7 @@ if __name__ == '__main__':
 
     print(f'loaded datasets: train[{len(train)}], val[{len(val)}]')
 
-    model = llama7b_phantom(model_path, dropout=dropout).to(device)
+    model = load_llama7b(model_path, dropout=dropout).to(device)
 
     # dataset is either train or val
     def get_batch(data, batch_size):

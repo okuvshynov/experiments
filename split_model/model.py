@@ -2,7 +2,7 @@
 
 # modifications by okuvshynov include:
 # - no weight tying 
-# - using phantom offloadable layers
+# - using blackbox offloadable modules
 # - simplify init/generation as we only use it for fine-tuning experiments
 
 import math

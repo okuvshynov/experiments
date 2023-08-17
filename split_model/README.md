@@ -20,7 +20,7 @@ python split_model/test_gen.py ../llama-2-7b/
 [x] export back to normal llama format.
 [x] make dropout work. use get_rng_state to make forward/backward pass match.
 [x] tokenizer + generation of something readable
-[x] fix 'eval' mode for phantom layers - dropout is not respected.
+[x] fix 'eval' mode for blackbox layers - dropout is not respected.
 [?] training: fine-tune on a real dataset
 [x] test on cuda
 [x] rather than comparing to reference implementation save the output.
@@ -29,7 +29,7 @@ python split_model/test_gen.py ../llama-2-7b/
 [ ] use shared memory rather than pipe
 [ ] offload embeddings & output linear layer as well.
 [ ] improve loading time as it is important for testing
-[ ] optimizations - prefetch the phantom, save asyncronously, measure utilization, etc.
+[ ] optimizations - prefetch the blackbox, save asyncronously, measure utilization, etc.
 [x] get rid of dependency on llama.c on test 
 [ ] larger llama2 (15/70)?
 [ ] training: test on large fast machine with cuda
@@ -52,7 +52,7 @@ Loaded 292 module metadata
 Created blank model
 processing transformer blocks ................................ DONE
 populated all weights to model
-loaded phantom model in 90.93994903564453 seconds
+loaded model in 90.93994903564453 seconds
 forward pass in 69.44901394844055 seconds
 backward pass in 192.10568189620972 seconds
 forward pass in 78.87712097167969 seconds
@@ -62,7 +62,7 @@ backward pass in 201.73040509223938 seconds
 Specific things we could improve:
 * quantization (just float16/bfloat16 or maybe lora)
 * prefetch/async save of the next/previous module. This will come at increased RAM usage - need to test.
-* to save more memory we can wrap embedding table and output in phantom modules as well. These are largest individual layers.
+* to save more memory we can wrap embedding table and output in blackbox modules as well. These are largest individual layers.
 * Change the way we serialize blocks, don't do full serialization
 
 #### What is taking memory? And how much is it?

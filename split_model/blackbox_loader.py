@@ -13,11 +13,11 @@ import json
 import os
 import ctypes
 
-from phantom_model import Transformer as PhantomTransformer, ModelArgs as PhantomModelArgs
+from model import Transformer, ModelArgs
 
 vocab_size = 32000
 
-def prepare_llama_config(params_path, **kwargs):
+def _prepare_llama_config(params_path, **kwargs):
     with open(params_path, 'r') as conf_file:
         config = json.loads(conf_file.read())
     
@@ -26,7 +26,7 @@ def prepare_llama_config(params_path, **kwargs):
         config[k] = v
     return config
 
-def load_torch_pickle(file):
+def _load_torch_pickle(file):
     class DummyObj:
         def __init__(self, *args):
             pass
@@ -43,13 +43,13 @@ def load_torch_pickle(file):
 
     return list(result.keys())
 
-def load_phantom_module_list(weights_path):
+def _load_module_list(weights_path):
     with zipfile.ZipFile(weights_path) as checkpoint_zip:
         with checkpoint_zip.open('consolidated/data.pkl', 'r') as pickle_file:
-            return load_torch_pickle(pickle_file)
+            return _load_torch_pickle(pickle_file)
 
 # module subset is a list of tuples ('submodule.path', id_in_original_state_dict)
-def populate_phantom_state_dict(module_subset, weights_path):
+def _populate_state_dict(module_subset, weights_path):
     state_dict = collections.OrderedDict()
 
     with zipfile.ZipFile(weights_path) as checkpoint_zip:
@@ -59,35 +59,35 @@ def populate_phantom_state_dict(module_subset, weights_path):
             state_dict[module_name] = torch.tensor(torch.UntypedStorage.from_buffer(buf, dtype=torch.bfloat16, byte_order='little'), dtype=torch.bfloat16)
     return state_dict
 
-def llama7b_phantom(llama2_7b_path, **kwargs):
+def load_llama7b(llama2_7b_path, **kwargs):
     params_path = os.path.join(llama2_7b_path, "params.json")
     weights_path = os.path.join(llama2_7b_path, "consolidated.00.pth")
 
-    modules = load_phantom_module_list(weights_path)
+    modules = _load_module_list(weights_path)
     print(f'Loaded {len(modules)} module metadata')
-    model_conf = PhantomModelArgs(**prepare_llama_config(params_path, **kwargs))
-    model = PhantomTransformer(model_conf)
+    model_conf = ModelArgs(**_prepare_llama_config(params_path, **kwargs))
+    model = Transformer(model_conf)
     print('Created blank model')
 
     sys.stdout.write('processing transformer blocks ')
     # first manually populate layers one by one
-    for i, phantom_layer in enumerate(model.layers):
+    for i, layer in enumerate(model.layers):
         sys.stdout.write('.')
         sys.stdout.flush()
         prefix = f'layers.{i}.'
         relevant_modules = [(j, k[len(prefix):]) for j, k in enumerate(modules) if k.startswith(prefix)]
 
         # a. load these into dictionary
-        state_dict = populate_phantom_state_dict(relevant_modules, weights_path)
+        state_dict = _populate_state_dict(relevant_modules, weights_path)
         
         # b. fix shapes manually
         # c. load_state_dict
-        phantom_layer.from_state_dict(state_dict)
+        layer.from_state_dict(state_dict)
     print(' DONE')
         
     # now we need to populate everything except transformer block layers with strict=False
     remaining_modules = [(j, k) for j, k in enumerate(modules) if not k.startswith('layers.')]
-    state_dict = populate_phantom_state_dict(remaining_modules, weights_path)
+    state_dict = _populate_state_dict(remaining_modules, weights_path)
     def fix_shapes_rec(module, prefix=''):
         nonlocal state_dict
         if hasattr(module, 'weight'):
@@ -106,19 +106,19 @@ def llama7b_phantom(llama2_7b_path, **kwargs):
     return model
 
 
-def save_model(model, original_path, new_path):
+def save_llama7b(model, original_path, new_path):
     state_dict = model.state_dict()
-    for i, phantom_layer in enumerate(model.layers):
+    for i, layer in enumerate(model.layers):
         sys.stdout.write('.')
         sys.stdout.flush()
         prefix = f'layers.{i}.'
-        module_state_dict = phantom_layer.to_state_dict()
+        module_state_dict = layer.to_state_dict()
         for k, t in module_state_dict.items():
             state_dict[prefix + k] = t
 
     # loading data.pkl from original file
     old_weights_path = os.path.join(original_path, "consolidated.00.pth")
-    modules = load_phantom_module_list(old_weights_path)
+    modules = _load_module_list(old_weights_path)
 
     with zipfile.ZipFile(old_weights_path) as checkpoint_zip:
         with checkpoint_zip.open('consolidated/data.pkl', 'r') as pickle_file:

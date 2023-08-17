@@ -5,7 +5,7 @@ import time
 import torch
 import sys
 
-from phantom_loader import llama7b_phantom
+from blackbox_loader import load_llama7b
 import backprop_service
 
 batch_size = 2
@@ -25,8 +25,8 @@ if __name__ == '__main__':
     backprop_service.lr = lr
 
     start = time.time()
-    model = llama7b_phantom(model_path, dropout=dropout).to(device)
-    print(f'loaded phantom model in {time.time() - start} seconds')
+    model = load_llama7b(model_path, dropout=dropout).to(device)
+    print(f'loaded model in {time.time() - start} seconds')
 
     opt = torch.optim.SGD(model.parameters(), lr=lr)
 
