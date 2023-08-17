@@ -25,9 +25,9 @@ python split_model/test_gen.py ../llama-2-7b/
 [x] test on cuda
 [x] rather than comparing to reference implementation save the output.
 [x] pass learning rate around, not configure in 3 different places.
-[ ] check what exactly takes how much memory
+[x] check what exactly takes how much memory
 [ ] use shared memory rather than pipe
-[ ] offload embeddings & output linear layer as well.
+[x] offload embeddings & output linear layer as well.
 [ ] improve loading time as it is important for testing
 [ ] optimizations - prefetch the blackbox, save asyncronously, measure utilization, etc.
 [x] get rid of dependency on llama.c on test 
@@ -62,8 +62,8 @@ backward pass in 201.73040509223938 seconds
 Specific things we could improve:
 * quantization (just float16/bfloat16 or maybe lora)
 * prefetch/async save of the next/previous module. This will come at increased RAM usage - need to test.
-* to save more memory we can wrap embedding table and output in blackbox modules as well. These are largest individual layers.
 * Change the way we serialize blocks, don't do full serialization
+* use shared mem, not pipe for gradients passing
 
 #### What is taking memory? And how much is it?
 
@@ -89,6 +89,112 @@ After making output layer also offloadable goes down to
 ```
 
 Need to measure second process though.
+
+Much better after:
+* offloading embeddings and output linear layer to blackbox as well
+* manually calling gc.collect
+
+```
+learner peak rss: 1819
+main peak rss: 2246
+[ OK ] weights before
+[ OK ] weights after
+[ OK ] emb weights before
+[ OK ] emb weights after
+[ OK ] out logits
+...
+          2891956224  maximum resident set size
+...
+          1755929856  peak memory footprint
+```
+
+
+
+### notes from testing on A100
+
+Steps to make it work:
+
+* get llama-2-7b weights, follow meta instructions
+* update torch: ```pip install torch --upgrade```
+* install cubestat for monitoring: ```pip install cubestat```
+* get llama repo from meta: https://github.com/facebookresearch/llama/tree/main
+* get current repo: https://github.com/okuvshynov/experiments/tree/main
+* setup vim: https://github.com/okuvshynov/vimrc
+* try running test on CPU first: ```python split_model/test_backprop.py ../llama-2-7b/```
+
+Observations:
+* ru_maxrss is not right
+* test fails when comparing to saved test data.
+* try comparing to reference impl. Get https://github.com/karpathy/llama2.c, run ```python split_model/test_backprop.py ../llama-2-7b/ ref```. Comment out weight-tying: ``` # self.tok_embeddings.weight = self.output.weight``` before that.
+
+Comparing with reference works:
+[ OK ] weights before
+[ OK ] weights after
+[ OK ] emb weights before
+[ OK ] emb weights after
+[ OK ] out logits
+
+With abundant memory, blackbox is obviously slower: 
+loaded model in 155.92071843147278 seconds
+forward pass in 12.745762348175049 seconds
+backward pass in 50.55747389793396 seconds
+
+vs 
+
+loaded plain model in 107.6094651222229 seconds
+plain forward pass in 1.8743972778320312 seconds
+plain backward pass in 4.215214490890503 seconds
+
+Let's try generation:
+```python split_model/test_gen.py ../llama-2-7b/```
+
+Needs sentencepiece for tokenizer, so ```pip install sentencepiece```
+
+Running again:
+```
+python split_model/test_gen.py ../llama-2-7b/
+
+...
+next token: tensor([[304]]) ['to']
+next token: tensor([[367]]) ['be']
+next token: tensor([[9796]]) ['happy']
+next token: tensor([[29889]]) ['.']
+```
+
+Works. Let's try on CUDA:
+```
+python split_model/test_gen.py ../llama-2-7b/ cuda
+...
+next token: tensor([[304]], device='cuda:0') ['to']
+next token: tensor([[367]], device='cuda:0') ['be']
+next token: tensor([[9796]], device='cuda:0') ['happy']
+next token: tensor([[29889]], device='cuda:0') ['.']
+```
+
+GPU util was low during this, both compute (~10%) and memory usage (~6%).
+
+Let's try benchmarking backprop:
+
+```
+python split_model/benchmark_backprop.py ../llama-2-7b
+```
+
+Had to modify device in the file, need to make configurable.
+
+After this is done, we can check how large can we make batch size/seq_len until we run out of memory.
+12% GPU memory use with batch size = 2 and small seq len (100?). 
+Let's try larger seq_len, like 2048. 
+
+Increase batch to 4.
+
+What we need to compare it to though - backprop on larger sequence lengths/batch sizes on reference implementations.
+
+With batch_size = 4 and seq_len = 2048 we are at 58% GPU memory util (out of 40Gb). 
+
+Reference impl CUDA OOMs at batch 5.
+
+Don't care about quantization as long as we are consistent in what we use.
+
 
 ### References
 * [llama2.c](https://github.com/karpathy/llama2.c)
