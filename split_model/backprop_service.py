@@ -3,10 +3,8 @@ import torch.multiprocessing as mp
 
 from utils import intermediate_path, restore_rng_state
 
-lr = 1e-5
-
-def process_input(ids):
-    device, module_id, input_id, grad_output, freqs_cos, freqs_sin, rng_state = ids
+def process_input(args):
+    device, module_id, input_id, grad_output, freqs_cos, freqs_sin, rng_state, lr = args
 
     module = torch.load(intermediate_path(module_id), map_location=torch.device(device))
     input = torch.load(intermediate_path(input_id), map_location=torch.device(device))
@@ -29,6 +27,8 @@ def backprop_service(pipe):
         message = pipe.recv()
         pipe.send(process_input(message))
 
+lr = 1e-5
+
 class Backprop:
     def __init__(self):
         mp.set_start_method('spawn')
@@ -37,5 +37,5 @@ class Backprop:
         p.start()
 
     def run(self, args):
-        self.conn.send(args)
+        self.conn.send(args + [lr])
         return self.conn.recv()

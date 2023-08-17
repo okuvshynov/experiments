@@ -6,25 +6,29 @@ import torch
 import sys
 
 from phantom_loader import llama7b_phantom
+import backprop_service
 
 batch_size = 2
-length = 2048
+length = 32
 seed = 123001
 dropout = 0.1
 iters = 2
+lr = 1.0
+device = 'mps'
 
 if __name__ == '__main__':
     model_path = sys.argv[1]
-    device = 'mps'
 
     X = torch.arange(length * batch_size).view(batch_size, length).to(device)
     Y = X + 1
+
+    backprop_service.lr = lr
 
     start = time.time()
     model = llama7b_phantom(model_path, dropout=dropout).to(device)
     print(f'loaded phantom model in {time.time() - start} seconds')
 
-    opt = torch.optim.SGD(model.parameters(), lr=100.0)
+    opt = torch.optim.SGD(model.parameters(), lr=lr)
 
     torch.random.manual_seed(seed)
     for _ in range(iters):

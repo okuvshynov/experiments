@@ -1,20 +1,7 @@
 import torch
 
-from utils import intermediate_path, save_rng_state
+from utils import intermediate_path, save_rng_state, device_map, next_id
 from backprop_service import Backprop
-
-def device_map(device):
-    if str(device).startswith('mps'):
-        return 'mps'
-    return str(device)
-
-global_id_auto = 0
-
-def next_id():
-    global global_id_auto
-    res = torch.tensor(global_id_auto)
-    global_id_auto += 1
-    return res
 
 def backwards_call(device, params):
     if not hasattr(backwards_call, 'backprop'):

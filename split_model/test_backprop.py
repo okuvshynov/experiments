@@ -6,6 +6,7 @@ import torch
 import sys
 
 from phantom_loader import llama7b_phantom
+import backprop_service
 
 batch_size = 1
 length = 50
@@ -120,6 +121,7 @@ def test_data_compare():
     print(f'{txt(same_y)} out logits')
 
 if __name__ == '__main__':
+    backprop_service.lr = lr
     if mode == 'data':
         test_data_compare()
     else:

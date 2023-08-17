@@ -1,6 +1,19 @@
 import torch
 import os
 
+def device_map(device):
+    if str(device).startswith('mps'):
+        return 'mps'
+    return str(device)
+
+global_id_auto = 0
+
+def next_id():
+    global global_id_auto
+    res = torch.tensor(global_id_auto)
+    global_id_auto += 1
+    return res
+
 def intermediate_path(id):
     if torch.is_tensor(id):
         id = id.item()

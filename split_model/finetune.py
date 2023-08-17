@@ -8,6 +8,8 @@ import torch
 
 from phantom_loader import llama7b_phantom
 
+import backprop_service
+
 sys.path.insert(0, '../llama/llama')
 from tokenizer import Tokenizer
 
@@ -30,6 +32,8 @@ lr = 1e-5
 
 if __name__ == '__main__':
     torch.random.manual_seed(seed)
+    backprop_service.lr = lr
+
     tokenizer_path = os.path.join(model_path, 'tokenizer.model')
 
     tokenizer = Tokenizer(tokenizer_path)

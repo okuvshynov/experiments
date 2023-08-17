@@ -24,7 +24,8 @@ python split_model/test_gen.py ../llama-2-7b/
 [?] training: fine-tune on a real dataset
 [x] test on cuda
 [x] rather than comparing to reference implementation save the output.
-[ ] pass learning rate around, not configure in 3 different places.
+[x] pass learning rate around, not configure in 3 different places.
+[ ] check what exactly takes how much memory
 [ ] use shared memory rather than pipe
 [ ] offload embeddings & output linear layer as well.
 [ ] improve loading time as it is important for testing
