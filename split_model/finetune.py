@@ -18,17 +18,20 @@ url = 'https://raw.githubusercontent.com/karpathy/char-rnn/master/data/tinyshake
 text = requests.get(url).text
 
 model_path = '../llama-2-7b'
-device = 'mps'
 split = 0.9
-seq_len = 128
-dropout = 0.05
-batch_size = 2
 seed = 1997
-iters = 100
-eval_iters = 10
+iters = 1000
+device = 'mps'
+
+seq_len = 128
+dropout = 0.01
+batch_size = 8
+lr = 1e-3
+
+eval_period = 5
+eval_iters = 20
 # can afford larger batch size for no-grad 
-eval_batch_size = 4
-lr = 1e-5
+eval_batch_size = 32
 
 if __name__ == '__main__':
     torch.random.manual_seed(seed)
@@ -73,17 +76,15 @@ if __name__ == '__main__':
 
     start = time.time()
     for i in range(iters):
-        print(f'start iter {i} @ {time.time() - start:.3g}')
-        if (i % 2 == 0):
+        print(f'{time.time() - start:.3g} starting iteration {i}')
+        if (i % eval_period == 0):
             val_loss()
         X, y = get_batch(train, batch_size)
-        print(f'got data batch: {time.time() - start}, {X.shape}, {y.shape}')
         logits = model(X, y)
-        print(f'forward done: {time.time() - start}')
 
         opt.zero_grad()
         loss = model.last_loss
-        print(f'batch loss: {loss.item()}')
+        print(f'{time.time() - start:.3g} loss={loss.item()}')
         loss.backward()
         opt.step()
         print(f'backprop done: {time.time() - start}')
