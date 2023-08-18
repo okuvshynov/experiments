@@ -2,7 +2,7 @@
 # In contrast with model.py, which has model definition itself and can run 
 # other model with different settings, this one is specifically focusing on 
 # loading/saving the model as it is shared by Meta. 
-# It relies on specific data types, etc.
+# It relies on specific data types, file names, etc..
 
 import pickle
 import collections
@@ -119,6 +119,11 @@ def save_llama7b(model, original_path, new_path):
     for i, layer in enumerate(model.layers):
         for k, t in layer.to_state_dict().items():
             state_dict[f'layers.{i}.{k}'] = t
+
+    for k, t in model.output.to_state_dict().items():
+        state_dict[f'output.{k}'] = t
+    for k, t in model.tok_embeddings.to_state_dict().items():
+        state_dict[f'tok_embeddings.{k}'] = t
 
     # loading data.pkl from original file
     old_weights_path = os.path.join(original_path, "consolidated.00.pth")
