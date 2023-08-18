@@ -191,7 +191,7 @@ What we need to compare it to though - backprop on larger sequence lengths/batch
 
 With batch_size = 4 and seq_len = 2048 we are at 58% GPU memory util (out of 40Gb). 
 
-Reference impl CUDA OOMs at batch 5.
+Reference impl CUDA OOMs at batch 4.
 
 Don't care about quantization as long as we are consistent in what we use.
 
