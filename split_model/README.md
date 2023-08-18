@@ -197,6 +197,24 @@ Reference impl CUDA OOMs at batch 4.
 
 Don't care about quantization as long as we are consistent in what we use.
 
+### notes testing on A10
+
+Config:
+* 24Gb GPU memory
+* 1.4Tb SSD drive (good)
+* 200Gb RAM
+* 30 vCPU
+
+Goals:
+1. Get 70B working with some setup?
+2. Check if pipe works well or results in copying.
+3. parallelize model loading
+4. maybe check float32 vs bfloat16?
+
+Notes:
+* model loading is way too slow.
+* pipe is wrong, we copying tensor back and forth many times.
+
 ### dependencies
 * pip install torch
 * pip install sentencepiece # for tokenizer
