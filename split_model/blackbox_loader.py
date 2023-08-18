@@ -5,7 +5,6 @@
 # It relies on specific data types, etc.
 
 import pickle
-import sys
 import collections
 import torch
 import zipfile
@@ -118,12 +117,8 @@ def load_llama7b(llama2_7b_path, **kwargs):
 def save_llama7b(model, original_path, new_path):
     state_dict = model.state_dict()
     for i, layer in enumerate(model.layers):
-        sys.stdout.write('.')
-        sys.stdout.flush()
-        prefix = f'layers.{i}.'
-        module_state_dict = layer.to_state_dict()
-        for k, t in module_state_dict.items():
-            state_dict[prefix + k] = t
+        for k, t in layer.to_state_dict().items():
+            state_dict[f'layers.{i}.{k}'] = t
 
     # loading data.pkl from original file
     old_weights_path = os.path.join(original_path, "consolidated.00.pth")
@@ -146,8 +141,6 @@ def save_llama7b(model, original_path, new_path):
             
             size = t.untyped_storage().nbytes()
             addr = t.untyped_storage().data_ptr()
-            print(f'{t.dtype} -- {size}')
-
             buffer = bytes((ctypes.c_char * size).from_address(addr))
 
             with checkpoint_zip.open(f'consolidated/data/{i}', 'w') as data_file:

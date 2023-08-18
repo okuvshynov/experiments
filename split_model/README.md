@@ -26,22 +26,22 @@ python split_model/test_gen.py ../llama-2-7b/
 [x] rather than comparing to reference implementation save the output.
 [x] pass learning rate around, not configure in 3 different places.
 [x] check what exactly takes how much memory
-[ ] use shared memory rather than pipe
 [x] offload embeddings & output linear layer as well.
 [ ] improve loading time as it is important for testing
+[ ] finetune + save
+[?] use shared memory rather than pipe
+    [ ] for cuda need to fix this
 [ ] optimizations - prefetch the blackbox, save asyncronously, measure utilization, etc.
 [x] get rid of dependency on llama.c on test 
 [ ] larger llama2 (15/70)?
 [ ] training: test on large fast machine with cuda
+[ ] try quantize?
 ```
 
 ### performance current status
 
 All of the tests/measurements were done on Apple M1 with 16Gb RAM and 256Gb SSD.
 
-Some measurements first:
-![cubestat utilization](static/backprop_0.png)
-![cubestat utilization](static/backprop_import.png)
 Looking at utilization plot at higher resolution (100ms time step) we can see what's going on more clearly:
 
 ![cubestat utilization](static/backprop_hires.png)
@@ -107,6 +107,7 @@ main peak rss: 2246
 ...
           1755929856  peak memory footprint
 ```
+
 
 
 
@@ -195,6 +196,9 @@ Reference impl CUDA OOMs at batch 4.
 
 Don't care about quantization as long as we are consistent in what we use.
 
+### dependencies
+* pip install torch
+* pip install sentencepiece # for tokenizer
 
 ### References
 * [llama2.c](https://github.com/karpathy/llama2.c)

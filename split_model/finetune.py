@@ -20,12 +20,12 @@ text = requests.get(url).text
 model_path = '../llama-2-7b'
 device = 'mps'
 split = 0.9
-seq_len = 2048
+seq_len = 128
 dropout = 0.05
 batch_size = 2
 seed = 1997
 iters = 100
-eval_iters = 1
+eval_iters = 10
 # can afford larger batch size for no-grad 
 eval_batch_size = 4
 lr = 1e-5
