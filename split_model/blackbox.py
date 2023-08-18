@@ -1,14 +1,6 @@
 import torch
 
 from utils import intermediate_path, save_rng_state, device_map, next_id
-from backprop_service import Backprop
-
-def backwards_call(device, params):
-    if not hasattr(backwards_call, 'backprop'):
-        backwards_call.backprop = Backprop()
-        
-    params = [device] + params
-    return backwards_call.backprop.run(params)
 
 class BlackboxFn(torch.autograd.Function):
     @staticmethod
@@ -17,26 +9,10 @@ class BlackboxFn(torch.autograd.Function):
 
         torch.save(input, intermediate_path(input_id))
 
-        # we need to save rng state here as well to do second forward pass exactly the same
-        ctx.save_for_backward(module_id, input_id, save_rng_state(device), *args)
         module = torch.load(intermediate_path(module_id), map_location=torch.device(device))
         if not is_training:
             module.eval()
-        output = module(input, *args)
-        return output
-
-    @staticmethod
-    def backward(ctx, grad_output):
-        module_id, input_id, rng_state, *extra = ctx.saved_tensors
-        device = device_map(grad_output.device)
-
-        params = [module_id.item(), input_id.item(), grad_output.to('cpu'), rng_state.to('cpu')]
-        extra = [t.to('cpu') for t in extra]
-        
-        grad_input = backwards_call(device, params + extra)
-        if grad_input is not None:
-            grad_input = grad_input.to(device)
-        return None, None, None, grad_input, None, None
+        return module(input, *args)
 
 class Blackbox(torch.nn.Module):
     def __init__(self, module):
@@ -47,6 +23,15 @@ class Blackbox(torch.nn.Module):
 
     def loaded_inner(self):
         return torch.load(intermediate_path(self.module_id))
+    
+    def load(self, device):
+        return torch.load(intermediate_path(self.module_id), map_location=torch.device(device_map(device)))
+
+    def save(self, module):
+        torch.save(module, intermediate_path(self.module_id))
+    
+    def load_input(self, device):
+        return torch.load(intermediate_path(self.input_id), map_location=torch.device(device_map(device)))
     
     def from_state_dict(self, state_dict):
         module = self.loaded_inner()

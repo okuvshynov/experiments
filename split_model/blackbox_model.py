@@ -15,6 +15,8 @@ from torch import nn
 
 from blackbox import Blackbox
 
+from utils import save_rng_state, restore_rng_state, device_map
+
 @dataclass
 class ModelArgs:
     dim: int = 4096
@@ -256,5 +258,84 @@ class Transformer(nn.Module):
             # inference-time mini-optimization: only forward the output on the very last position
             logits = self.output(h[:, [-1], :]) # note: using list [-1] to preserve the time dim
             self.last_loss = None
+
+        return logits
+
+
+    def backprop_blackbox(self, blackbox_module, output_grad, lr=100.0, *args):
+        device = output_grad.device
+        module = blackbox_module.load(device)
+        input = blackbox_module.load_input(device)
+
+        if 'float' in str(input.dtype):
+            input.requires_grad = True
+
+        opt = torch.optim.SGD(module.parameters(), lr=lr)
+        opt.zero_grad()
+        
+        output = module(input, *args)
+        output.backward(output_grad)
+        opt.step()
+
+        blackbox_module.save(module)
+        return input.grad if input.requires_grad else None
+
+
+    def manual_loop(self, tokens, targets, lr=0.01):
+        device = device_map(tokens.device)
+
+        dummy = torch.ones((1, 1), requires_grad=True)
+        embd_out = self.tok_embeddings(tokens, dummy)
+        embd_out = embd_out.detach()
+        embd_out.requires_grad = True
+
+        rngstate = save_rng_state(device)
+        dropout_out = self.dropout(embd_out)
+        dropout_out = dropout_out.detach()
+        dropout_out.requires_grad = True
+
+        _bsz, seqlen = tokens.shape
+
+        freqs_cos = self.freqs_cos[:seqlen]
+        freqs_sin = self.freqs_sin[:seqlen]
+
+        layers_in = [dropout_out]
+        rng_before = []
+
+        for layer in self.layers:
+            rng_before.append(save_rng_state(device))
+            out = layer(layers_in[-1], freqs_cos, freqs_sin)
+            out = out.detach()
+            out.requires_grad = True
+            layers_in.append(out)
+
+        norm_out = self.norm(layers_in[-1])
+        norm_out = norm_out.detach()
+        norm_out.requires_grad = True
+
+        logits = self.output(norm_out)
+        logits = logits.detach()
+        logits.requires_grad = True
+
+        loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1)
+
+        loss.backward()
+
+        norm_out_grad = self.backprop_blackbox(self.output, logits.grad)
+
+        norm_out2 = self.norm(layers_in[-1])
+        norm_out2.backward(norm_out_grad)
+
+        last_grad = layers_in[-1].grad
+
+        for (layer, rng_state) in zip(reversed(self.layers), reversed(rng_before)):
+            restore_rng_state(rng_state, device=device)
+            last_grad = self.backprop_blackbox(layer, last_grad, lr, freqs_cos, freqs_sin)
+
+        restore_rng_state(rngstate, device=device)
+        dropped_out = self.dropout(embd_out)
+        dropped_out.backward(last_grad)
+
+        self.backprop_blackbox(self.tok_embeddings, embd_out.grad, lr, dummy)
 
         return logits

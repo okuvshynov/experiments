@@ -6,7 +6,6 @@ import torch
 import sys
 
 from blackbox_loader import load_llama7b
-import backprop_service
 
 batch_size = 2
 length = 32
@@ -22,8 +21,6 @@ if __name__ == '__main__':
     X = torch.arange(length * batch_size).view(batch_size, length).to(device)
     Y = X + 1
 
-    backprop_service.lr = lr
-
     start = time.time()
     model = load_llama7b(model_path, dropout=dropout).to(device)
     print(f'loaded model in {time.time() - start} seconds')
@@ -38,7 +35,6 @@ if __name__ == '__main__':
 
         start = time.time()
         opt.zero_grad()
-        loss = model.last_loss
-        loss.backward()
+        _ = model.manual_loop(X, Y, lr=lr)
         opt.step()
-        print(f'backward pass in {time.time() - start} seconds')
+        print(f'combined pass in {time.time() - start} seconds')

@@ -8,8 +8,6 @@ import torch
 
 from blackbox_loader import load_llama7b
 
-import backprop_service
-
 sys.path.insert(0, '../llama/llama')
 from tokenizer import Tokenizer
 
@@ -35,7 +33,6 @@ eval_batch_size = 32
 
 if __name__ == '__main__':
     torch.random.manual_seed(seed)
-    backprop_service.lr = lr
 
     tokenizer_path = os.path.join(model_path, 'tokenizer.model')
 
@@ -83,8 +80,9 @@ if __name__ == '__main__':
         logits = model(X, y)
 
         opt.zero_grad()
-        loss = model.last_loss
+
+        loss = model.manual_loop(X, y, lr=lr)
         print(f'{time.time() - start:.3g} loss={loss.item()}')
-        loss.backward()
+
         opt.step()
         print(f'backprop done: {time.time() - start}')

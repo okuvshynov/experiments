@@ -6,7 +6,6 @@ import torch
 import sys
 
 from blackbox_loader import load_llama7b
-import backprop_service
 from utils import peak_rss
 
 batch_size = 1
@@ -20,6 +19,8 @@ lr = 100.0
 
 model_path = sys.argv[1]
 mode = sys.argv[2] if len(sys.argv) > 2 else 'data'
+
+txt = lambda ok: '[ OK ]' if ok else '[FAIL]'
 
 def blackbox_backwards(device='cpu'):
     print(f'main peak rss: {peak_rss()}')
@@ -38,19 +39,21 @@ def blackbox_backwards(device='cpu'):
     torch.random.manual_seed(seed)
     logits = model(X, Y)
 
-    print(f'forward pass in {time.time() - start} seconds')
-    print(f'main peak rss: {peak_rss()}')
+    print(f'forward pass in {time.time() - start} seconds, peak rss {peak_rss()}')
     layer_13 = model.layers[13].loaded_inner()
     weight_before = layer_13.attention.wq.weight[:test_data_dim, :test_data_dim].clone()
     emb_before = model.tok_embeddings.loaded_inner().weight[:test_data_dim, :test_data_dim].clone()
 
     start = time.time()
     opt.zero_grad()
-    loss = model.last_loss
-    loss.backward()
+
+    torch.random.manual_seed(seed)
+    logits2 = model.manual_loop(X, Y, lr=lr)
+
     opt.step()
-    print(f'backward pass in {time.time() - start} seconds')
-    print(f'main peak rss: {peak_rss()}')
+    print(f'combined pass in {time.time() - start} seconds, peak rss {peak_rss()}')
+
+    print(f'{txt(torch.allclose(logits.cpu(), logits2.cpu()))} logits from fwd/combined are same')
 
     layer_13 = model.layers[13].loaded_inner()
     weight_after = layer_13.attention.wq.weight[:test_data_dim, :test_data_dim].clone()
@@ -86,7 +89,7 @@ def plain_backwards(device='cpu'):
     emb_after = model.tok_embeddings.weight[:test_data_dim, :test_data_dim].clone()
     return weight_before, weight_after, logits[0, :length, :test_data_dim].clone(), emb_before, emb_after
 
-def reference_compare(save_test_data=True):
+def reference_compare(save_test_data=False):
     print('Running blackbox on CPU')
     wb, wa, y, emb_before, emb_after = blackbox_backwards('cpu')
 
@@ -104,7 +107,6 @@ def reference_compare(save_test_data=True):
     same_y = torch.allclose(y.cpu(), y_plain.cpu())
     same_emb_before = torch.allclose(emb_before.cpu(), emb_before_plain.cpu())
     same_emb_after = torch.allclose(emb_after.cpu(), emb_after_plain.cpu())
-    txt = lambda ok: '[ OK ]' if ok else '[FAIL]'
 
     print(f'{txt(same_before)} weights before')
     print(f'{txt(same_after)} weights after')
@@ -127,8 +129,7 @@ def test_data_compare():
     same_y = torch.allclose(y.cpu(), y_plain.cpu())
     same_emb_before = torch.allclose(emb_before.cpu(), emb_before_plain.cpu())
     same_emb_after = torch.allclose(emb_after.cpu(), emb_after_plain.cpu())
-    txt = lambda ok: '[ OK ]' if ok else '[FAIL]'
-
+    
     print(f'{txt(same_before)} weights before')
     print(f'{txt(same_after)} weights after')
     print(f'{txt(same_emb_before)} emb weights before')
@@ -136,7 +137,7 @@ def test_data_compare():
     print(f'{txt(same_y)} out logits')
 
 if __name__ == '__main__':
-    backprop_service.lr = lr
+    #backprop_service.lr = lr
     if mode == 'data':
         test_data_compare()
     else:
