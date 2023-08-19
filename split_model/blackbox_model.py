@@ -204,13 +204,6 @@ class TransformerBlock(nn.Module):
         out = h + self.feed_forward.forward(self.ffn_norm(h))
         return out
 
-class DummyEmbedding(nn.Embedding):
-    def __init__(self, vocab_size, dim):
-        super().__init__(vocab_size, dim)
-        
-    def forward(self, tokens, extra):
-        return super().forward(tokens) * extra.to(tokens.device)
-
 class Transformer(nn.Module):
     last_loss: Optional[torch.Tensor]
 
@@ -220,7 +213,7 @@ class Transformer(nn.Module):
         self.vocab_size = params.vocab_size
         self.n_layers = params.n_layers
 
-        self.tok_embeddings = Blackbox(DummyEmbedding(params.vocab_size, params.dim))
+        self.tok_embeddings = Blackbox(nn.Embedding(params.vocab_size, params.dim))
         self.dropout = nn.Dropout(params.dropout)
         self.layers = torch.nn.ModuleList()
         for layer_id in range(params.n_layers):
@@ -240,8 +233,7 @@ class Transformer(nn.Module):
         _bsz, seqlen = tokens.shape
 
         # dummy input to force gradient propagation to blackbox modules
-        dummy = torch.ones((1, 1), requires_grad=True)
-        h = self.tok_embeddings(tokens, dummy)
+        h = self.tok_embeddings(tokens)
         h = self.dropout(h)
         freqs_cos = self.freqs_cos[:seqlen]
         freqs_sin = self.freqs_sin[:seqlen]
@@ -284,32 +276,27 @@ class Transformer(nn.Module):
     def manual_loop(self, tokens, targets, lr=0.01):
         device = device_map(tokens.device)
 
-        dummy = torch.ones((1, 1), requires_grad=True)
-        embd_out = self.tok_embeddings(tokens, dummy)
+        embd_out = self.tok_embeddings(tokens)
         embd_out = embd_out.detach()
         embd_out.requires_grad = True
-
-        rngstate = save_rng_state(device)
-        dropout_out = self.dropout(embd_out)
-        dropout_out = dropout_out.detach()
-        dropout_out.requires_grad = True
 
         _bsz, seqlen = tokens.shape
 
         freqs_cos = self.freqs_cos[:seqlen]
         freqs_sin = self.freqs_sin[:seqlen]
 
-        layers_in = [dropout_out]
+        rngstate = save_rng_state(device)
+        current = self.dropout(embd_out)
         rng_before = []
 
         for layer in self.layers:
             rng_before.append(save_rng_state(device))
-            out = layer(layers_in[-1], freqs_cos, freqs_sin)
-            out = out.detach()
-            out.requires_grad = True
-            layers_in.append(out)
+            current = layer(current, freqs_cos, freqs_sin)
 
-        norm_out = self.norm(layers_in[-1])
+        current = current.detach()
+        current.requires_grad = True
+
+        norm_out = self.norm(current)
         norm_out = norm_out.detach()
         norm_out.requires_grad = True
 
@@ -323,10 +310,10 @@ class Transformer(nn.Module):
 
         norm_out_grad = self.backprop_blackbox(self.output, logits.grad)
 
-        norm_out2 = self.norm(layers_in[-1])
+        norm_out2 = self.norm(current)
         norm_out2.backward(norm_out_grad)
 
-        last_grad = layers_in[-1].grad
+        last_grad = current.grad
 
         for (layer, rng_state) in zip(reversed(self.layers), reversed(rng_before)):
             restore_rng_state(rng_state, device=device)
@@ -336,6 +323,6 @@ class Transformer(nn.Module):
         dropped_out = self.dropout(embd_out)
         dropped_out.backward(last_grad)
 
-        self.backprop_blackbox(self.tok_embeddings, embd_out.grad, lr, dummy)
+        self.backprop_blackbox(self.tok_embeddings, embd_out.grad, lr)
 
         return logits
