@@ -49,5 +49,8 @@ def restore_rng_state(rng_state, device='cpu'):
     else:
         raise ValueError(f"Unsupported device: {device}")
     
-def peak_rss():
+def peak_rss_mb():
     return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss // (1024 * 1024)
+
+def mps_allocated_mb():
+    return torch.mps.current_allocated_memory() // (1024 * 1024)

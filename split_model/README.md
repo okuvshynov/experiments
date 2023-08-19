@@ -28,15 +28,14 @@ python split_model/test_gen.py ../llama-2-7b/
 [x] check what exactly takes how much memory
 [x] offload embeddings & output linear layer as well.
 [ ] finetune + save
-[?] use shared memory rather than pipe
-    [ ] for cuda need to fix this
 [ ] for saving model, fix rope?
 [ ] optimizations - prefetch the blackbox, save asyncronously, measure utilization, etc.
 [ ] improve loading time as it is important for testing
+[ ] cleanup and explanation
 [x] get rid of dependency on llama.c on test 
 [ ] larger llama2 (15/70)?
 [ ] training: test on large fast machine with cuda
-[ ] try quantize?
+[ ] try quantize? at least try bfloat16 on cuda
 ```
 
 ### performance current status

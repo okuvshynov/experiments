@@ -4,6 +4,7 @@
 # - no weight tying 
 # - using blackbox offloadable modules
 # - simplify init/generation as we only use it for fine-tuning experiments
+# - manual backprop 
 
 import math
 from dataclasses import dataclass
@@ -271,7 +272,6 @@ class Transformer(nn.Module):
 
         blackbox_module.save(module)
         return input.grad if input.requires_grad else None
-
 
     def manual_loop(self, tokens, targets, lr=0.01):
         device = device_map(tokens.device)

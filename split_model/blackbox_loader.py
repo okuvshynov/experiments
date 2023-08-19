@@ -14,7 +14,7 @@ import ctypes
 import gc
 
 from blackbox_model import Transformer, ModelArgs
-from utils import peak_rss
+from utils import peak_rss_mb
 
 vocab_size = 32000
 
@@ -68,7 +68,7 @@ def load_llama7b(llama2_7b_path, **kwargs):
     print(f'Loaded {len(modules)} module metadata')
     model_conf = ModelArgs(**_prepare_llama_config(params_path, **kwargs))
     model = Transformer(model_conf)
-    print(f'main peak rss: {peak_rss()}')
+    print(f'peak rss: {peak_rss_mb()}')
 
     # first manually populate layers one by one
     for i, layer in enumerate(model.layers):
@@ -79,20 +79,20 @@ def load_llama7b(llama2_7b_path, **kwargs):
         
         layer.from_state_dict(state_dict)
         gc.collect()
-        print(f'main peak rss after loading layer {i}: {peak_rss()}')
+        print(f'peak rss after loading layer {i}: {peak_rss_mb()}')
 
     prefix = 'output.'
     output_module = [(j, k[len(prefix):]) for j, k in enumerate(modules) if k.startswith(prefix)]
     model.output.from_state_dict(_populate_state_dict(output_module, weights_path))
     gc.collect()
-    print(f'main peak rss after output: {peak_rss()}')
+    print(f'peak rss after output: {peak_rss_mb()}')
     
     # embed
     prefix = 'tok_embeddings.'
     embed_module = [(j, k[len(prefix):]) for j, k in enumerate(modules) if k.startswith(prefix)]
     model.tok_embeddings.from_state_dict(_populate_state_dict(embed_module, weights_path))
     gc.collect()
-    print(f'main peak rss after embeddings: {peak_rss()}')
+    print(f'peak rss after embeddings: {peak_rss_mb()}')
 
     remaining_modules = [(j, k) for j, k in enumerate(modules) if (not (k.startswith('layers.') or (k.startswith('output.')) or (k.startswith('tok_embeddings.')))) ]
     state_dict = _populate_state_dict(remaining_modules, weights_path)

@@ -21,9 +21,9 @@ seed = 1997
 iters = 1000
 device = 'mps'
 
-seq_len = 128
+seq_len = 512
 dropout = 0.01
-batch_size = 8
+batch_size = 16
 lr = 1e-3
 
 eval_period = 5
@@ -73,16 +73,12 @@ if __name__ == '__main__':
 
     start = time.time()
     for i in range(iters):
-        print(f'{time.time() - start:.3g} starting iteration {i}')
-        if (i % eval_period == 0):
+        print(f'{time.time() - start} starting iteration {i}')
+        if (i % eval_period == 0 and i > 0):
             val_loss()
         X, y = get_batch(train, batch_size)
-        logits = model(X, y)
-
         opt.zero_grad()
-
-        loss = model.manual_loop(X, y, lr=lr)
-        print(f'{time.time() - start:.3g} loss={loss.item()}')
-
+        # both forward and backward passes are here
+        logits = model.manual_loop(X, y, lr=lr)
         opt.step()
         print(f'backprop done: {time.time() - start}')
