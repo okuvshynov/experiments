@@ -255,7 +255,7 @@ class Transformer(nn.Module):
         return logits
 
 
-    def backprop_blackbox(self, blackbox_module, output_grad, lr=100.0, *args):
+    def backprop_blackbox(self, blackbox_module, output_grad, lr, *args):
         device = output_grad.device
         module = blackbox_module.load(device)
         input = blackbox_module.load_input(device)
@@ -273,7 +273,7 @@ class Transformer(nn.Module):
         blackbox_module.save(module)
         return input.grad if input.requires_grad else None
 
-    def manual_loop(self, tokens, targets, lr=0.01):
+    def manual_loop(self, tokens, targets, lr):
         device = device_map(tokens.device)
 
         embd_out = self.tok_embeddings(tokens)
@@ -308,7 +308,7 @@ class Transformer(nn.Module):
 
         loss.backward()
 
-        norm_out_grad = self.backprop_blackbox(self.output, logits.grad)
+        norm_out_grad = self.backprop_blackbox(self.output, logits.grad, lr)
 
         norm_out2 = self.norm(current)
         norm_out2.backward(norm_out_grad)
