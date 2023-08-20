@@ -1,18 +1,6 @@
 import torch
 
-from utils import intermediate_path, save_rng_state, device_map, next_id
-
-class BlackboxFn(torch.autograd.Function):
-    @staticmethod
-    def forward(ctx, module_id, is_training, input_id, input, *args):
-        device = device_map(input.device)
-
-        torch.save(input, intermediate_path(input_id))
-
-        module = torch.load(intermediate_path(module_id), map_location=torch.device(device))
-        if not is_training:
-            module.eval()
-        return module(input, *args)
+from utils import intermediate_path, device_map, next_id
 
 class Blackbox(torch.nn.Module):
     def __init__(self, module):
@@ -56,4 +44,14 @@ class Blackbox(torch.nn.Module):
         return self.loaded_inner().state_dict()
 
     def forward(self, input, *args):
-        return BlackboxFn.apply(self.module_id, self.training, self.input_id, input, *args)
+        torch.save(input, intermediate_path(self.input_id))
+        device = device_map(input.device)
+        module = torch.load(intermediate_path(self.module_id), map_location=torch.device(device))
+
+        if not self.training:
+            module.eval()
+        
+        # we offload model anyway. for backwards pass we do it manually.
+        # no need to have gradient here ever.
+        with torch.no_grad():
+            return module(input, *args)
