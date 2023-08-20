@@ -27,15 +27,18 @@ python split_model/test_gen.py ../llama-2-7b/
 [x] pass learning rate around, not configure in 3 different places.
 [x] check what exactly takes how much memory
 [x] offload embeddings & output linear layer as well.
-[ ] finetune + save
+[x] get rid of dependency on llama.c on test 
+[ ] finetune + save/load + gen
+[ ] larger llama (13B on mac, 70b on CUDA)
+[ ] file/folder organization. move tests/benchmarks.
+[ ] cleanup and explanation
+[ ] bfloat16 on cuda
+Later:
 [ ] for saving model, fix rope?
 [ ] optimizations - prefetch the blackbox, save asyncronously, measure utilization, etc.
 [ ] improve loading time as it is important for testing
-[ ] cleanup and explanation
-[x] get rid of dependency on llama.c on test 
-[ ] larger llama2 (15/70)?
-[ ] training: test on large fast machine with cuda
-[ ] try quantize? at least try bfloat16 on cuda
+[ ] lora quantization
+[ ] AdamW support, save optimizer state as well.
 ```
 
 ### performance current status
