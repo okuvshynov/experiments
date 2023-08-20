@@ -325,4 +325,4 @@ class Transformer(nn.Module):
 
         self.backprop_blackbox(self.tok_embeddings, embd_out.grad, lr)
 
-        return logits
+        return logits, loss.item()

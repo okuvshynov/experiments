@@ -21,9 +21,9 @@ seed = 1997
 iters = 1000
 device = 'mps'
 
-seq_len = 512
+seq_len = 64
 dropout = 0.01
-batch_size = 16
+batch_size = 1
 lr = 1e-3
 
 eval_period = 5
@@ -78,7 +78,8 @@ if __name__ == '__main__':
             val_loss()
         X, y = get_batch(train, batch_size)
         opt.zero_grad()
-        # both forward and backward passes are here
-        logits = model.manual_loop(X, y, lr=lr)
+        # both forward and backward passes are here.
+        # returned loss is a scalar, not variable
+        logits, loss = model.manual_loop(X, y, lr=lr)
         opt.step()
-        print(f'backprop done: {time.time() - start}')
+        print(f'backprop done: {time.time() - start}, loss = {loss}')

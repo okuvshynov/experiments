@@ -48,7 +48,7 @@ def blackbox_backwards(device='cpu'):
     opt.zero_grad()
 
     torch.random.manual_seed(seed)
-    logits2 = model.manual_loop(X, Y, lr=lr)
+    logits2, loss2 = model.manual_loop(X, Y, lr=lr)
 
     opt.step()
     print(f'combined pass in {time.time() - start} seconds, peak rss {peak_rss_mb()}')
