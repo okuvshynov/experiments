@@ -42,10 +42,6 @@ python split_model/test_gen.py ../llama-2-7b/
 
 All of the tests/measurements were done on Apple M1 with 16Gb RAM and 256Gb SSD.
 
-Looking at utilization plot at higher resolution (100ms time step) we can see what's going on more clearly:
-
-![cubestat utilization](static/backprop_hires.png)
-
 Running benchmark:
 ```
 Loaded 292 module metadata
