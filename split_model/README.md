@@ -28,11 +28,12 @@ python split_model/test_gen.py ../llama-2-7b/
 [x] check what exactly takes how much memory
 [x] offload embeddings & output linear layer as well.
 [x] get rid of dependency on llama.c on test 
-[ ] finetune + save/load + gen
+[x] finetune + save/load + gen
 [ ] progress tracking for everything
 [ ] larger llama (13B on mac, 70b on CUDA)
 [ ] cleanup and explanation. file/folder organization. move tests/benchmarks.
 [ ] try bfloat16 on cuda
+
 Later:
 [ ] for saving model, fix rope?
 [ ] optimizations - prefetch the blackbox, save asyncronously, measure utilization, etc.

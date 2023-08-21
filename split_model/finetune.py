@@ -6,7 +6,7 @@ import sys
 import time
 import torch
 
-from blackbox_loader import load_llama7b
+from blackbox_loader import load_llama7b, save_llama7b
 
 sys.path.insert(0, '../llama/llama')
 from tokenizer import Tokenizer
@@ -16,9 +16,11 @@ url = 'https://raw.githubusercontent.com/karpathy/char-rnn/master/data/tinyshake
 text = requests.get(url).text
 
 model_path = '../llama-2-7b'
+new_model_path = '../llama-2-7b-tuned'
+
 split = 0.9
 seed = 1997
-iters = 1000
+iters = 100
 device = 'mps'
 
 seq_len = 64
@@ -83,3 +85,5 @@ if __name__ == '__main__':
         logits, loss = model.manual_loop(X, y, lr=lr)
         opt.step()
         print(f'backprop done: {time.time() - start}, loss = {loss}')
+
+    save_llama7b(model, model_path, new_path=new_model_path)

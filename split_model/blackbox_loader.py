@@ -12,6 +12,7 @@ import json
 import os
 import ctypes
 import gc
+import shutil
 
 from blackbox_model import Transformer, ModelArgs
 from utils import peak_rss_mb
@@ -54,8 +55,13 @@ def _populate_state_dict(module_subset, weights_path):
     state_dict = collections.OrderedDict()
 
     with zipfile.ZipFile(weights_path) as checkpoint_zip:
+        names = checkpoint_zip.namelist()
         for i, module_name in module_subset:
-            with checkpoint_zip.open(f'consolidated/data/{i}', 'r') as data_file:
+            name = f'consolidated/data/{i}'
+            if not name in names:
+                print(f'{module_name}[{name}] is missing in the archive')
+                continue
+            with checkpoint_zip.open(name, 'r') as data_file:
                 buf = data_file.read()
             state_dict[module_name] = torch.tensor(torch.UntypedStorage.from_buffer(buf, dtype=torch.bfloat16, byte_order='little'), dtype=torch.bfloat16)
     return state_dict
@@ -108,7 +114,7 @@ def load_llama7b(llama2_7b_path, **kwargs):
                 fix_shapes_rec(child, child_prefix)
 
     fix_shapes_rec(model)
-    model.load_state_dict(state_dict, strict=False)
+    print(f'loading rest of modules: {model.load_state_dict(state_dict, strict=False)}')
     print('populated all weights to model')
 
     return model
@@ -116,6 +122,8 @@ def load_llama7b(llama2_7b_path, **kwargs):
 
 def save_llama7b(model, original_path, new_path):
     state_dict = model.state_dict()
+
+    # populate back the modules we have offloaded to the normal paths
     for i, layer in enumerate(model.layers):
         for k, t in layer.to_state_dict().items():
             state_dict[f'layers.{i}.{k}'] = t
@@ -129,11 +137,17 @@ def save_llama7b(model, original_path, new_path):
     old_weights_path = os.path.join(original_path, "consolidated.00.pth")
     modules = _load_module_list(old_weights_path)
 
+
     with zipfile.ZipFile(old_weights_path) as checkpoint_zip:
         with checkpoint_zip.open('consolidated/data.pkl', 'r') as pickle_file:
             data_pkl = pickle_file.read()
+        # copy rope.freqs which we are not using
+        with checkpoint_zip.open('consolidated/data.pkl', 'r') as pickle_file:
+            data_pkl = pickle_file.read()
 
+    os.makedirs(new_path, exist_ok=True)
     new_weights_path = os.path.join(new_path, "consolidated.00.pth")
+    shutil.copy2(os.path.join(original_path, "params.json"), new_path)
     
     with zipfile.ZipFile(new_weights_path, mode='w') as checkpoint_zip:
         with checkpoint_zip.open('consolidated/data.pkl', 'w') as pickle_file:
@@ -142,7 +156,7 @@ def save_llama7b(model, original_path, new_path):
             if key not in state_dict.keys():
                 continue
             # prepare buffer of the right type from the tensor
-            t = state_dict[key].to(torch.bfloat16)
+            t = state_dict[key].cpu().to(torch.bfloat16)
             
             size = t.untyped_storage().nbytes()
             addr = t.untyped_storage().data_ptr()
