@@ -29,12 +29,15 @@ python split_model/test_gen.py ../llama-2-7b/
 [x] offload embeddings & output linear layer as well.
 [x] get rid of dependency on llama.c on test 
 [x] finetune + save/load + gen
+[ ] simpler loading, just load checkpoints one by one on CPU
+    [ ] two versions - current for 7b only, and simpler for 7/13/70
 [ ] progress tracking for everything
 [ ] larger llama (13B on mac, 70b on CUDA)
-[ ] cleanup and explanation. file/folder organization. move tests/benchmarks.
 [ ] try bfloat16 on cuda
+[ ] cleanup and explanation. 
 
 Later:
+[ ] file/folder organization. move tests/benchmarks.
 [ ] for saving model, fix rope?
 [ ] optimizations - prefetch the blackbox, save asyncronously, measure utilization, etc.
 [ ] improve loading time as it is important for testing
