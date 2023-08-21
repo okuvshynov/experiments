@@ -18,7 +18,13 @@ dropout = 0.1
 lr = 100.0
 
 model_path = sys.argv[1]
-mode = sys.argv[2] if len(sys.argv) > 2 else 'data'
+
+# ref -- reference implementation. 
+# data -- precomputed data. 
+# None - no comparison, just run and measure time
+compare_to = sys.argv[2] if len(sys.argv) > 2 else 'none'
+
+device = sys.argv[3] if len(sys.argv) > 3 else 'cpu'
 
 test_data_paths = [
     'split_model/test_data/sample_weights_before.pt',
@@ -30,7 +36,7 @@ test_data_paths = [
 
 txt = lambda ok: '[ OK ]' if ok else '[FAIL]'
 
-def blackbox_backwards(device='cpu'):
+def blackbox_backwards():
     print(f'peak rss: {peak_rss_mb()}')
     
     X = torch.arange(length * batch_size).view(batch_size, length).to(device)
@@ -68,7 +74,7 @@ def blackbox_backwards(device='cpu'):
     emb_after = model.tok_embeddings.loaded_inner().weight[:test_data_dim, :test_data_dim].clone()
     return weight_before, weight_after, logits[0, :length, :test_data_dim].clone(), emb_before, emb_after
 
-def plain_backwards(device='cpu'):
+def plain_backwards():
     from plain_loader import llama7b_torch
     X = torch.arange(length * batch_size).view(batch_size, length).to(device)
     Y = X + 1
@@ -98,10 +104,12 @@ def plain_backwards(device='cpu'):
     return weight_before, weight_after, logits[0, :length, :test_data_dim].clone(), emb_before, emb_after
 
 def get_comparison_data():
-    return plain_backwards() if mode == 'ref' else tuple(torch.load(p) for p in test_data_paths)
+    return plain_backwards() if compare_to == 'ref' else tuple(torch.load(p) for p in test_data_paths)
 
 def run(save_test_data):
-    wb, wa, y, emb_before, emb_after = blackbox_backwards('cpu')
+    wb, wa, y, emb_before, emb_after = blackbox_backwards()
+    if compare_to == 'none':
+        return
     comparison_data = get_comparison_data()
     if save_test_data:
         for t, p in zip(comparison_data, test_data_paths):
