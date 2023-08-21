@@ -75,7 +75,7 @@ def blackbox_backwards():
     return weight_before, weight_after, logits[0, :length, :test_data_dim].clone(), emb_before, emb_after
 
 def plain_backwards():
-    from plain_loader import llama7b_torch
+    from test_ref_loader import llama7b_torch
     X = torch.arange(length * batch_size).view(batch_size, length).to(device)
     Y = X + 1
 
