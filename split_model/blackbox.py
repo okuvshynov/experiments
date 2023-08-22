@@ -21,7 +21,7 @@ class Blackbox(torch.nn.Module):
     def load_input(self, device):
         return torch.load(intermediate_path(self.input_id), map_location=torch.device(device_map(device)))
     
-    def from_state_dict(self, state_dict):
+    def from_state_dict(self, state_dict, fix_shapes=True):
         module = self.loaded_inner()
 
         # fix shapes before loading
@@ -36,7 +36,8 @@ class Blackbox(torch.nn.Module):
                     child_prefix = prefix + name + '.'
                     fix_shapes_rec(child, child_prefix)
 
-        fix_shapes_rec(module)
+        if fix_shapes:
+            fix_shapes_rec(module)
         module.load_state_dict(state_dict)
         torch.save(module, intermediate_path(self.module_id))
 

@@ -6,7 +6,7 @@ import sys
 import time
 import torch
 
-from blackbox_loader import load_llama7b, save_llama7b
+from loader import load_llama2_7b, save_llama2_7b
 
 sys.path.insert(0, '../llama/llama')
 from tokenizer import Tokenizer
@@ -20,7 +20,7 @@ new_model_path = '../llama-2-7b-tuned'
 
 split = 0.9
 seed = 1997
-iters = 100
+iters = 1
 device = 'mps'
 
 seq_len = 64
@@ -49,7 +49,7 @@ if __name__ == '__main__':
 
     print(f'loaded datasets: train[{len(train)}], val[{len(val)}]')
 
-    model = load_llama7b(model_path, dropout=dropout).to(device)
+    model = load_llama2_7b(model_path, dropout=dropout).to(device)
 
     # dataset is either train or val
     def get_batch(data, batch_size):
@@ -86,4 +86,4 @@ if __name__ == '__main__':
         opt.step()
         print(f'backprop done: {time.time() - start}, loss = {loss}')
 
-    save_llama7b(model, model_path, new_path=new_model_path)
+    save_llama2_7b(model, new_model_path, model_path)
