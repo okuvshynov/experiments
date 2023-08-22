@@ -26,7 +26,7 @@ def load_llama2_7b(path, **kwargs):
     for i, layer in enumerate(model.layers):
         prefix = f'layers.{i}.'
         state_dict = {k[len(prefix):]: w for k, w in checkpoint.items() if k.startswith(prefix)}
-        layer.from_state_dict(state_dict, fix_shapes=False)
+        layer.from_state_dict(state_dict)
 
         # this might be not particularly important in a 'fit into memory' sense - 
         # only peak memory matters. However, in practice that might mean 'need to use swap less'
@@ -36,12 +36,12 @@ def load_llama2_7b(path, **kwargs):
         gc.collect()
         print(f'peak rss after loading layer {i}: {peak_rss_mb()}')
 
-    model.output.from_state_dict({'weight': checkpoint['output.weight']}, fix_shapes=False)
+    model.output.from_state_dict({'weight': checkpoint['output.weight']})
     del checkpoint['output.weight']
     gc.collect()
     print(f'peak rss after output: {peak_rss_mb()}')
 
-    model.tok_embeddings.from_state_dict({'weight': checkpoint['tok_embeddings.weight']}, fix_shapes=False)
+    model.tok_embeddings.from_state_dict({'weight': checkpoint['tok_embeddings.weight']})
     del checkpoint['tok_embeddings.weight']
     gc.collect()
     print(f'peak rss after tok_embeddings: {peak_rss_mb()}')
@@ -49,15 +49,15 @@ def load_llama2_7b(path, **kwargs):
     model.load_state_dict(checkpoint, strict=False)
     return model
 
-def save_llama2_7b(model, new_path, original_path):
-    state_dict = model.state_dict()
+def save_llama2_7b(model, new_path, original_path, dtype=torch.bfloat16):
+    state_dict = model.cpu().to(dtype).state_dict()
     for i, layer in enumerate(model.layers):
         for k, t in layer.to_state_dict().items():
-            state_dict[f'layers.{i}.{k}'] = t
+            state_dict[f'layers.{i}.{k}'] = t.cpu().to(dtype)
     for k, t in model.output.to_state_dict().items():
-        state_dict[f'output.{k}'] = t
+        state_dict[f'output.{k}'] = t.cpu().to(dtype)
     for k, t in model.tok_embeddings.to_state_dict().items():
-        state_dict[f'tok_embeddings.{k}'] = t
+        state_dict[f'tok_embeddings.{k}'] = t.cpu().to(dtype)
 
     os.makedirs(new_path, exist_ok=True)
     weights_path = os.path.join(new_path, 'consolidated.00.pth')
