@@ -47,7 +47,6 @@ def get_w_subset(title, weight, shards, shard):
 def apply_subset(module, weight_subset, checkpoint_index, title):
     with torch.no_grad():
         idx_subset = get_subset(title, weight_subset, checkpoint_index)
-        print(idx_subset)
         module.weight[idx_subset] = weight_subset
 
 def load_llama2(path, **kwargs):
