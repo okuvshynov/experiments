@@ -5,7 +5,7 @@ import time
 import torch
 import sys
 
-from loader import load_llama2_7b
+from loader import load_llama2
 from utils import peak_rss_mb
 
 batch_size = 1
@@ -43,7 +43,7 @@ def blackbox_backwards():
     Y = X + 1
 
     start = time.time()
-    model = load_llama2_7b(model_path, dropout=dropout).to(device)
+    model = load_llama2(model_path, dropout=dropout).to(device)
     print(f'loaded model in {time.time() - start} seconds')
 
     opt = torch.optim.SGD(model.parameters(), lr=lr)

@@ -6,7 +6,7 @@ import sys
 import time
 import torch
 
-from loader import load_llama2_7b, save_llama2_7b
+from loader import load_llama2, save_llama2
 
 sys.path.insert(0, '../llama/llama')
 from tokenizer import Tokenizer
@@ -15,8 +15,8 @@ from tokenizer import Tokenizer
 url = 'https://raw.githubusercontent.com/karpathy/char-rnn/master/data/tinyshakespeare/input.txt'
 text = requests.get(url).text
 
-model_path = '../llama-2-7b'
-new_model_path = '../llama-2-7b-tuned'
+model_path = '../llama-2-13b'
+new_model_path = '../llama-2-13b-tuned'
 
 split = 0.9
 seed = 1997
@@ -49,7 +49,7 @@ if __name__ == '__main__':
 
     print(f'loaded datasets: train[{len(train)}], val[{len(val)}]')
 
-    model = load_llama2_7b(model_path, dropout=dropout).to(device)
+    model = load_llama2(model_path, dropout=dropout).to(device)
 
     # dataset is either train or val
     def get_batch(data, batch_size):
@@ -86,4 +86,4 @@ if __name__ == '__main__':
         opt.step()
         print(f'backprop done: {time.time() - start}, loss = {loss}')
 
-    save_llama2_7b(model, new_model_path, model_path)
+    save_llama2(model, new_model_path, model_path, shards=1)
