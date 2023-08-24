@@ -4,12 +4,14 @@ import json
 import gc
 import shutil
 import glob
+import logging
 
 from blackbox_model import Transformer, ModelArgs
 from utils import peak_rss_mb
 
 vocab_size = 32000
 
+# are weights are sharded by rows or columns in llama2?
 join_dim = {
     'attention.wq': 0,
     'attention.wk': 0,
@@ -58,10 +60,13 @@ def load_llama2(path, **kwargs):
     for k, v in kwargs.items():
         config[k] = v
 
+    logging.info('creating model instance')
     model = Transformer(ModelArgs(**config))
     paths = sorted(glob.glob(f'{path}/consolidated.*.pth'))
 
     for ci, checkpoint_path in enumerate(paths):
+        logging.info(f'processing checkpoint {ci} out of {len(paths)}')
+    
         checkpoint = torch.load(checkpoint_path, map_location='cpu')
 
         for i, layer in enumerate(model.layers):
@@ -75,17 +80,20 @@ def load_llama2(path, **kwargs):
                     apply_subset(submodule, weight_subset, ci, title)
                     del checkpoint[full_path]
                     gc.collect()
+            logging.info(f'updating layer {i} out of {len(model.layers)}')
             layer.save(block)
 
         # now repeat for other submodules: output, embeddings and norm
         title = 'output'
         block = model.output.loaded_inner()
         apply_subset(block, checkpoint[f'{title}.weight'], ci, title)
+        logging.info(f'updating output layer')
         model.output.save(block)
 
         title = 'tok_embeddings'
         block = model.tok_embeddings.loaded_inner()
         apply_subset(block, checkpoint[f'{title}.weight'], ci, title)
+        logging.info(f'updating token embeddings')
         model.tok_embeddings.save(block)
 
         # norm left
@@ -100,8 +108,10 @@ def save_llama2(model, new_path, original_path, shards=1, dtype=torch.bfloat16):
     os.makedirs(new_path, exist_ok=True)
     
     for shard in range(shards):
+        logging.info(f'processing shard {shard} out of {shards}')
         # layers:
         for i, layer in enumerate(model.layers):
+            logging.info(f'processing layer {i} out of {len(model.layers)}')
             for title, weight in layer.to_state_dict().items():
                 title = title[:-len('.weight')]
                 subset = get_w_subset(title, weight, shards, shard)
@@ -126,5 +136,6 @@ def save_llama2(model, new_path, original_path, shards=1, dtype=torch.bfloat16):
 
 
 if __name__ == '__main__':
+    logging.basicConfig(format='%(asctime)s %(message)s', level=logging.INFO)
     model_a = load_llama2('../llama-2-13b')
     save_llama2(model_a, '../llama-2-13b_x', '../llama-2-13b', shards=2)
