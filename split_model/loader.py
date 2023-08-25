@@ -11,7 +11,7 @@ from utils import peak_rss_mb
 
 vocab_size = 32000
 
-# are weights are sharded by rows or columns in llama2?
+# are weights sharded by rows or columns in llama2?
 join_dim = {
     'attention.wq': 0,
     'attention.wk': 0,

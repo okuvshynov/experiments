@@ -1,7 +1,6 @@
 import os
 import requests
 import sys
-import time
 import torch
 import logging
 
@@ -71,9 +70,8 @@ if __name__ == '__main__':
 
     opt = torch.optim.SGD(model.parameters(), lr=lr)
 
-    start = time.time()
     for i in range(iters):
-        logging.info(f'{time.time() - start} starting iteration {i}')
+        logging.info(f'starting iteration {i}')
         if (i % eval_period == 0 and i > 0):
             val_loss()
         X, y = get_batch(train, batch_size)
@@ -82,6 +80,6 @@ if __name__ == '__main__':
         # returned loss is a scalar, not variable
         logits, loss = model.manual_loop(X, y, lr=lr)
         opt.step()
-        logging.info(f'backprop done: {time.time() - start}, loss = {loss}')
+        logging.info(f'backprop done, loss = {loss}')
 
     save_llama2(model, new_model_path, model_path, shards=1)
