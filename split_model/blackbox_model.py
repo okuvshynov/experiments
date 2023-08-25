@@ -5,6 +5,7 @@
 # - using blackbox offloadable modules
 # - simplify init/generation as we only use it for fine-tuning experiments
 # - manual backprop 
+# - support for ffn_dim_multiplier which llama2-70b uses
 
 import math
 from dataclasses import dataclass
@@ -14,9 +15,43 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from blackbox import Blackbox
+from utils import save_rng_state, restore_rng_state, device_map, intermediate_path, device_map, next_id
 
-from utils import save_rng_state, restore_rng_state, device_map
+# a wrapper around arbitrary model which can save/load inner model to hdd
+class Blackbox(torch.nn.Module):
+    def __init__(self, module):
+        super().__init__()
+        self.module_id = next_id()
+        self.input_id = next_id()
+        torch.save(module, intermediate_path(self.module_id))
+
+    def loaded_inner(self):
+        return torch.load(intermediate_path(self.module_id))
+    
+    def load(self, device):
+        return torch.load(intermediate_path(self.module_id), map_location=torch.device(device_map(device)))
+
+    def save(self, module):
+        torch.save(module, intermediate_path(self.module_id))
+    
+    def load_input(self, device):
+        return torch.load(intermediate_path(self.input_id), map_location=torch.device(device_map(device)))
+
+    def to_state_dict(self):
+        return self.loaded_inner().state_dict()
+
+    def forward(self, input, *args):
+        torch.save(input, intermediate_path(self.input_id))
+        device = device_map(input.device)
+        module = torch.load(intermediate_path(self.module_id), map_location=torch.device(device))
+
+        if not self.training:
+            module.eval()
+        
+        # we offload model anyway. for backwards pass we do it manually.
+        # no need to have gradient here ever.
+        with torch.no_grad():
+            return module(input, *args)
 
 @dataclass
 class ModelArgs:
@@ -258,7 +293,7 @@ class Transformer(nn.Module):
 
         return logits
 
-
+    # TODO: move this to Blackbox class
     def backprop_blackbox(self, blackbox_module, output_grad, lr, *args):
         device = output_grad.device
         module = blackbox_module.load(device)
@@ -277,6 +312,7 @@ class Transformer(nn.Module):
         blackbox_module.save(module)
         return input.grad if input.requires_grad else None
 
+    # this is a manual implementation on forward/backward passes
     def manual_loop(self, tokens, targets, lr):
         device = device_map(tokens.device)
 

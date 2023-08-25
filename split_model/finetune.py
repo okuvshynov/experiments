@@ -69,7 +69,6 @@ if __name__ == '__main__':
 
         model.train()
 
-    X, y = get_batch(train, batch_size)
     opt = torch.optim.SGD(model.parameters(), lr=lr)
 
     start = time.time()
