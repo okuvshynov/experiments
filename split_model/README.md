@@ -1,9 +1,32 @@
-### How to use
+## slowllama
+
+Fine-tune llama2 models (including 70B) on Apple macbooks. slowllama is not using any aggressive quantization (no lora, etc) and just offloads parts of model to/from SSD. This approach, while slow, can work for small-scale finetuning.
+In contrast with training from scratch (completely unattainable) or inference (where we are likely to care about interactivity and tokens/sec), in finetune case we can still get something done if we allow it to run, say, overnight. 
+
+### How does it work?
+Most of the tests were done on MacMini M1 with 16Gb RAM with llama2-13b. 7B model will have one shard and 70B model will have 8, but other than that there's no special handling.
+
+First, we need to be able to load a model which needs much more RAM than we have. We create model instance with all large modules' weights offloaded to SSD - for each of the transformer blocks, token embeddings and output linear layer. After that we load model checkpoints one by one, for each checkpoint iterate over all modules, update corresponding subset of its weights and save it back. 
+
+Doing forward path is straighforward - we just load each model when we need, evaluate it and return the result. Backward pass is a little more tricky.
+
+The way it's currently implemented is:
+1. Do a forward pass the same way as above, while also saving inputs to each block.
+2. Then, do a ~manual backward gradient propagation. We re-run each block again with the same input to build the internal graph again. Run real backward pass, update the weights for that block, save it back. Repeat. Important: we need to save and restore random number generation state. During training we use dropout, and randomly switched off neurons should be the same on both forward passes.
+
+Limitations:
+1. Stateless optimizer (SGD). We'll have to load/save AdamW state repeatedly as well to be able to use it. That's one of the next action items.
+2. It is slow
+3. SSD requirements - even for 13B model you'll need: 26-27Gb for original weights + 50Gb for intermediate weights (this can be easily reduced 2x if we save it in bfloat16 rather than float32) + same 26-27Gb if you want to save a single snapshot.
+4. no gradient accumulation, just update weights as we go.
+
+
+### How to setup
 
 1. Install dependencies: torch, sentencepiece 
-1. Follow instructions in [llama2](https://github.com/facebookresearch/llama) and download the models. It will download tokenizer model as well.
-2. Clone that repo, we'll need it for tokenizer
-3. To check that everything worked you can run 
+2. Follow instructions in [llama2](https://github.com/facebookresearch/llama) and download the models. It will download tokenizer model as well.
+3. Clone that repo, we'll need it for tokenizer
+4. To check that model loaded correctly we can test generating the sequence 
 
 ```
 python test_gen.py path_to_folder [optional device]
@@ -21,10 +44,21 @@ Example folder structure could look like:
     /llama-2-7b/...
     /llama-2-13b/...
     /llama-2-70b/...
-    /llama/ # <-- this is Meta repository
+    /llama/...     # <-- this is Meta repository
     /slowllama/... # <- this repo
-    /llama2.c # (https://github.com/karpathy/llama2.c), optional for 
 ```
+
+5. Running a single backprop iteration test:
+
+```
+python test_backprop.py ../llama-2-7b data
+```
+This would run model on CPU and compare output and some weight subset after 1 step against data obtained through reference implementation (llama2.c). 
+
+### How to finetune
+
+1. Open finetune.py. It's a very simple file which loads small txt file with public domain text, tokenizes it and splits into train/test set. There are some settings you could change here, like sequence length, batch size, learning rate, dropout rate, number of iterations. Change this if desired. Model path for input/output is hardcoded in that script as well, change accordingly. For the model saving, double-check that you use the expected number of shards (TODO: just reuse one from original model). 
+2. run ```python finetune.py```
 
 ### Files
 
