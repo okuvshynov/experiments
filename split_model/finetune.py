@@ -1,5 +1,3 @@
-# first iteration of fine-tuning, we don't even save the model anywhere
-
 import os
 import requests
 import sys
@@ -9,6 +7,7 @@ import logging
 
 from loader import load_llama2, save_llama2
 
+# use tokenizer from llama
 sys.path.insert(0, '../llama/llama')
 from tokenizer import Tokenizer
 

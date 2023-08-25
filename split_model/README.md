@@ -29,11 +29,10 @@ python split_model/test_gen.py ../llama-2-7b/
 [x] offload embeddings & output linear layer as well.
 [x] get rid of dependency on llama.c on test 
 [x] finetune + save/load + gen
-[ ] simpler loading, just load checkpoints one by one on CPU
-    [ ] two versions - current for 7b only, and simpler for 7/13/70
+[x] simpler loading, just load checkpoints one by one on CPU
 [ ] progress tracking for everything
-[ ] larger llama (13B on mac, 70b on CUDA)
-[ ] try bfloat16 on cuda
+[x] larger llama (13B on mac, 70b on CUDA)
+[x] try bfloat16 on cuda
 [ ] cleanup and explanation. 
 
 Later:
