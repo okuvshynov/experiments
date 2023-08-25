@@ -7,6 +7,10 @@ from tokenizer import Tokenizer
 
 from loader import load_llama2
 
+import logging
+
+logging.basicConfig(format='%(asctime)s %(message)s', level=logging.INFO)
+    
 model_path = sys.argv[1]
 device = sys.argv[2] if len(sys.argv) > 2 else 'cpu'
 
@@ -30,4 +34,4 @@ def greedy_gen(prompt, max_new_tokens=50):
 
 prompt = 'I believe the meaning of life is'
 
-greedy_gen(prompt, max_new_tokens=10)
+greedy_gen(prompt, max_new_tokens=100)

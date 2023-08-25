@@ -64,8 +64,10 @@ def load_llama2(path, **kwargs):
     model = Transformer(ModelArgs(**config))
     paths = sorted(glob.glob(f'{path}/consolidated.*.pth'))
 
+    shards = len(paths)
+
     for ci, checkpoint_path in enumerate(paths):
-        logging.info(f'processing checkpoint {ci} out of {len(paths)}')
+        logging.info(f'processing checkpoint {ci} out of {shards}')
     
         checkpoint = torch.load(checkpoint_path, map_location='cpu')
 
