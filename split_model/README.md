@@ -1,7 +1,7 @@
 ## slowllama
 
 Fine-tune llama2 models (including 70B) on Apple macbooks. slowllama is not using any aggressive quantization (no lora, etc) and just offloads parts of model to/from SSD. This approach, while slow, can work for small-scale finetuning.
-In contrast with training from scratch (completely unattainable) or inference (where we are likely to care about interactivity and tokens/sec), in finetune case we can still get something done if we allow it to run, say, overnight. 
+In contrast with training large models from scratch (unattainable) or inference (where we are likely to care about interactivity and tokens/sec), in finetune case we can still get something done if we allow it to run, say, overnight in batches of modest size.
 
 ### How does it work?
 Most of the tests were done on MacMini M1 with 16Gb RAM with llama2-13b. 7B model will have one shard and 70B model will have 8, but other than that there's no special handling.
@@ -17,8 +17,8 @@ The way it's currently implemented is:
 Limitations:
 1. Stateless optimizer (SGD). We'll have to load/save AdamW state repeatedly as well to be able to use it. That's one of the next action items.
 2. It is slow
-3. SSD requirements - even for 13B model you'll need: 26-27Gb for original weights + 50Gb for intermediate weights (this can be easily reduced 2x if we save it in bfloat16 rather than float32) + same 26-27Gb if you want to save a single snapshot.
-4. no gradient accumulation, just update weights as we go.
+3. SSD requirements - even for 13B model you'll need: 26-27Gb for original weights + 50Gb for intermediate weights (this can be reduced if we save them in bfloat16 or do all computation in float16 vs float32) + same 26-27Gb if you want to save a single snapshot, so ~100-110Gb total. You are looking at something order of 500Gb for llama70.
+4. no gradient accumulation, we just update weights as we go.
 
 
 ### How to setup
@@ -99,6 +99,7 @@ test_ref_loader.py - loader for reference implementation from llama2.c. Will onl
 [ ] cleanup and explanation. 
 
 Later:
+[ ] allow at least fp16
 [ ] AdamW support, save optimizer state as well.
 [ ] lora quantization
 [ ] optimizations - prefetch the blackbox, save asyncronously, measure utilization, etc.
