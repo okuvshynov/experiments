@@ -32,6 +32,6 @@ def greedy_gen(prompt, max_new_tokens=50):
     for i, output in enumerate(tokens):
         print(f'{i} - {tokenizer.decode(output.tolist())}')
 
-prompt = 'I believe the meaning of life is'
+prompt = 'Alice drank from the '
 
 greedy_gen(prompt, max_new_tokens=100)
