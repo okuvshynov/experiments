@@ -1,6 +1,6 @@
 ## slowllama
 
-Fine-tune llama2 models (including 70B) on Apple macbooks. slowllama is not using any aggressive quantization (no lora, etc) and just offloads parts of model to/from SSD. This approach, while slow, can work for small-scale finetuning.
+Fine-tune llama2 models (including 70B) on Apple macbooks. slowllama is not using any quantization (no lora, etc) and just offloads parts of model to/from SSD. This approach, while slow, can work for small-scale finetuning.
 In contrast with training large models from scratch (unattainable) or inference (where we are likely to care about interactivity and tokens/sec), in finetune case we can still get something done if we allow it to run, say, overnight in batches of modest size.
 
 ### How does it work?
@@ -17,7 +17,7 @@ The way it's currently implemented is:
 Limitations:
 1. Stateless optimizer (SGD). We'll have to load/save AdamW state repeatedly as well to be able to use it. That's one of the next action items.
 2. It is slow
-3. SSD requirements - even for 13B model you'll need: 26-27Gb for original weights + 50Gb for intermediate weights (this can be reduced if we save them in bfloat16 or do all computation in float16 vs float32) + same 26-27Gb if you want to save a single snapshot, so ~100-110Gb total. You are looking at something order of 500Gb for llama70.
+3. SSD requirements - even for 13B model you'll need: 26-27Gb for original weights + 50Gb for intermediate weights (in float32) + same 26-27Gb if you want to save a single snapshot, so ~100-110Gb total. You are looking at something order of 500Gb for llama70.
 4. no gradient accumulation, we just update weights as we go.
 
 
@@ -57,7 +57,7 @@ This would run model on CPU and compare output and some weight subset after 1 st
 
 ### How to finetune
 
-1. Open finetune.py. It's a very simple file which loads small txt file with public domain text, tokenizes it and splits into train/test set. There are some settings you could change here, like sequence length, batch size, learning rate, dropout rate, number of iterations. Change this if desired. Model path for input/output is hardcoded in that script as well, change accordingly. For the model saving, double-check that you use the expected number of shards (TODO: just reuse one from original model). 
+1. Open finetune.py. It's a very simple file which loads small txt file with public domain text, tokenizes it and splits into train/validation set. There are some settings you could change here, like sequence length, batch size, learning rate, dropout rate, number of iterations. Change this if desired. Model path for input/output is hardcoded in that script as well, change accordingly. For the model saving, double-check that you use the expected number of shards (TODO: just reuse one from original model). 
 2. run ```python finetune.py```
 
 ### Files
@@ -99,10 +99,9 @@ test_ref_loader.py - loader for reference implementation from llama2.c. Will onl
 [ ] cleanup and explanation. 
 
 Later:
-[ ] allow at least fp16
-[ ] AdamW support, save optimizer state as well.
-[ ] lora quantization
-[ ] optimizations - prefetch the blackbox, save asyncronously, measure utilization, etc.
+[ ] quantization: fp16, lora
+[ ] AdamW support, save optimizer state as well
+[ ] optimizations - prefetch the blackbox, save asyncronously, etc.
 [ ] improve loading time as it is important for testing
 [ ] for saving model, fix rope?
 ```
