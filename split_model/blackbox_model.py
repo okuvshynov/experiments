@@ -17,7 +17,7 @@ from torch import nn
 
 from utils import save_rng_state, restore_rng_state, device_map, intermediate_path, device_map, next_id
 
-# a wrapper around arbitrary model which can save/load inner model to hdd
+# a wrapper around arbitrary module which can save/load inner model to hard drive
 class Blackbox(torch.nn.Module):
     def __init__(self, module):
         super().__init__()
