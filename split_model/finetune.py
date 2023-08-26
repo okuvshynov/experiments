@@ -220,8 +220,8 @@ device = 'mps'
 
 seq_len = 256
 dropout = 0.01
-batch_size = 16
-lr = 1e-4
+batch_size = 32
+lr = 1e-3
 
 eval_period = 10
 gen_tokens = 20
@@ -235,8 +235,9 @@ def greedy_gen(prompt, max_new_tokens=50):
     for _ in range(max_new_tokens):
         logits = model(tokens)
         logits = logits[:, -1, :]
-        _, next_token = torch.topk(logits, k=1, dim=-1)
-        print(f'next token: {next_token} {tokenizer.decode(next_token.tolist())}')
+        logits_top, next_tokens = torch.topk(logits, k=5, dim=-1)
+        next_token = next_tokens[0, 0].view(1, 1)
+        #print(f'next tokens: {logits_top} {next_tokens} {tokenizer.decode(next_tokens.tolist())}')
         tokens = torch.cat((tokens, next_token), dim=1)
 
     for i, output in enumerate(tokens):
@@ -272,7 +273,7 @@ if __name__ == '__main__':
         X, y = get_batch(batch_size)
         opt.zero_grad()
         if i % eval_period == 0:
-            greedy_gen('Alice drank from the ')
+            greedy_gen('Alice drank from the bottle which had a label: ', max_new_tokens=10)
         # both forward and backward passes are here.
         # returned loss is a scalar, not variable
         logits, loss = model.manual_loop(X, y, lr=lr)
