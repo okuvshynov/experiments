@@ -73,7 +73,7 @@ if __name__ == '__main__':
         logging.info(f'starting iteration {i}')
         X, y = get_batch(batch_size)
         opt.zero_grad()
-        if i % eval_period == 0:
+        if i % eval_period == 0 and i > 0:
             greedy_gen(prompt, max_new_tokens=20)
         # both forward and backward passes are here.
         # returned loss is a scalar, not variable

@@ -142,9 +142,15 @@ class Attention(nn.Module):
         self.n_local_kv_heads = self.n_kv_heads // model_parallel_size
         self.n_rep = self.n_local_heads // self.n_local_kv_heads
         self.head_dim = args.dim // args.n_heads
+
+        # TODO: here's where we inject LoRA
         self.wq = nn.Linear(args.dim, args.n_heads * self.head_dim, bias=False)
         self.wk = nn.Linear(args.dim, self.n_kv_heads * self.head_dim, bias=False)
+
+        # TODO: here's where we inject LoRA
         self.wv = nn.Linear(args.dim, self.n_kv_heads * self.head_dim, bias=False)
+
+        print(self.wq.weight.shape, self.wv.weight.shape)
         self.wo = nn.Linear(args.n_heads * self.head_dim, args.dim, bias=False)
         self.attn_dropout = nn.Dropout(args.dropout)
         self.resid_dropout = nn.Dropout(args.dropout)
@@ -163,11 +169,13 @@ class Attention(nn.Module):
         x: torch.Tensor,
         freqs_cos: torch.Tensor,
         freqs_sin: torch.Tensor,
+        q_lora: nn.Module,
+        v_lora: nn.Module
     ):
         bsz, seqlen, _ = x.shape
 
         # QKV
-        xq, xk, xv = self.wq(x), self.wk(x), self.wv(x)
+        xq, xk, xv = self.wq(x) + q_lora(x), self.wk(x), self.wv(x) + v_lora(x)
         xq = xq.view(bsz, seqlen, self.n_local_heads, self.head_dim)
         xk = xk.view(bsz, seqlen, self.n_local_kv_heads, self.head_dim)
         xv = xv.view(bsz, seqlen, self.n_local_kv_heads, self.head_dim)
@@ -239,10 +247,23 @@ class TransformerBlock(nn.Module):
         self.attention_norm = RMSNorm(args.dim, eps=args.norm_eps)
         self.ffn_norm = RMSNorm(args.dim, eps=args.norm_eps)
 
-    def forward(self, x, freqs_cos, freqs_sin):
-        h = x + self.attention.forward(self.attention_norm(x), freqs_cos, freqs_sin)
+    def forward(self, x, freqs_cos, freqs_sin, lora_q, lora_v):
+        h = x + self.attention.forward(self.attention_norm(x), freqs_cos, freqs_sin, lora_q, lora_v)
         out = h + self.feed_forward.forward(self.ffn_norm(h))
         return out
+    
+class LoRA(nn.Module):
+    def __init__(self, original_layer, rank=8, alpha=32, dropout=0.05):
+        super().__init__()
+        n, m = original_layer.weight.shape
+        self.A = nn.Linear(n, rank, bias=False)
+        self.B = nn.Linear(rank, m, bias=False)
+        nn.init.zeros_(self.B.weight)
+        self.dropout = nn.Dropout(dropout)
+        self.scale = alpha / rank
+
+    def forward(self, x):
+        return self.dropout(self.B(self.A(x))) * self.scale
 
 class Transformer(nn.Module):
     last_loss: Optional[torch.Tensor]
@@ -256,8 +277,18 @@ class Transformer(nn.Module):
         self.tok_embeddings = Blackbox(nn.Embedding(params.vocab_size, params.dim))
         self.dropout = nn.Dropout(params.dropout)
         self.layers = torch.nn.ModuleList()
+
+        # we create LoRA adapters separately. As we don't want to load/save them continously
+        self.lora_layers = []
         for layer_id in range(params.n_layers):
-            self.layers.append(Blackbox(TransformerBlock(layer_id, params)))
+            block = TransformerBlock(layer_id, params)
+            q_lora = LoRA(block.attention.wq).to('mps')
+            v_lora = LoRA(block.attention.wv).to('mps')
+            self.lora_layers.append({ 'q_lora': q_lora, 'v_lora': v_lora})
+            self.add_module(f'q_lora_{layer_id}', q_lora)
+            self.add_module(f'v_lora_{layer_id}', v_lora)
+            self.layers.append(Blackbox(block))
+
         self.norm = RMSNorm(params.dim, eps=params.norm_eps)
         self.output = Blackbox(nn.Linear(params.dim, params.vocab_size, bias=False))
 
@@ -278,8 +309,8 @@ class Transformer(nn.Module):
         freqs_cos = self.freqs_cos[:seqlen]
         freqs_sin = self.freqs_sin[:seqlen]
 
-        for layer in self.layers:
-            h = layer(h, freqs_cos, freqs_sin)
+        for layer, lora in zip(self.layers, self.lora_layers):
+            h = layer(h, freqs_cos, freqs_sin, lora['q_lora'], lora['v_lora'])
         h = self.norm(h)
 
         if targets is not None:
@@ -292,24 +323,21 @@ class Transformer(nn.Module):
             self.last_loss = None
 
         return logits
-
-    # TODO: move this to Blackbox class
-    def backprop_blackbox(self, blackbox_module, output_grad, lr, *args):
+    
+    def backprop_w_lora(self, blackbox_module, output_grad, *args):
         device = output_grad.device
         module = blackbox_module.load(device)
+        for param in module.parameters():
+            param.requires_grad = False
+
         input = blackbox_module.load_input(device)
 
         if 'float' in str(input.dtype):
             input.requires_grad = True
-
-        opt = torch.optim.SGD(module.parameters(), lr=lr)
-        opt.zero_grad()
         
         output = module(input, *args)
         output.backward(output_grad)
-        opt.step()
 
-        blackbox_module.save(module)
         return input.grad if input.requires_grad else None
 
     # this is a manual implementation on forward/backward passes
@@ -325,13 +353,17 @@ class Transformer(nn.Module):
         freqs_cos = self.freqs_cos[:seqlen]
         freqs_sin = self.freqs_sin[:seqlen]
 
-        rngstate = save_rng_state(device)
+        #rngstate = save_rng_state(device)
         current = self.dropout(embd_out)
         rng_before = []
 
-        for layer in self.layers:
+        for layer, lora in zip(self.layers, self.lora_layers):
             rng_before.append(save_rng_state(device))
-            current = layer(current, freqs_cos, freqs_sin)
+            current = layer(current, freqs_cos, freqs_sin, lora['q_lora'], lora['v_lora'])
+            #print('qa', lora['q_lora'].A.weight)
+            #print('va', lora['v_lora'].A.weight)
+            #print('qb', lora['q_lora'].B.weight)
+            #print('vb', lora['v_lora'].B.weight)
 
         current = current.detach()
         current.requires_grad = True
@@ -348,21 +380,26 @@ class Transformer(nn.Module):
 
         loss.backward()
 
-        norm_out_grad = self.backprop_blackbox(self.output, logits.grad, lr)
+        norm_out_grad = self.backprop_w_lora(self.output, logits.grad)
 
         norm_out2 = self.norm(current)
         norm_out2.backward(norm_out_grad)
 
         last_grad = current.grad
 
-        for (layer, rng_state) in zip(reversed(self.layers), reversed(rng_before)):
+        for (layer, rng_state, lora) in zip(reversed(self.layers), reversed(rng_before), reversed(self.lora_layers)):
             restore_rng_state(rng_state, device=device)
-            last_grad = self.backprop_blackbox(layer, last_grad, lr, freqs_cos, freqs_sin)
+            last_grad = self.backprop_w_lora(layer, last_grad, freqs_cos, freqs_sin, lora['q_lora'], lora['v_lora'])
+            #print('qa', lora['q_lora'].A.weight.grad)
+            #print('va', lora['v_lora'].A.weight.grad)
 
-        restore_rng_state(rngstate, device=device)
-        dropped_out = self.dropout(embd_out)
-        dropped_out.backward(last_grad)
+            #print('qb', lora['q_lora'].B.weight.grad)
+            #print('vb', lora['v_lora'].B.weight.grad)
 
-        self.backprop_blackbox(self.tok_embeddings, embd_out.grad, lr)
+        #restore_rng_state(rngstate, device=device)
+        #dropped_out = self.dropout(embd_out)
+        #dropped_out.backward(last_grad)
+
+        #self.backprop_blackbox(self.tok_embeddings, embd_out.grad, lr)
 
         return logits, loss.item()
