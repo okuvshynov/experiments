@@ -9,20 +9,24 @@ from loader import load_llama2, save_llama2
 sys.path.insert(0, '../llama/llama')
 from tokenizer import Tokenizer
 
+# data to finetune on
 with open('split_model/test_data/alice.txt') as f:
     text = f.read()
+prompt = 'Alice drank from the bottle which had a label '
 
+# old/new model paths
 model_path = '../llama-2-13b'
 new_model_path = '../llama-2-13b-tuned'
 shards_to_save = 2
 
+# training settings
 seed = 1997
 iters = 50
 device = 'mps'
 seq_len = 256
 dropout = 0.01
 batch_size = 16
-lr = 1e-3
+lr = 5e-4
 
 eval_period = 10
 gen_tokens = 20
@@ -53,18 +57,14 @@ if __name__ == '__main__':
     tokenizer = Tokenizer(tokenizer_path)
     tokens = tokenizer.encode(text, True, True)
 
-    n = len(tokens)
-    train = tokens
-
-    logging.info(f'loaded dataset: train[{len(train)}]')
+    logging.info(f'loaded dataset: {len(tokens)} tokens')
 
     model = load_llama2(model_path, dropout=dropout).to(device)
 
-    # dataset is either train or val
     def get_batch(batch_size):
-        index = torch.randint(len(train) - seq_len, (batch_size,))
-        x = torch.stack([torch.tensor(train[i:i + seq_len]).to(torch.int64) for i in index])
-        y = torch.stack([torch.tensor(train[i + 1:i + seq_len + 1]).to(torch.int64) for i in index])
+        index = torch.randint(len(tokens) - seq_len, (batch_size,))
+        x = torch.stack([torch.tensor(tokens[i:i + seq_len]).to(torch.int64) for i in index])
+        y = torch.stack([torch.tensor(tokens[i + 1:i + seq_len + 1]).to(torch.int64) for i in index])
         return x.to(device), y.to(device)
 
     opt = torch.optim.SGD(model.parameters(), lr=lr)
@@ -74,11 +74,11 @@ if __name__ == '__main__':
         X, y = get_batch(batch_size)
         opt.zero_grad()
         if i % eval_period == 0:
-            greedy_gen('Alice drank from the bottle which had a label: ', max_new_tokens=20)
+            greedy_gen(prompt, max_new_tokens=20)
         # both forward and backward passes are here.
         # returned loss is a scalar, not variable
         logits, loss = model.manual_loop(X, y, lr=lr)
         opt.step()
-        logging.info(f'backprop done, loss = {loss}')
+        logging.info(f'backprop done, loss after forward pass = {loss}')
 
     save_llama2(model, new_model_path, model_path, shards=shards_to_save)
