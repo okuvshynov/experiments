@@ -10,9 +10,9 @@ sys.path.insert(0, '../llama/llama')
 from tokenizer import Tokenizer
 
 # data to finetune on
-with open('split_model/test_data/alice.txt') as f:
+with open('split_model/test_data/cubestat.txt') as f:
     text = f.read()
-prompt = 'Alice drank from the bottle which had a label '
+prompt = 'Cubestat is a tool which can measure and visualize '
 
 # old/new model paths
 model_path = '../llama-2-13b'
@@ -21,12 +21,12 @@ shards_to_save = 2
 
 # training settings
 seed = 1997
-iters = 50
+iters = 1000
 device = 'mps'
 seq_len = 256
 dropout = 0.01
 batch_size = 16
-lr = 5e-4
+lr = 3e-3
 
 eval_period = 10
 gen_tokens = 20
@@ -40,7 +40,7 @@ def greedy_gen(prompt, max_new_tokens=50):
     for _ in range(max_new_tokens):
         logits = model(tokens)
         logits = logits[:, -1, :]
-        logits_top, next_tokens = torch.topk(logits, k=5, dim=-1)
+        logits_top, next_tokens = torch.topk(logits, k=25, dim=-1)
         next_token = next_tokens[0, 0].view(1, 1)
         logging.info(f'next tokens: {logits_top} {next_tokens} {tokenizer.decode(next_tokens.tolist())}')
         tokens = torch.cat((tokens, next_token), dim=1)
@@ -49,7 +49,7 @@ def greedy_gen(prompt, max_new_tokens=50):
         logging.info(f'{i} - {tokenizer.decode(output.tolist())}')
 
 if __name__ == '__main__':
-    logging.basicConfig(format='%(asctime)s %(message)s', level=logging.INFO)
+    logging.basicConfig(format='%(asctime)s %(message)s', level=logging.INFO, filename='finetune.log')
     torch.random.manual_seed(seed)
 
     tokenizer_path = os.path.join(model_path, 'tokenizer.model')
@@ -73,7 +73,7 @@ if __name__ == '__main__':
         logging.info(f'starting iteration {i}')
         X, y = get_batch(batch_size)
         opt.zero_grad()
-        if i % eval_period == 0 and i > 0:
+        if i % eval_period == 0:
             greedy_gen(prompt, max_new_tokens=20)
         # both forward and backward passes are here.
         # returned loss is a scalar, not variable
@@ -81,4 +81,5 @@ if __name__ == '__main__':
         opt.step()
         logging.info(f'backprop done, loss after forward pass = {loss}')
 
+    greedy_gen(prompt, max_new_tokens=20)
     save_llama2(model, new_model_path, model_path, shards=shards_to_save)

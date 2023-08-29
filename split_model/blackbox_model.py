@@ -150,7 +150,6 @@ class Attention(nn.Module):
         # TODO: here's where we inject LoRA
         self.wv = nn.Linear(args.dim, self.n_kv_heads * self.head_dim, bias=False)
 
-        print(self.wq.weight.shape, self.wv.weight.shape)
         self.wo = nn.Linear(args.n_heads * self.head_dim, args.dim, bias=False)
         self.attn_dropout = nn.Dropout(args.dropout)
         self.resid_dropout = nn.Dropout(args.dropout)
@@ -253,7 +252,7 @@ class TransformerBlock(nn.Module):
         return out
     
 class LoRA(nn.Module):
-    def __init__(self, original_layer, rank=8, alpha=32, dropout=0.05):
+    def __init__(self, original_layer, rank=8, alpha=64, dropout=0.05):
         super().__init__()
         n, m = original_layer.weight.shape
         self.A = nn.Linear(n, rank, bias=False)
@@ -290,6 +289,7 @@ class Transformer(nn.Module):
             self.layers.append(Blackbox(block))
 
         self.norm = RMSNorm(params.dim, eps=params.norm_eps)
+        self.norm.requires_grad = False
         self.output = Blackbox(nn.Linear(params.dim, params.vocab_size, bias=False))
 
         # some useful precompute for the RoPE relative positional embeddings
