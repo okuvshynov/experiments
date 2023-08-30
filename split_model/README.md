@@ -4,7 +4,7 @@ Fine-tune Llama2 models, including 70B on Apple M1/M2 devices.
 
 slowllama is not using any quantization. Instead, it offloads parts of model to SSD on both forward/backward passes. In contrast with training large models from scratch (unattainable) or inference (where we are likely to care about interactivity and tokens/sec), we can still get something finetuned if we allow it to run, say, overnight in batches of modest size.
 
-Current version is using LoRA to limit the updates to a smaller set of parameters. First version which can be found in history [LINK HERE] supported full finetuning as well, but I decided to remove that for now, more on that below.
+Current version is using LoRA to limit the updates to a smaller set of parameters. First version supported full finetuning as well, but I decided to remove that for now, more on that below.
 
 slowllama is most definitely not suitable for anything research-like with heavy experimentation as it is too slow - the iteration cycle lnegth would kill the productivity. The use-case here is rather to be part of a product (built and debugged on more powerful HW) which makes small changes based on personal/local data, for example set of documents or code someone is working on.
 
@@ -24,7 +24,7 @@ In order to fine-tune llama2 model we need to:
     /llama-2-70b/... # <- and here as well
     /llama/...     # <-- this is Meta's llama2 repository
     /slowllama/... # <- this repo
-
+```
 
 Let's start with a [tiny example](test_data/cubestat.txt). It is an intro to the description of my other open-source project - [cubestat](https://github.com/okuvshynov/cubestat). It is small enough to just be included as part of the prompt, but it's a decent illustration. As I just published that project recently, there's no way original llama would know anything about it. 
 
@@ -35,7 +35,7 @@ Try is out:
 python test_gen.py ../llama-2-7b mps
 ```
 
-Now let's finetune the 7b model on Mac Mini M1 with 16Gb or unified memory.
+Now let's finetune the 7b model on Mac Mini M1 with 16Gb of unified memory.
 
 ```
 python finetune.py
@@ -47,7 +47,7 @@ Here's train dataset loss:
 
 ![train loss](static/train_loss.png)
 
- I didn't even added a validation set for this data and just checked what would we produce for the prompt.
+I didn't added a validation set for this data and just checked what would we produce for the prompt.
 
 At ~100 iteration we get the following: ```Cubestat reports the following metrics: 1. The number of times the application was launched. 2. The number of times the application was closed.```
 
@@ -86,22 +86,23 @@ Original version which can be still found [here](https://github.com/okuvshynov/e
 Here we can see resource utilization for 1 full iteration - forward and manual backward passes. A few notes:
 1. Forward pass has lower GPU utilization and spends more time on IO as we need to both read weights and write cached inputs/outputs
 2. Backward pass achieves very high GPU utilization, close to 100%
-3. As we move along layers back and forth, we effectively process them in LIFO order, so in the beginning of both forward and backward pass we don't have to access disk, weights are being cached.
+3. As we move along layers back and forth, we effectively process them in LIFO order. Thus in the beginning of both forward and backward pass we don't have to access disk, weights are being cached and we don't see disk reads.
 
 Each iteration was taking ~2.5 min. 
 
 If it is that slow, what's the point?
 
 1. The use-case is not doing research. The way I thought about it was to finetune something personal based on small amount of new data I have. It would be fine to just let it run overnight but keep everything local and not pass the model/data around.
-2. Training settings are most likely suboptimal, we can try optimizer with momentum, differen learning rate, batch size, sequence length, etc.
+2. Training settings are most likely suboptimal, we can try optimizer with momentum, different learning rate, batch size, sequence length, etc.
 3. There are some further optimizations: prefetch the weights and inputs, save inputs asynchronously
-4. The tests here were done on oldest available M1. Modern higher-end laptops with M2 Max should have ~5x GPU performance, and newer models might be even more powerful.
+4. The tests here were done on oldest available M1. Modern higher-end laptops with M2 Max should have ~5x GPU performance, and upcoming models might be even more powerful.
 5. Computation is done in float32. MPS device doesn't support bfloat16, but supports float16 - we can look at that. 
 6. This approach can be used not only for original llama2 by Meta, but for smaller models with similar architecture, for example ones produced by [llama2.c](https://github.com/karpathy/llama2.c). Need to make weight tying for embedding/output configurable though.
 
 
-### Files
+### Project structure
 
+Just a few files with no large dependencies other than torch and sentencepiece for tokenizer.
 ```
 blackbox_model.py -- model definition and manual backprop implementation
 finetune.py - script which does the training
@@ -113,16 +114,16 @@ test_gen.py - complete the sequence. Useful for sanity checks.
 
 ### TODO:
 ```
-[ ] merge lora back with base model weights and export model in original format
-[ ] make lora params configurable
+[ ] merge lora back with base model weights and export model in original format. Current 'save' would just save a copy of the original model.
+[ ] make lora params (rank, alpha, dropout) configurable
 [ ] check how it works on CUDA
-[ ] optimizations - prefetch the blackbox, save asyncronously, etc.
-[ ] cleanup and explanation.
+[ ] optimizations - prefetch the next layer/input, save asyncronously, etc.
+[ ] tests, cleanup and comments.
 [ ] progress tracking for everything
 [ ] quantization
 [ ] improve loading time as it is important for testing
 [ ] configurable weight tying
-[ ] check RNG state correcness
+[ ] check RNG state correctness
 ```
 
 ### References
