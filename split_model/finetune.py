@@ -78,7 +78,7 @@ if __name__ == '__main__':
             greedy_gen(prompt, max_new_tokens=10)
         # both forward and backward passes are here.
         # returned loss is a scalar, not variable
-        logits, loss = model.manual_loop(X, y, lr=lr)
+        logits, loss = model.manual_loop(X, y)
         opt.step()
         logging.info(f'backprop done, loss after forward pass = {loss}')
         if last_loss is None:

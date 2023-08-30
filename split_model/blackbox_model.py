@@ -342,7 +342,7 @@ class Transformer(nn.Module):
         return input.grad if input.requires_grad else None
 
     # this is a manual implementation on forward/backward passes
-    def manual_loop(self, tokens, targets, lr):
+    def manual_loop(self, tokens, targets):
         device = device_map(tokens.device)
 
         embd_out = self.tok_embeddings(tokens)
