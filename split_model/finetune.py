@@ -12,7 +12,7 @@ from tokenizer import Tokenizer
 # data to finetune on
 with open('split_model/test_data/cubestat.txt') as f:
     text = f.read()
-prompt = 'Cubestat is a tool which can monitor '
+prompt = 'Cubestat reports the following metrics: '
 
 # old/new model paths
 model_path = '../llama-2-7b'
