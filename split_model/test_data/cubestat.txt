@@ -1,6 +1,4 @@
-cubestat is a command-line utility to monitor system metrics in horizon chart format. It was originally created for Apple M1/M2 devices, but now works on Linux with nVidia GPU as well, including Google Colab environment.
-
-Let's start with example: running deep RL loop on a single MacBook Air M2. We can see model training (on GPU), self-play (done on 4 performance CPU cores) and model evaluation, which runs inference on Neural Engine (ANE): Self-play + training + eval
+Cubestat is a command-line utility to monitor system metrics in horizon chart format. It was originally created for Apple M1/M2 devices, but now works on Linux with nVidia GPU as well, including Google Colab environment.
 
 Currently cubestat reports:
 
@@ -9,4 +7,3 @@ GPU utilization per card/chip. Is shown in percentage. Works for Apple's M1/M2 S
 ANE (Apple's Neural Engine) power consumption. According to man powermetrics it is an estimate, but seems working good enough as a proxy to ANE utilization. Is shown as percentage.
 Disk and network IO; Is shown in Kb/s.
 Memory usage in %
-Despite many monitoring tools available for monitoring system counters, horizon charts have nice information density properties which make it possible to show a history of N measurements for M metrics on a single screen for significantly large N and M. Thus, this tool was created.

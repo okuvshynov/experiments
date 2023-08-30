@@ -12,21 +12,21 @@ from tokenizer import Tokenizer
 # data to finetune on
 with open('split_model/test_data/cubestat.txt') as f:
     text = f.read()
-prompt = 'Cubestat is a tool which can measure and visualize '
+prompt = 'Cubestat is a tool which can monitor '
 
 # old/new model paths
-model_path = '../llama-2-13b'
-new_model_path = '../llama-2-13b-tuned'
+model_path = '../llama-2-7b'
+new_model_path = '../llama-2-7b-tuned'
 shards_to_save = 2
 
 # training settings
 seed = 1997
 iters = 1000
 device = 'mps'
-seq_len = 256
+seq_len = 128
 dropout = 0.01
-batch_size = 16
-lr = 3e-3
+batch_size = 32
+lr = 1e-3
 
 eval_period = 10
 gen_tokens = 20
@@ -69,17 +69,25 @@ if __name__ == '__main__':
 
     opt = torch.optim.SGD(model.parameters(), lr=lr)
 
+    last_loss = None
     for i in range(iters):
         logging.info(f'starting iteration {i}')
         X, y = get_batch(batch_size)
         opt.zero_grad()
         if i % eval_period == 0:
-            greedy_gen(prompt, max_new_tokens=20)
+            greedy_gen(prompt, max_new_tokens=10)
         # both forward and backward passes are here.
         # returned loss is a scalar, not variable
         logits, loss = model.manual_loop(X, y, lr=lr)
         opt.step()
         logging.info(f'backprop done, loss after forward pass = {loss}')
+        if last_loss is None:
+            last_loss = loss
+        elif loss < last_loss:
+            last_loss = loss
+            logging.info(f'saving snapshot')
+            torch.save(model.state_dict(), f'state_dict_{i}.pth')
+            #save_llama2(model, new_model_path, model_path, shards=shards_to_save)
 
-    greedy_gen(prompt, max_new_tokens=20)
-    save_llama2(model, new_model_path, model_path, shards=shards_to_save)
+    #greedy_gen(prompt, max_new_tokens=20)
+    #save_llama2(model, new_model_path, model_path, shards=shards_to_save)

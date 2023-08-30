@@ -23,16 +23,17 @@ class Blackbox(torch.nn.Module):
         super().__init__()
         self.module_id = next_id()
         self.input_id = next_id()
-        torch.save(module, intermediate_path(self.module_id))
+        torch.save(module.to('cpu').to(torch.bfloat16), intermediate_path(self.module_id))
 
     def loaded_inner(self):
-        return torch.load(intermediate_path(self.module_id))
+        return torch.load(intermediate_path(self.module_id), map_location='cpu')
     
     def load(self, device):
-        return torch.load(intermediate_path(self.module_id), map_location=torch.device(device_map(device)))
+        res = torch.load(intermediate_path(self.module_id), map_location='cpu')
+        return res.to(torch.float32).to(device_map(device))
 
     def save(self, module):
-        torch.save(module, intermediate_path(self.module_id))
+        torch.save(module.to('cpu').to(torch.bfloat16), intermediate_path(self.module_id))
     
     def load_input(self, device):
         return torch.load(intermediate_path(self.input_id), map_location=torch.device(device_map(device)))
@@ -43,7 +44,7 @@ class Blackbox(torch.nn.Module):
     def forward(self, input, *args):
         torch.save(input, intermediate_path(self.input_id))
         device = device_map(input.device)
-        module = torch.load(intermediate_path(self.module_id), map_location=torch.device(device))
+        module = self.load(device)
 
         if not self.training:
             module.eval()
