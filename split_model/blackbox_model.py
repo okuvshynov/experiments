@@ -354,17 +354,12 @@ class Transformer(nn.Module):
         freqs_cos = self.freqs_cos[:seqlen]
         freqs_sin = self.freqs_sin[:seqlen]
 
-        #rngstate = save_rng_state(device)
         current = self.dropout(embd_out)
         rng_before = []
 
         for layer, lora in zip(self.layers, self.lora_layers):
             rng_before.append(save_rng_state(device))
             current = layer(current, freqs_cos, freqs_sin, lora['q_lora'], lora['v_lora'])
-            #print('qa', lora['q_lora'].A.weight)
-            #print('va', lora['v_lora'].A.weight)
-            #print('qb', lora['q_lora'].B.weight)
-            #print('vb', lora['v_lora'].B.weight)
 
         current = current.detach()
         current.requires_grad = True
@@ -391,16 +386,5 @@ class Transformer(nn.Module):
         for (layer, rng_state, lora) in zip(reversed(self.layers), reversed(rng_before), reversed(self.lora_layers)):
             restore_rng_state(rng_state, device=device)
             last_grad = self.backprop_w_lora(layer, last_grad, freqs_cos, freqs_sin, lora['q_lora'], lora['v_lora'])
-            #print('qa', lora['q_lora'].A.weight.grad)
-            #print('va', lora['v_lora'].A.weight.grad)
-
-            #print('qb', lora['q_lora'].B.weight.grad)
-            #print('vb', lora['v_lora'].B.weight.grad)
-
-        #restore_rng_state(rngstate, device=device)
-        #dropped_out = self.dropout(embd_out)
-        #dropped_out.backward(last_grad)
-
-        #self.backprop_blackbox(self.tok_embeddings, embd_out.grad, lr)
 
         return logits, loss.item()
