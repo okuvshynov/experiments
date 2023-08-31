@@ -14,7 +14,7 @@ It should work on CUDA as well, but I didn't do any tests/optimization for that 
 
 ### Example
 
-Everything below was tested on Apple M1 and Apple M2. 
+Everything below was tested on Apple M1 with 16Gb memory and Apple M2 with 24Gb memory. 
 
 In order to fine-tune llama2 model we need to:
 1. Install dependencies: ```pip install torch sentencepiece``` 
@@ -77,14 +77,17 @@ Backward pass is a little more tricky. The way it's currently implemented is:
 2. Then, do a manual backward gradient propagation. We start from the last layer, re-run each layer with the input we cached on step (1) again. We run backward pass within that block and pass the gradient for the input to the next (previous?) module. As we use LoRA, only LoRA weights are being updated and we store them in memory. Important: we also need to save and restore random number generation state before evaluating each offloaded module. During training we use dropout, and randomly switched off neurons should be the same on both forward passes.
 3. After that we run optimizer step on LoRA weights and save them separately if needed.
 
-Original version which can be still found [here](https://github.com/okuvshynov/experiments/tree/5cf944cb1274e577d1e755e6ad1957190d286d9d/split_model) was capable of doing full finetuning and update all weights pretty much the same way. However, I decided to remove that for now. The reason for removal was the very high volume of writes to SSD which can negatively impact SSD life - we can read from SSD as much as we want, but there's a write limit. Limit is usually high enough for normal usage, but in the case of full finetunining we'll have to write, say, ~150Gb per one iteration/weight update of llama70, assuming stateless optimizer and no gradient accumulation. With AdamW we'll have to save/update another 150-300Gb (depending on data types used) of optimizer state per iteration. If, for example, we assume 1Pb of writes, even 100 iterations of finetuning would cost too much. We can bring it back if needed though.
+Original version which can be still found [here](https://github.com/okuvshynov/experiments/tree/5cf944cb1274e577d1e755e6ad1957190d286d9d/split_model) was capable of doing full finetuning and update all weights pretty much the same way. However, I decided to remove that for now. The reason for removal was the very high volume of writes to SSD which can negatively impact SSD life - we can read from SSD as much as we want, but there's a write limit. Limit is usually high enough for normal usage, but in the case of full finetunining we'll have to write, say, ~150Gb per one iteration/weight update of llama70, assuming stateless optimizer and no gradient accumulation. With AdamW we'll have to save/update another 150-300Gb (depending on data types used) of optimizer state per iteration. If, for example, we assume 1Pb of writes, even 100 iterations of finetuning would cost too much. 
 
-### Resource utilization/requirements/limitations
+There are still remnants of that code in the current version, for example Dropout layers for static, frozen model, which I should clean up. 
+We can bring full-tuning back if needed though.
+
+### Resource requirements/utilization/limitations
 
 ![finetune on mac mini](static/finetune_m1_7b.png)
 
 Here we can see resource utilization for 1 full iteration on 7B model - forward and manual backward passes. A few notes:
-1. It is slow, but GPU is reasonably well utilized;
+1. It is slow, GPU is reasonably well utilized;
 2. SSD requirements - even for 13B model you'll need 27Gb for original weights + 27Gb for intermediate weights of free space. Expect hundreds of Gb for 70B model.
 3. Forward pass has lower GPU utilization and spends more time on IO as we need to both read weights and write cached inputs/outputs
 4. Backward pass achieves very high GPU utilization, close to 100%
