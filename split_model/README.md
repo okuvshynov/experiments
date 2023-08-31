@@ -70,9 +70,11 @@ First, we need to be able to load a model which requires more RAM than we have. 
 
 Original llama2 weights are in bfloat16, but mps backend doesn't support that type natively, so we do computation in float32 instead.
 
-Doing forward path is easy - we just load each module when we need, evaluate it and propagate the result. Backward pass is a little more tricky. The way it's currently implemented is:
+Doing forward path is easy - we just load each module when we need, evaluate it and propagate the result. 
+
+Backward pass is a little more tricky. The way it's currently implemented is:
 1. Do a forward pass the same way as above, while also saving inputs to each block to the hard drive. The goal of the first forward pass is to compute the final loss and cache inputs to each offloaded layer. 
-2. Then, do a manual backward gradient propagation. We start from the end, and for each offloaded block re-run it with the cached input again. We run backward pass within that block and pass the gradient for the input to the next (previous?) module. As we use LoRA, only LoRA weights are being updated and we store them in memory. Important: we also need to save and restore random number generation state before evaluating each offloaded module. During training we use dropout, and randomly switched off neurons should be the same on both forward passes.
+2. Then, do a manual backward gradient propagation. We start from the last layer, re-run each layer with the input we cached on step (1) again. We run backward pass within that block and pass the gradient for the input to the next (previous?) module. As we use LoRA, only LoRA weights are being updated and we store them in memory. Important: we also need to save and restore random number generation state before evaluating each offloaded module. During training we use dropout, and randomly switched off neurons should be the same on both forward passes.
 3. After that we run optimizer step on LoRA weights and save them separately if needed.
 
 Original version which can be still found [here](https://github.com/okuvshynov/experiments/tree/5cf944cb1274e577d1e755e6ad1957190d286d9d/split_model) was capable of doing full finetuning and update all weights pretty much the same way. However, I decided to remove that for now. The reason for removal was the very high volume of writes to SSD which can negatively impact SSD life - we can read from SSD as much as we want, but there's a write limit. Limit is usually high enough for normal usage, but in the case of full finetunining we'll have to write, say, ~150Gb per one iteration/weight update of llama70, assuming stateless optimizer and no gradient accumulation. With AdamW we'll have to save/update another 150-300Gb (depending on data types used) of optimizer state per iteration. If, for example, we assume 1Pb of writes, even 100 iterations of finetuning would cost too much. We can bring it back if needed though.
@@ -81,17 +83,20 @@ Original version which can be still found [here](https://github.com/okuvshynov/e
 
 ![finetune on mac mini](static/finetune_m1_7b.png)
 
-Here we can see resource utilization for 1 full iteration - forward and manual backward passes. A few notes:
+Here we can see resource utilization for 1 full iteration on 7B model - forward and manual backward passes. A few notes:
 1. It is slow, but GPU is reasonably well utilized;
 2. SSD requirements - even for 13B model you'll need 27Gb for original weights + 27Gb for intermediate weights of free space. Expect hundreds of Gb for 70B model.
 3. Forward pass has lower GPU utilization and spends more time on IO as we need to both read weights and write cached inputs/outputs
 4. Backward pass achieves very high GPU utilization, close to 100%
 5. As we move along layers back and forth, we effectively process them in LIFO order. Thus in the beginning of both forward and backward pass we don't have to access disk, weights are being cached and we don't see disk reads.
 
-Each iteration was taking ~2.5 min. 
+Each iteration was taking ~2.5 min for 7B model on Mac Mini M1.
+
+For 70B model Macbook Air M2 one iteration takes ~40min.
 
 If it is that slow, what's the point?
 
+0. Maybe there's none;
 1. The use-case is not doing research. The way I thought about it was to finetune something personal based on small amount of new data. It would be fine to just let it run overnight but keep everything local and not pass the model/data around.
 2. Training settings are most likely suboptimal, we can try optimizer with momentum, different learning rate schedule, batch size, sequence length, lora rank, etc.
 3. There are some further optimizations: prefetch the weights and inputs, save inputs asynchronously
@@ -114,6 +119,7 @@ test_gen.py - complete the sequence. Useful for sanity checks.
 ### TODO:
 ```
 [ ] merge lora back with base model weights and export model in original format. Current 'save' would just save a copy of the original model;
+[ ] rope -- current implementation and weights published by Meta have slighly different logic and precompute slightly different things. Needs to be fixed so that computation is actually the same;
 [ ] make lora params (rank, alpha, dropout) easily configurable;
 [ ] check if/how it works on CUDA;
 [ ] optimizations - prefetch the next layer/input, save asyncronously, etc;

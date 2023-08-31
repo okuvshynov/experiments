@@ -15,8 +15,8 @@ with open('split_model/test_data/cubestat.txt') as f:
 prompt = 'Cubestat reports the following metrics: '
 
 # old/new model paths
-model_path = '../llama-2-7b'
-new_model_path = '../llama-2-7b-tuned'
+model_path = '../llama-2-13b'
+new_model_path = '../llama-2-13b-tuned'
 shards_to_save = 2
 
 # training settings

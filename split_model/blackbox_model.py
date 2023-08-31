@@ -26,7 +26,7 @@ class Blackbox(torch.nn.Module):
         torch.save(module.to('cpu').to(torch.bfloat16), intermediate_path(self.module_id))
 
     def loaded_inner(self):
-        return 
+        return torch.load(intermediate_path(self.module_id), map_location='cpu')
     
     def load(self, device):
         res = torch.load(intermediate_path(self.module_id), map_location='cpu')
@@ -139,10 +139,8 @@ class Attention(nn.Module):
     def __init__(self, args: ModelArgs):
         super().__init__()
         self.n_kv_heads = args.n_heads if args.n_kv_heads is None else args.n_kv_heads
-        model_parallel_size = 1
-        self.n_local_heads = args.n_heads // model_parallel_size
-        self.n_local_kv_heads = self.n_kv_heads // model_parallel_size
-        self.n_rep = self.n_local_heads // self.n_local_kv_heads
+        self.n_heads = args.n_heads
+        self.n_rep = self.n_heads // self.n_kv_heads
         self.head_dim = args.dim // args.n_heads
 
         # TODO: here's where we inject LoRA
@@ -153,6 +151,8 @@ class Attention(nn.Module):
         self.wv = nn.Linear(args.dim, self.n_kv_heads * self.head_dim, bias=False)
 
         self.wo = nn.Linear(args.n_heads * self.head_dim, args.dim, bias=False)
+
+        # TODO: probably don't need dropout here as we don't plan to do full finetune
         self.attn_dropout = nn.Dropout(args.dropout)
         self.resid_dropout = nn.Dropout(args.dropout)
         self.dropout = args.dropout
@@ -177,19 +177,19 @@ class Attention(nn.Module):
 
         # QKV
         xq, xk, xv = self.wq(x) + q_lora(x), self.wk(x), self.wv(x) + v_lora(x)
-        xq = xq.view(bsz, seqlen, self.n_local_heads, self.head_dim)
-        xk = xk.view(bsz, seqlen, self.n_local_kv_heads, self.head_dim)
-        xv = xv.view(bsz, seqlen, self.n_local_kv_heads, self.head_dim)
+        xq = xq.view(bsz, seqlen, self.n_heads, self.head_dim)
+        xk = xk.view(bsz, seqlen, self.n_kv_heads, self.head_dim)
+        xv = xv.view(bsz, seqlen, self.n_kv_heads, self.head_dim)
 
         # RoPE relative positional embeddings
         xq, xk = apply_rotary_emb(xq, xk, freqs_cos, freqs_sin)
 
         # grouped multiquery attention: expand out keys and values
-        xk = repeat_kv(xk, self.n_rep)  # (bs, seqlen, n_local_heads, head_dim)
-        xv = repeat_kv(xv, self.n_rep)  # (bs, seqlen, n_local_heads, head_dim)
+        xk = repeat_kv(xk, self.n_rep)  # (bs, seqlen, n_heads, head_dim)
+        xv = repeat_kv(xv, self.n_rep)  # (bs, seqlen, n_heads, head_dim)
 
         # make heads into a batch dimension
-        xq = xq.transpose(1, 2)  # (bs, n_local_heads, seqlen, head_dim)
+        xq = xq.transpose(1, 2)  # (bs, n_heads, seqlen, head_dim)
         xk = xk.transpose(1, 2)
         xv = xv.transpose(1, 2)
 
@@ -200,10 +200,10 @@ class Attention(nn.Module):
             # manual implementation
             scores = torch.matmul(xq, xk.transpose(2, 3)) / math.sqrt(self.head_dim)
             assert hasattr(self, 'mask')
-            scores = scores + self.mask[:, :, :seqlen, :seqlen]   # (bs, n_local_heads, seqlen, cache_len + seqlen)
+            scores = scores + self.mask[:, :, :seqlen, :seqlen]   # (bs, n_heads, seqlen, cache_len + seqlen)
             scores = F.softmax(scores.float(), dim=-1).type_as(xq)
             scores = self.attn_dropout(scores)
-            output = torch.matmul(scores, xv)  # (bs, n_local_heads, seqlen, head_dim)
+            output = torch.matmul(scores, xv)  # (bs, n_heads, seqlen, head_dim)
 
         # restore time as batch dimension and concat heads
         output = output.transpose(1, 2).contiguous().view(bsz, seqlen, -1)
@@ -250,15 +250,15 @@ class TransformerBlock(nn.Module):
 
     def forward(self, x, freqs_cos, freqs_sin, lora_q, lora_v):
         h = x + self.attention.forward(self.attention_norm(x), freqs_cos, freqs_sin, lora_q, lora_v)
-        out = h + self.feed_forward.forward(self.ffn_norm(h))
+        out = h + self.feed_forward.forward(self.ffn_norm(h)) 
         return out
     
 class LoRA(nn.Module):
     def __init__(self, original_layer, rank=8, alpha=64, dropout=0.05):
         super().__init__()
         n, m = original_layer.weight.shape
-        self.A = nn.Linear(n, rank, bias=False)
-        self.B = nn.Linear(rank, m, bias=False)
+        self.A = nn.Linear(m, rank, bias=False)
+        self.B = nn.Linear(rank, n, bias=False)
         nn.init.zeros_(self.B.weight)
         self.dropout = nn.Dropout(dropout)
         self.scale = alpha / rank
@@ -329,11 +329,16 @@ class Transformer(nn.Module):
     def backprop_w_lora(self, blackbox_module, output_grad, *args):
         device = output_grad.device
         module = blackbox_module.load(device)
+
+        # we use LoRA and only updated attached low-rank modules
+        # no part of original model is getting any updates, so no need for gradient
         for param in module.parameters():
             param.requires_grad = False
 
         input = blackbox_module.load_input(device)
 
+        # TODO: don't need that check? 
+        # we don't backprop through embeddings at all.
         if 'float' in str(input.dtype):
             input.requires_grad = True
         
@@ -369,6 +374,7 @@ class Transformer(nn.Module):
         norm_out = norm_out.detach()
         norm_out.requires_grad = True
 
+        # TODO: micro-optimization: as output is last layer, we can skip loading it second time 
         logits = self.output(norm_out)
         logits = logits.detach()
         logits.requires_grad = True
