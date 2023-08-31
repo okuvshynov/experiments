@@ -26,7 +26,7 @@ class Blackbox(torch.nn.Module):
         torch.save(module.to('cpu').to(torch.bfloat16), intermediate_path(self.module_id))
 
     def loaded_inner(self):
-        return torch.load(intermediate_path(self.module_id), map_location='cpu')
+        return 
     
     def load(self, device):
         res = torch.load(intermediate_path(self.module_id), map_location='cpu')
@@ -39,7 +39,8 @@ class Blackbox(torch.nn.Module):
         return torch.load(intermediate_path(self.input_id), map_location=torch.device(device_map(device)))
 
     def to_state_dict(self):
-        return self.loaded_inner().state_dict()
+        module = torch.load(intermediate_path(self.module_id), map_location='cpu')
+        return module.state_dict()
 
     def forward(self, input, *args):
         torch.save(input, intermediate_path(self.input_id))
@@ -49,7 +50,7 @@ class Blackbox(torch.nn.Module):
         if not self.training:
             module.eval()
         
-        # we offload model anyway. for backwards pass we do it manually.
+        # we offload model immediately anyway.
         # no need to have gradient here ever.
         with torch.no_grad():
             return module(input, *args)
