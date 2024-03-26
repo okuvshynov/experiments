@@ -1,4 +1,5 @@
 # modified version of one_file_ref.py by mistral-ai, Apache Licence 2.0
+
 from dataclasses import dataclass
 from pathlib import Path
 from sentencepiece import SentencePieceProcessor
@@ -7,7 +8,7 @@ from typing import Optional, Tuple, List
 import json
 import sys
 import torch
-
+import logging
 
 @dataclass
 class ModelArgs:
@@ -22,7 +23,6 @@ class ModelArgs:
     vocab_size: int
 
     max_batch_size: int = 0
-
 
 def repeat_kv(keys: torch.Tensor, values: torch.Tensor, repeats: int):
     keys = torch.repeat_interleave(keys, repeats=repeats, dim=2)
@@ -257,10 +257,7 @@ class Transformer(nn.Module):
         input_ids: torch.Tensor,
         positions: torch.Tensor,
     ):
-        print(f'input_ids = {input_ids}')
-        print(f'positions = {positions}')
         h = self.tok_embeddings(input_ids)
-        #freqs_cis = self.freqs_cis[positions]
         freqs_cos = self.freqs_cos[positions]
         freqs_sin = self.freqs_sin[positions]
 
@@ -281,7 +278,11 @@ class Transformer(nn.Module):
         for layer in self.layers:
             h = layer(h, freqs_cos, freqs_sin, positions, mask)
 
-        return self.output(self.norm(h)).float()
+        res = self.output(self.norm(h))
+
+        logging.info(f'evaluated model, got {res.shape} of {res.dtype}')
+
+        return res.float()
 
     @staticmethod
     def from_folder(folder: Path, max_batch_size: int = 1, device="mps", dtype=torch.float16):
@@ -319,7 +320,6 @@ class Tokenizer:
 def generate(prompts: List[str], model: Transformer, tokenizer: Tokenizer, max_tokens: int):
     encoded_prompts = [tokenizer.encode(prompt) for prompt in prompts]
     prompt_lens = [len(x) for x in encoded_prompts]
-    print(prompt_lens)
     min_prompt_len = min(prompt_lens)
     max_prompt_len = max(prompt_lens)
 
@@ -330,7 +330,6 @@ def generate(prompts: List[str], model: Transformer, tokenizer: Tokenizer, max_t
 
     # pre-fill
     positions = torch.arange(0, min_prompt_len).to("mps")
-    print(positions)
     logits = model.forward(input_tokens[:, :min_prompt_len], positions)
     logprobs = nn.functional.log_softmax(logits, dim=-1)
 
@@ -368,9 +367,10 @@ def demo(model_path: str, max_tokens: int = 35):
 
     res, _logprobs = generate(
         [
-            "This is a test",
-            "This is another test",
-            "This is a third test, mistral AI is very good at testing. ",
+            #"This is a test",
+            #"This is another test",
+            #"This is a third test, mistral AI is very good at testing. ",
+            "Edward Bear, known to his friends as Winnie-the-Pooh, or Pooh for short, was walking through the forest one day, humming proudly to himself. He had made up a little hum that very morning, as he was doing his Stoutness Exercises in front of the glass: Tra-la-la, tra-la-la, as he stretched up as high as he could go, and then Tra-la-la, tra-la—oh, help!—la, as he tried to reach his toes. After breakfast he had said it over and over to himself until he had learnt it off by heart, and now he was humming it right through, properly. It went like this:"
         ],
         transformer,
         tokenizer,
@@ -381,4 +381,5 @@ def demo(model_path: str, max_tokens: int = 35):
         print("=====================")
 
 if __name__ == "__main__":
+    logging.basicConfig(format='%(asctime)s %(message)s', level=logging.INFO)
     demo(sys.argv[1])
