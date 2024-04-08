@@ -19,7 +19,7 @@ with requests.Session() as session:
         latency = (end_time - start_time) * 1000  # Convert to milliseconds
 
         fm.add("rountrip_latency_ms", 1000.0 * (end_time - start_time))
-        for h in fm.histogram('rountrip_latency_ms', n_lines=2, left_margin=40, custom_range=(0, 200)):
+        for h in fm.histogram('rountrip_latency_ms', n_lines=2, title_width=40, custom_range=(0, 200), color='green'):
             print(h)
 
-        time.sleep(0.01)
+        time.sleep(0.1)
