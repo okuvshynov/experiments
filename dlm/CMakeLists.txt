@@ -38,3 +38,6 @@ add_executable(dlm dlm.cpp)
 target_link_libraries(dlm PRIVATE cppzmq)
 target_link_libraries(dlm PRIVATE llama common)
 target_link_libraries(dlm PRIVATE nlohmann_json::nlohmann_json)
+
+configure_file(${llama.cpp_SOURCE_DIR}/ggml-metal.metal ggml-metal.metal COPYONLY)
+configure_file(${llama.cpp_SOURCE_DIR}/ggml-common.h ggml-common.h COPYONLY)
