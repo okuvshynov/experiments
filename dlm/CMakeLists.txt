@@ -5,6 +5,8 @@ project(dlm)
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED true)
 
+option(CPPZMQ_BUILD_TESTS "Build the cppzmq tests." OFF)
+
 include(FetchContent)
 
 FetchContent_Declare(
