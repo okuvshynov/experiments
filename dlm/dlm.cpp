@@ -14,16 +14,14 @@
 
 using json = nlohmann::json;
 
-/* 
- * First version - single query mode.
- * We load the model and wait for 'query' 
- * After that, pass around shared context. Who queries whom? 
- * option 1 - speculator calls. This way we hide the IO latency for main model
- * option 2 - main model calls, this way we reduce number of roundtrips
- * let's test (1)
- */
-
 mt_queue<std::string> prompt_queue;
+
+struct linear_speculative_context
+{
+    std::vector<llama_token> speculation;
+    std::mutex mtx;
+    bool done;
+};
 
 void parse_request(const zmq::message_t& request)
 {
@@ -38,6 +36,10 @@ void parse_request(const zmq::message_t& request)
         // enqueue here
         prompt_queue.push(prompt);
         return;
+    }
+    if (j.contains("spec")) {
+        std::string speculation = j["spec"];
+        bool done = j["done"].template get<bool>();
     }
 }
 
@@ -61,13 +63,6 @@ int serve_loop()
     }
     return 0;
 }
-
-struct linear_speculative_context
-{
-    std::vector<llama_token> speculation;
-    std::mutex mtx;
-    bool done;
-};
 
 int eval_prompt(
         llama_model                    * model,

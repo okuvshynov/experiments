@@ -14,35 +14,41 @@
 
 using json = nlohmann::json;
 
+mt_queue<std::string> prompt_queue;
+
+void parse_request(const zmq::message_t& request)
+{
+    const std::string req_str(static_cast<const char*>(request.data()), request.size());
+
+    // TODO: this might throw
+    json j = json::parse(req_str);
+
+    // new prompt
+    if (j.contains("prompt")) {
+        std::string prompt = j["prompt"];
+        // enqueue here
+        prompt_queue.push(prompt);
+        return;
+    }
+}
+
 int serve_loop()
 {
     zmq::context_t context(1);
     zmq::socket_t socket(context, ZMQ_REP);
-    socket.bind("tcp://*:5555");
+    // TODO: configure this
+    socket.bind("tcp://*:5566");
     while (true)
     {
         zmq::message_t request;
 
         // Wait for the next request from the client
         socket.recv(request, zmq::recv_flags::none);
-        std::string req_str(static_cast<char*>(request.data()), request.size());
 
-        // Deserialize JSON
-        json j = json::parse(req_str);
+        parse_request(request);
 
-        // Process JSON (e.g., multiply fields by 2)
-        if (j.contains("value"))
-        {
-            j["value"] = j["value"].get<int>() * 2;
-        }
-
-        // Serialize JSON
-        std::string response_str = j.dump();
-
-        // Send reply back to client
-        zmq::message_t reply(response_str.size());
-        memcpy(reply.data(), response_str.data(), response_str.size());
-        socket.send(reply, zmq::send_flags::none);
+        // sending back same thing
+        socket.send(request, zmq::send_flags::none);
     }
     return 0;
 }
@@ -54,7 +60,44 @@ struct linear_speculative_context
     bool done;
 };
 
-static int speculation_loop(
+// returns true/false if completed
+bool merge_speculation(
+        llama_context              * ctx,
+        linear_speculative_context * spec_ctx,
+        std::vector<llama_token>   & local_spec,
+        size_t                     & match_len)
+{
+    std::lock_guard<std::mutex> _lock(spec_ctx->mtx);
+    if (spec_ctx->done)
+    {
+        return true;
+    } 
+    auto& spec = spec_ctx->speculation;
+    bool match = true;
+    match_len = local_spec.size() - 1;
+    for (size_t i = 0; i < std::min(spec.size(), local_spec.size()); i++)
+    {
+        if (spec[i] != local_spec[i])
+        {
+            match = false;
+            match_len = i;
+            llama_kv_cache_seq_rm(ctx, 0, i, -1);
+            break;
+        }
+    }
+    if (match && spec.size() < local_spec.size())
+    {
+        spec = local_spec;
+        // TODO: and send update here?
+    }
+    else
+    {
+        local_spec = spec;
+    }
+    return false;
+}
+
+static int speculate(
         llama_model * model,
         linear_speculative_context * spec_ctx,
         llama_context * ctx,
@@ -92,33 +135,8 @@ static int speculation_loop(
 
         local_spec.push_back(next_tokens[0]);
 
-        {
-            std::lock_guard<std::mutex> _lock(spec_ctx->mtx);
-            if (spec_ctx->done)
-            {
-                break;
-            } 
-            auto& spec = spec_ctx->speculation;
-            bool match = true;
-            match_len = local_spec.size() - 1;
-            for (size_t i = 0; i < std::min(spec.size(), local_spec.size()); i++)
-            {
-                if (spec[i] != local_spec[i])
-                {
-                    match = false;
-                    match_len = i;
-                    llama_kv_cache_seq_rm(ctx, 0, i, -1);
-                    break;
-                }
-            }
-            if (match && spec.size() < local_spec.size())
-            {
-                spec = local_spec;
-            }
-            else
-            {
-                local_spec = spec;
-            }
+        if (merge_speculation(ctx, spec_ctx, local_spec, match_len)) {
+            break;
         }
 
         llama_batch_clear(batch);
@@ -141,54 +159,51 @@ static int speculation_loop(
     return 0;
 }
 
-int main(int argc, char ** argv) {
-    gpt_params params;
+int eval_loop(llama_model * model)
+{
+    while (true)
+    {
+        // blocking wait
+        std::string prompt = prompt_queue.pop();
 
+        const auto t_start = ggml_time_us();
+        llama_context_params ctx_params = llama_context_default_params();
+        ctx_params.seed  = 1234;
+        ctx_params.n_ctx = 2048;
+        ctx_params.n_threads = 16;
+        ctx_params.n_threads_batch = 16;
+        llama_context * ctx   = llama_new_context_with_model(model, ctx_params);
+
+        dbg_not_matched(prompt, 0);
+
+        auto tokens_list = llama_tokenize(ctx, prompt, true);
+
+        // Init shared speculative context
+        linear_speculative_context spec_ctx;
+        spec_ctx.speculation = tokens_list;
+        spec_ctx.done = false;
+
+        speculate(model, &spec_ctx, ctx, tokens_list);
+
+        llama_free(ctx);
+        const auto t_end = ggml_time_us();
+        printf("Processing time: %.3lf\n", (t_end - t_start) / 1000000.0);
+    }
+}
+
+int main(int argc, char ** argv)
+{
     llama_backend_init();
-    llama_numa_init(params.numa);
 
-    // init context params
-    llama_context_params ctx_params = llama_context_default_params();
-    ctx_params.seed  = 1234;
-    ctx_params.n_ctx = 2048;
-    ctx_params.n_threads = params.n_threads;
-    ctx_params.n_threads_batch = params.n_threads_batch == -1 ? params.n_threads : params.n_threads_batch;
-
-    // Init main model and context
-    if (argc >= 2) {
-        params.model = argv[1];
-    }
     llama_model_params model_params = llama_model_default_params();
-    model_params.n_gpu_layers = 0;
-    llama_model   * model = llama_load_model_from_file(params.model.c_str(), model_params);
-    llama_context * ctx   = llama_new_context_with_model(model, ctx_params);
+    model_params.n_gpu_layers = 99;
+    llama_model * model = llama_load_model_from_file(argv[1], model_params);
 
-    // Print & tokenize prompt
-    // tokenizer should be the same and prompt tokens should be the same
-    if (argc >= 3) {
-      params.prompt = argv[2];
-    }
-    if (params.prompt.empty()) {
-        params.prompt = "What's the difference between instruction cache and data cache?";
-    }
-    dbg_not_matched(params.prompt, 0);
-    std::vector<llama_token> tokens_list = llama_tokenize(ctx, params.prompt, true);
-
-    // Init shared speculative context
-    linear_speculative_context spec_ctx;
-    spec_ctx.speculation = tokens_list;
-    spec_ctx.done = false;
-
-    const auto t_main_start = ggml_time_us();
-    std::thread t_eval(speculation_loop, model, &spec_ctx, ctx, tokens_list);
+    std::thread t_eval(eval_loop, model);
     std::thread t_serve(serve_loop);
+
     t_eval.join();
-    const auto t_main_end = ggml_time_us();
-
-    printf("Total time: %.3lf\n", (t_main_end - t_main_start) / 1000000.0);
-
     llama_free_model(model);
-    llama_free(ctx);
     llama_backend_free();
 
     t_serve.join();
