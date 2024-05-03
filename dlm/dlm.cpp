@@ -113,7 +113,7 @@ int eval_prompt(
         llama_context                  * ctx,
         const std::vector<llama_token> & tokens_list)
 {
-    const int n_len = 256;
+    const int n_len = 1024;
 
     llama_batch batch = llama_batch_init(1024, 0, 1);
 
