@@ -23,7 +23,9 @@ struct linear_speculative_context
     bool done;
 };
 
-void parse_request(const zmq::message_t& request)
+linear_speculative_context spec_ctx;
+
+std::string parse_request(const zmq::message_t& request)
 {
     const std::string req_str(static_cast<const char*>(request.data()), request.size());
 
@@ -35,12 +37,52 @@ void parse_request(const zmq::message_t& request)
         std::string prompt = j["prompt"];
         // enqueue here
         prompt_queue.push(prompt);
-        return;
+        return req_str;
     }
     if (j.contains("spec")) {
-        std::string speculation = j["spec"];
-        bool done = j["done"].template get<bool>();
+        std::vector<llama_token> local_spec = j["spec"];
+        // process speculation and return speculation result
+        // this should be equivalent to what was done in spec thread
+        {
+            json res;
+            std::lock_guard<std::mutex> _lock(spec_ctx.mtx);
+            if (spec_ctx.done)
+            {
+                res["done"] = true;
+            } 
+            else
+            {
+                res["done"] = false;
+                auto& spec = spec_ctx.speculation;
+                bool match = true;
+                size_t match_len = local_spec.size() - 1;
+                for (size_t i = 0; i < std::min(spec.size(), local_spec.size()); i++)
+                {
+                    if (spec[i] != local_spec[i])
+                    {
+                        match = false;
+                        match_len = i;
+                        // llama_kv_cache_seq_rm(ctx, 0, i, -1);
+                        break;
+                    }
+                }
+                if (match && spec.size() < local_spec.size())
+                {
+                    spec = local_spec;
+                }
+                else
+                {
+                    local_spec = spec;
+                }
+                res["spec"] = local_spec;
+                res["match_len"] = match_len;
+            }
+            std::string res_str = res.dump();
+
+            return res_str;
+        }
     }
+    return req_str;
 }
 
 int serve_loop()
@@ -56,17 +98,18 @@ int serve_loop()
         // Wait for the next request from the client
         socket.recv(request, zmq::recv_flags::none);
 
-        parse_request(request);
+        auto res_str = parse_request(request);
+        zmq::message_t response(res_str.size());
+        memcpy(response.data(), res_str.data(), res_str.size());
 
         // sending back same thing
-        socket.send(request, zmq::send_flags::none);
+        socket.send(response, zmq::send_flags::none);
     }
     return 0;
 }
 
 int eval_prompt(
         llama_model                    * model,
-        linear_speculative_context     * spec_ctx,
         llama_context                  * ctx,
         const std::vector<llama_token> & tokens_list)
 {
@@ -144,8 +187,8 @@ int eval_prompt(
 
         // CRITICAL SECTION -- reconcile main and speculative
         {
-            std::lock_guard<std::mutex> _lock(spec_ctx->mtx);
-            auto & spec = spec_ctx->speculation;
+            std::lock_guard<std::mutex> _lock(spec_ctx.mtx);
+            auto & spec = spec_ctx.speculation;
             size_t n_match = 0;
             for (size_t i = 0; i < next_tokens.size() && i + next_tokens_pos < spec.size(); i++)
             {
@@ -212,8 +255,8 @@ int eval_prompt(
     }
     std::cout << std::endl << std::endl;
     {
-        std::lock_guard<std::mutex> _lock(spec_ctx->mtx);
-        spec_ctx->done = true;
+        std::lock_guard<std::mutex> _lock(spec_ctx.mtx);
+        spec_ctx.done = true;
     }
 
     llama_batch_free(batch);
@@ -240,11 +283,10 @@ int eval_loop(llama_model * model)
         auto tokens_list = llama_tokenize(ctx, prompt, true);
 
         // Init shared speculative context
-        linear_speculative_context spec_ctx;
         spec_ctx.speculation = tokens_list;
         spec_ctx.done = false;
 
-        eval_prompt(model, &spec_ctx, ctx, tokens_list);
+        eval_prompt(model, ctx, tokens_list);
 
         llama_free(ctx);
         const auto t_end = ggml_time_us();

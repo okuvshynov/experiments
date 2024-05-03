@@ -15,6 +15,8 @@
 using json = nlohmann::json;
 
 mt_queue<std::string> prompt_queue;
+zmq::context_t context(1);
+zmq::socket_t main_socket(context, ZMQ_REQ);
 
 void parse_request(const zmq::message_t& request)
 {
@@ -53,53 +55,38 @@ int serve_loop()
     return 0;
 }
 
-struct linear_speculative_context
-{
-    std::vector<llama_token> speculation;
-    std::mutex mtx;
-    bool done;
-};
-
 // returns true/false if completed
 bool merge_speculation(
         llama_context              * ctx,
-        linear_speculative_context * spec_ctx,
         std::vector<llama_token>   & local_spec,
         size_t                     & match_len)
 {
-    std::lock_guard<std::mutex> _lock(spec_ctx->mtx);
-    if (spec_ctx->done)
+    json j;
+    j["spec"] = local_spec;
+    std::string request_str = j.dump();
+    zmq::message_t request(request_str.size());
+    memcpy(request.data(), request_str.data(), request_str.size());
+    main_socket.send(request, zmq::send_flags::none);
+
+    zmq::message_t reply;
+    main_socket.recv(reply, zmq::recv_flags::none);
+    std::string reply_str(static_cast<char*>(reply.data()), reply.size());
+
+    j = json::parse(reply_str);
+
+    bool done = j["done"].template get<bool>();
+    if (done)
     {
         return true;
-    } 
-    auto& spec = spec_ctx->speculation;
-    bool match = true;
-    match_len = local_spec.size() - 1;
-    for (size_t i = 0; i < std::min(spec.size(), local_spec.size()); i++)
-    {
-        if (spec[i] != local_spec[i])
-        {
-            match = false;
-            match_len = i;
-            llama_kv_cache_seq_rm(ctx, 0, i, -1);
-            break;
-        }
     }
-    if (match && spec.size() < local_spec.size())
-    {
-        spec = local_spec;
-        // TODO: and send update here?
-    }
-    else
-    {
-        local_spec = spec;
-    }
+    match_len = j["match_len"].template get<size_t>();
+    local_spec = j["spec"].get<std::vector<llama_token>>();
+    llama_kv_cache_seq_rm(ctx, 0, match_len, -1);
     return false;
 }
 
 static int speculate(
         llama_model * model,
-        linear_speculative_context * spec_ctx,
         llama_context * ctx,
         std::vector<llama_token> tokens_list /* copy here */)
 {
@@ -135,7 +122,7 @@ static int speculate(
 
         local_spec.push_back(next_tokens[0]);
 
-        if (merge_speculation(ctx, spec_ctx, local_spec, match_len)) {
+        if (merge_speculation(ctx, local_spec, match_len)) {
             break;
         }
 
@@ -179,11 +166,7 @@ int eval_loop(llama_model * model)
         auto tokens_list = llama_tokenize(ctx, prompt, true);
 
         // Init shared speculative context
-        linear_speculative_context spec_ctx;
-        spec_ctx.speculation = tokens_list;
-        spec_ctx.done = false;
-
-        speculate(model, &spec_ctx, ctx, tokens_list);
+        speculate(model, ctx, tokens_list);
 
         llama_free(ctx);
         const auto t_end = ggml_time_us();
@@ -196,9 +179,10 @@ int main(int argc, char ** argv)
     llama_backend_init();
 
     llama_model_params model_params = llama_model_default_params();
-    model_params.n_gpu_layers = 99;
+    model_params.n_gpu_layers = 0;
     llama_model * model = llama_load_model_from_file(argv[1], model_params);
 
+    main_socket.connect("tcp://localhost:5555");
     std::thread t_eval(eval_loop, model);
     std::thread t_serve(serve_loop);
 
