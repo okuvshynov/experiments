@@ -59,19 +59,20 @@ int eval_loop(
         llama_context              * ctx,
         std::vector<llama_token> tokens_list /* making copy here */) {
     const int n_len = 256;
-    int input_len_dist[1024] = {0};
 
     llama_batch batch = llama_batch_init(1024, 0, 1);
 
     // evaluate the initial prompt
-    for (size_t i = 0; i < tokens_list.size(); i++) {
+    for (size_t i = 0; i < tokens_list.size(); i++)
+    {
         llama_batch_add(batch, tokens_list[i], i, { 0 }, false);
     }
 
     // llama_decode will output logits only for the last token of the prompt
     batch.logits[batch.n_tokens - 1] = true;
 
-    if (llama_decode(ctx, batch) != 0) {
+    if (llama_decode(ctx, batch) != 0)
+    {
         LOG_TEE("%s: llama_decode() failed\n", __func__);
         return 1;
     }
@@ -86,10 +87,12 @@ int eval_loop(
     int logits_to   = n_cur;
     size_t bg_index = 0;
 
-    while (n_cur <= n_len) {
+    while (n_cur <= n_len)
+    {
         bg_index++;
         next_tokens = greedy_tokens(model, ctx, logits_from, logits_to);
-        if (next_tokens.size() != input_seq.size()) {
+        if (next_tokens.size() != input_seq.size())
+        {
             fprintf(stderr, "invalid next tokens\n");
             return 1;
         }
@@ -98,10 +101,14 @@ int eval_loop(
         int next_tokens_pos = n_cur;
         // we always accept at least one new token
         n_cur += 1;
-        for (size_t i = 0; i + 1 < input_seq.size(); i++) {
-            if (next_tokens[i] == input_seq[i + 1]) {
+        for (size_t i = 0; i + 1 < input_seq.size(); i++)
+        {
+            if (next_tokens[i] == input_seq[i + 1])
+            {
                 n_cur += 1;
-            } else {
+            }
+            else
+            {
                 // reject. next_tokens[i] is the last 'correct' one.
                 next_tokens.erase(next_tokens.begin() + i + 1, next_tokens.end());
                 break;
@@ -111,12 +118,15 @@ int eval_loop(
         llama_kv_cache_seq_rm(ctx, 0, n_cur - 1, -1);
 
         bool done = false;
-        for (llama_token new_token_id: next_tokens) {
-            if (new_token_id == llama_token_eos(model)) {
+        for (llama_token new_token_id: next_tokens)
+        {
+            if (new_token_id == llama_token_eos(model))
+            {
                 done = true;
             }
         }
-        if (n_cur >= n_len || done) {
+        if (n_cur >= n_len || done)
+        {
             break;
         }
 
@@ -125,10 +135,14 @@ int eval_loop(
             std::lock_guard<std::mutex> _lock(spec_ctx->mtx);
             auto & spec = spec_ctx->speculation;
             size_t n_match = 0;
-            for (size_t i = 0; i < next_tokens.size() && i + next_tokens_pos < spec.size(); i++) {
-                if (next_tokens[i] == spec[i + next_tokens_pos]) {
+            for (size_t i = 0; i < next_tokens.size() && i + next_tokens_pos < spec.size(); i++)
+            {
+                if (next_tokens[i] == spec[i + next_tokens_pos])
+                {
                     n_match++;
-                } else {
+                }
+                else
+                {
                     break;
                 }
             }
@@ -136,23 +150,28 @@ int eval_loop(
             std::string accepted = "";
             // Write accepted/rejected/not matched
             // this is slow and inefficient but for short strings doesn't matter 
-            for (size_t i = next_tokens_pos; i < next_tokens_pos + n_match; i++) {
+            for (size_t i = next_tokens_pos; i < next_tokens_pos + n_match; i++)
+            {
                 accepted += llama_token_to_piece(ctx, spec[i]);
             }
             dbg_accepted(accepted, bg_index);
-            if (n_match != next_tokens.size()) {
+            if (n_match != next_tokens.size())
+            {
                 std::string rejected = "";
-                for (size_t i = next_tokens_pos + n_match; i < spec.size(); i++) {
+                for (size_t i = next_tokens_pos + n_match; i < spec.size(); i++)
+                {
                     rejected += llama_token_to_piece(ctx, spec[i]);
                 }
                 dbg_rejected(rejected, bg_index);
                 // need to modify speculation
                 spec.erase(spec.begin() + next_tokens_pos, spec.end());
-                for (const auto tok: next_tokens) {
+                for (const auto tok: next_tokens)
+                {
                     spec.push_back(tok);
                 }
                 std::string not_matched = "";
-                for (size_t i = n_match; i < next_tokens.size(); i++) {
+                for (size_t i = n_match; i < next_tokens.size(); i++)
+                {
                     not_matched += llama_token_to_piece(ctx, next_tokens[i]);
                 }
                 dbg_not_matched(not_matched, bg_index);
@@ -162,11 +181,12 @@ int eval_loop(
         }
 
         llama_batch_clear(batch);
-        input_len_dist[input_seq.size()]++;
-        for (size_t i = 0; i < input_seq.size(); i++) {
+        for (size_t i = 0; i < input_seq.size(); i++)
+        {
             llama_batch_add(batch, input_seq[i], n_cur - 1 + i, { 0 }, true);
         }
-        if (llama_decode(ctx, batch)) {
+        if (llama_decode(ctx, batch))
+        {
             fprintf(stderr, "%s : failed to eval, return code %d\n", __func__, 1);
             return 1;
         }
@@ -174,19 +194,14 @@ int eval_loop(
         logits_to = input_seq.size();
     }
 
-    for (size_t i = 0; i < next_tokens.size(); i++) {
+    for (size_t i = 0; i < next_tokens.size(); i++)
+    {
         dbg_not_matched(llama_token_to_piece(ctx, next_tokens[i]), bg_index);
     }
     std::cout << std::endl << std::endl;
     {
         std::lock_guard<std::mutex> _lock(spec_ctx->mtx);
         spec_ctx->done = true;
-    }
-
-    for (int i = 0; i < n_len; i++) {
-        if (input_len_dist[i] > 0) {
-            std::cout << "input len_dist[" << i << "] = " << input_len_dist[i] << std::endl;
-        }
     }
 
     llama_batch_free(batch);
@@ -208,7 +223,8 @@ int main(int argc, char ** argv)
     ctx_params.n_threads_batch = params.n_threads_batch == -1 ? params.n_threads : params.n_threads_batch;
 
     // Init main model and context
-    if (argc >= 2) {
+    if (argc >= 2)
+    {
         params.model = argv[1];
     }
     llama_model_params model_params = llama_model_default_params();
@@ -216,10 +232,12 @@ int main(int argc, char ** argv)
     llama_model   * model = llama_load_model_from_file(params.model.c_str(), model_params);
     llama_context * ctx = llama_new_context_with_model(model, ctx_params);
 
-    if (argc >= 3) {
+    if (argc >= 3)
+    {
       params.prompt = argv[2];
     }
-    if (params.prompt.empty()) {
+    if (params.prompt.empty())
+    {
         params.prompt = "What's the difference between instruction cache and data cache?";
     }
     dbg_not_matched(params.prompt, 0);
