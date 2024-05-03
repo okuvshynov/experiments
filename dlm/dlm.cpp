@@ -47,7 +47,8 @@ int serve_loop()
     return 0;
 }
 
-struct linear_speculative_context {
+struct linear_speculative_context
+{
     std::vector<llama_token> speculation;
     std::mutex mtx;
     bool done;
@@ -57,7 +58,8 @@ int eval_loop(
         llama_model                * model,
         linear_speculative_context * spec_ctx,
         llama_context              * ctx,
-        std::vector<llama_token> tokens_list /* making copy here */) {
+        std::vector<llama_token> tokens_list /* making copy here */)
+{
     const int n_len = 256;
 
     llama_batch batch = llama_batch_init(1024, 0, 1);
@@ -222,7 +224,7 @@ int main(int argc, char ** argv)
     ctx_params.n_threads = params.n_threads;
     ctx_params.n_threads_batch = params.n_threads_batch == -1 ? params.n_threads : params.n_threads_batch;
 
-    // Init main model and context
+    // Init model and context
     if (argc >= 2)
     {
         params.model = argv[1];
@@ -230,7 +232,7 @@ int main(int argc, char ** argv)
     llama_model_params model_params = llama_model_default_params();
     model_params.n_gpu_layers = 99;
     llama_model   * model = llama_load_model_from_file(params.model.c_str(), model_params);
-    llama_context * ctx = llama_new_context_with_model(model, ctx_params);
+    llama_context * ctx   = llama_new_context_with_model(model, ctx_params);
 
     if (argc >= 3)
     {
