@@ -14,7 +14,6 @@
 
 using json = nlohmann::json;
 
-mt_queue<std::string> prompt_queue;
 
 struct linear_speculative_context
 {
@@ -24,6 +23,7 @@ struct linear_speculative_context
 };
 
 linear_speculative_context spec_ctx;
+mt_queue<std::string> prompt_queue;
 
 std::string parse_request(const zmq::message_t& request)
 {
@@ -41,8 +41,6 @@ std::string parse_request(const zmq::message_t& request)
     }
     if (j.contains("spec")) {
         std::vector<llama_token> local_spec = j["spec"];
-        // process speculation and return speculation result
-        // this should be equivalent to what was done in spec thread
         {
             json res;
             std::lock_guard<std::mutex> _lock(spec_ctx.mtx);
@@ -62,7 +60,6 @@ std::string parse_request(const zmq::message_t& request)
                     {
                         match = false;
                         match_len = i;
-                        // llama_kv_cache_seq_rm(ctx, 0, i, -1);
                         break;
                     }
                 }
@@ -77,9 +74,7 @@ std::string parse_request(const zmq::message_t& request)
                 res["spec"] = local_spec;
                 res["match_len"] = match_len;
             }
-            std::string res_str = res.dump();
-
-            return res_str;
+            return res.dump();
         }
     }
     return req_str;
@@ -299,7 +294,7 @@ int main(int argc, char ** argv)
     llama_backend_init();
 
     llama_model_params model_params = llama_model_default_params();
-    model_params.n_gpu_layers = 99;
+    model_params.n_gpu_layers = 0;
     llama_model * model = llama_load_model_from_file(argv[1], model_params);
 
     std::thread t_eval(eval_loop, model);
