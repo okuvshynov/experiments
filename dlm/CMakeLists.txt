@@ -5,6 +5,7 @@ project(dlm)
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED true)
 
+option(ZMQ_BUILD_TESTS    "Build the zmq tests."    OFF)
 option(CPPZMQ_BUILD_TESTS "Build the cppzmq tests." OFF)
 
 include(FetchContent)
@@ -37,11 +38,11 @@ add_executable(dlm dlm.cpp)
 add_executable(speculator speculator.cpp)
 
 target_link_libraries(dlm PRIVATE cppzmq)
-target_link_libraries(dlm PRIVATE llama common)
+target_link_libraries(dlm PRIVATE common) # from llama.cpp
 target_link_libraries(dlm PRIVATE nlohmann_json::nlohmann_json)
 
 target_link_libraries(speculator PRIVATE cppzmq)
-target_link_libraries(speculator PRIVATE llama common)
+target_link_libraries(speculator PRIVATE common) # from llama.cpp
 target_link_libraries(speculator PRIVATE nlohmann_json::nlohmann_json)
 
 configure_file(${llama.cpp_SOURCE_DIR}/ggml-metal.metal ggml-metal.metal COPYONLY)
