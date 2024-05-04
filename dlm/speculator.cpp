@@ -18,20 +18,17 @@ mt_queue<std::string> prompt_queue;
 zmq::context_t context(1);
 zmq::socket_t main_socket(context, ZMQ_REQ);
 
-void parse_request(const zmq::message_t& request)
+json handle_request(const json & j)
 {
-    const std::string req_str(static_cast<const char*>(request.data()), request.size());
-
-    // TODO: this might throw
-    json j = json::parse(req_str);
-
     // new prompt
+    json res;
+    res["status"] = "ok";
     if (j.contains("prompt")) {
         std::string prompt = j["prompt"];
         // enqueue here
         prompt_queue.push(prompt);
-        return;
     }
+    return res;
 }
 
 int serve_loop()
@@ -42,15 +39,13 @@ int serve_loop()
     socket.bind("tcp://*:5566");
     while (true)
     {
-        zmq::message_t request;
+        zmq::message_t req_z;
+        socket.recv(req_z, zmq::recv_flags::none);
 
-        // Wait for the next request from the client
-        socket.recv(request, zmq::recv_flags::none);
-
-        parse_request(request);
-
-        // sending back same thing
-        socket.send(request, zmq::send_flags::none);
+        auto req_j = json_from_zmsg(req_z);
+        auto res_j = handle_request(req_j);
+        auto res_z = json_to_zmsg(res_j);
+        socket.send(res_z, zmq::send_flags::none);
     }
     return 0;
 }
@@ -61,31 +56,29 @@ bool merge_speculation(
         std::vector<llama_token>   & local_spec,
         size_t                     & match_len)
 {
-    json j;
-    j["spec"] = local_spec;
-    std::string request_str = j.dump();
-    zmq::message_t request(request_str.size());
-    memcpy(request.data(), request_str.data(), request_str.size());
-    main_socket.send(request, zmq::send_flags::none);
+    json req_j;
+    req_j["spec"] = local_spec;
 
-    zmq::message_t reply;
-    main_socket.recv(reply, zmq::recv_flags::none);
-    std::string reply_str(static_cast<char*>(reply.data()), reply.size());
+    auto req_z = json_to_zmsg(req_j);
+    main_socket.send(req_z, zmq::send_flags::none);
 
-    j = json::parse(reply_str);
+    zmq::message_t res_z;
+    main_socket.recv(res_z, zmq::recv_flags::none);
 
-    bool done = j["done"].template get<bool>();
+    auto res_j = json_from_zmsg(res_z);
+
+    bool done = res_j["done"].get<bool>();
     if (done)
     {
         return true;
     }
-    match_len = j["match_len"].template get<size_t>();
-    local_spec = j["spec"].get<std::vector<llama_token>>();
+    match_len  = res_j["match_len"].get<size_t>();
+    local_spec = res_j["spec"].get<std::vector<llama_token>>();
     llama_kv_cache_seq_rm(ctx, 0, match_len, -1);
     return false;
 }
 
-// TODO: if running indefinitely, this will gte out of the boundary
+// TODO: if running indefinitely, this will get out of bounds
 static int speculate(
         llama_model * model,
         llama_context * ctx,
@@ -179,9 +172,10 @@ int main(int argc, char ** argv)
     llama_backend_init();
 
     llama_model_params model_params = llama_model_default_params();
-    model_params.n_gpu_layers = 99;
+    model_params.n_gpu_layers = 0;
     llama_model * model = llama_load_model_from_file(argv[1], model_params);
 
+    // TODO configure this
     main_socket.connect("tcp://localhost:5555");
     std::thread t_eval(eval_loop, model);
     std::thread t_serve(serve_loop);

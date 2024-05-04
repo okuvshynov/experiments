@@ -27,7 +27,7 @@ mt_queue<std::string> prompt_queue;
 json process_request(const json & j)
 {
     json res;
-    res["xyz"] = "k";
+    res["status"] = "ok";
     if (j.contains("prompt"))
     {
         std::string prompt = j["prompt"];
@@ -69,7 +69,6 @@ json process_request(const json & j)
                 res["spec"] = local_spec;
                 res["match_len"] = match_len;
             }
-            //auto _tmp = json_to_zmsg(res);
             return res;
         }
     }
@@ -85,14 +84,11 @@ int serve_loop()
     while (true)
     {
         zmq::message_t req_z;
-
-        // Blocking wait
         socket.recv(req_z, zmq::recv_flags::none);
+
         auto req_j = json_from_zmsg(req_z);
         auto res_j = process_request(req_j);
-        zmq::message_t res_z = json_to_zmsg(res_j);
-
-        // sending back same thing
+        auto res_z = json_to_zmsg(res_j);
         socket.send(res_z, zmq::send_flags::none);
     }
     return 0;
@@ -292,7 +288,7 @@ int main(int argc, char ** argv)
     llama_backend_init();
 
     llama_model_params model_params = llama_model_default_params();
-    model_params.n_gpu_layers = 0;
+    model_params.n_gpu_layers = 99;
     llama_model * model = llama_load_model_from_file(argv[1], model_params);
 
     std::thread t_eval(eval_loop, model);
