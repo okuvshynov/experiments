@@ -14,7 +14,6 @@
 
 using json = nlohmann::json;
 
-
 struct linear_speculative_context
 {
     std::vector<llama_token> speculation;
@@ -25,24 +24,20 @@ struct linear_speculative_context
 linear_speculative_context spec_ctx;
 mt_queue<std::string> prompt_queue;
 
-std::string parse_request(const zmq::message_t& request)
+json process_request(const json & j)
 {
-    const std::string req_str(static_cast<const char*>(request.data()), request.size());
-
-    // TODO: this might throw
-    json j = json::parse(req_str);
-
-    // new prompt
-    if (j.contains("prompt")) {
+    json res;
+    res["xyz"] = "k";
+    if (j.contains("prompt"))
+    {
         std::string prompt = j["prompt"];
-        // enqueue here
         prompt_queue.push(prompt);
-        return req_str;
+        return res;
     }
-    if (j.contains("spec")) {
+    if (j.contains("spec"))
+    {
         std::vector<llama_token> local_spec = j["spec"];
         {
-            json res;
             std::lock_guard<std::mutex> _lock(spec_ctx.mtx);
             if (spec_ctx.done)
             {
@@ -74,10 +69,11 @@ std::string parse_request(const zmq::message_t& request)
                 res["spec"] = local_spec;
                 res["match_len"] = match_len;
             }
-            return res.dump();
+            //auto _tmp = json_to_zmsg(res);
+            return res;
         }
     }
-    return req_str;
+    return res;
 }
 
 int serve_loop()
@@ -88,17 +84,16 @@ int serve_loop()
     socket.bind("tcp://*:5555");
     while (true)
     {
-        zmq::message_t request;
+        zmq::message_t req_z;
 
-        // Wait for the next request from the client
-        socket.recv(request, zmq::recv_flags::none);
-
-        auto res_str = parse_request(request);
-        zmq::message_t response(res_str.size());
-        memcpy(response.data(), res_str.data(), res_str.size());
+        // Blocking wait
+        socket.recv(req_z, zmq::recv_flags::none);
+        auto req_j = json_from_zmsg(req_z);
+        auto res_j = process_request(req_j);
+        zmq::message_t res_z = json_to_zmsg(res_j);
 
         // sending back same thing
-        socket.send(response, zmq::send_flags::none);
+        socket.send(res_z, zmq::send_flags::none);
     }
     return 0;
 }
@@ -231,6 +226,9 @@ int eval_prompt(
         }
 
         llama_batch_clear(batch);
+        if (input_seq.size() + n_cur > n_len) {
+            input_seq.resize(n_len - n_cur);
+        }
         for (size_t i = 0; i < input_seq.size(); i++)
         {
             llama_batch_add(batch, input_seq[i], n_cur - 1 + i, { 0 }, true);

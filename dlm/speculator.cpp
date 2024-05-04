@@ -85,6 +85,7 @@ bool merge_speculation(
     return false;
 }
 
+// TODO: if running indefinitely, this will gte out of the boundary
 static int speculate(
         llama_model * model,
         llama_context * ctx,
@@ -165,7 +166,6 @@ int eval_loop(llama_model * model)
 
         auto tokens_list = llama_tokenize(ctx, prompt, true);
 
-        // Init shared speculative context
         speculate(model, ctx, tokens_list);
 
         llama_free(ctx);
@@ -179,7 +179,7 @@ int main(int argc, char ** argv)
     llama_backend_init();
 
     llama_model_params model_params = llama_model_default_params();
-    model_params.n_gpu_layers = 0;
+    model_params.n_gpu_layers = 99;
     llama_model * model = llama_load_model_from_file(argv[1], model_params);
 
     main_socket.connect("tcp://localhost:5555");
