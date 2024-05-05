@@ -6,13 +6,13 @@ prompt = "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\nYou are
 def main():
     context = zmq.Context()
 
+    expert = "tcp://localhost:5555" 
     # calling main model
     main_socket = context.socket(zmq.REQ)
-    main_socket.connect("tcp://localhost:5555")
-
+    main_socket.connect(expert)
 
     # Prepare JSON data
-    data = {"prompt": prompt}
+    data = {"prompt": prompt, "expert": expert}
 
     message = json.dumps(data)
 
