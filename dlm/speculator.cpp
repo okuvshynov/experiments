@@ -1,6 +1,5 @@
 // ZeroMQ
 #include <zmq.hpp>
-#include <zmq.h>
 
 // json
 #include <nlohmann/json.hpp>
@@ -59,7 +58,6 @@ class speculator
             size_t                   & match_len);
 
     zmq::context_t zmq_context_;
-    void * zmq_ctx_;
     mt_queue<query> queue_;
     llama_model * model_;
     const config conf_;
@@ -83,12 +81,6 @@ std::unique_ptr<speculator> speculator::create(config conf)
         return nullptr;
     }
 
-    self->zmq_ctx_ = zmq_ctx_new();
-    if (self->zmq_ctx_ == nullptr)
-    {
-        fprintf(stderr, "zmq_ctx_new failed.\n");
-        return nullptr;
-    }
     return self;
 }
 
@@ -101,13 +93,6 @@ speculator::~speculator()
     if (model_ != nullptr)
     {
         llama_free_model(model_);
-    }
-    if (zmq_ctx_ != nullptr)
-    {
-        if (zmq_ctx_destroy(zmq_ctx_) != 0)
-        {
-            fprintf(stderr, "zmq_ctx_destroy failed\n");
-        }
     }
 }
 
