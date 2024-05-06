@@ -48,13 +48,13 @@ json process_request(const json & j)
                 res["done"] = false;
                 auto& spec = spec_ctx.speculation;
                 bool match = true;
-                size_t match_len = local_spec.size() - 1;
+                size_t n_matched = local_spec.size() - 1;
                 for (size_t i = 0; i < std::min(spec.size(), local_spec.size()); i++)
                 {
                     if (spec[i] != local_spec[i])
                     {
                         match = false;
-                        match_len = i;
+                        n_matched = i;
                         break;
                     }
                 }
@@ -67,7 +67,7 @@ json process_request(const json & j)
                     local_spec = spec;
                 }
                 res["spec"] = local_spec;
-                res["match_len"] = match_len;
+                res["n_matched"] = n_matched;
             }
             return res;
         }
