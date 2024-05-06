@@ -1,42 +1,48 @@
-// ZeroMQ
-#include <zmq.hpp>
-
-// json
-#include <nlohmann/json.hpp>
-
-// llama.cpp
-#include <llama.h>
-#include <common.h>
-
+#include <memory>
 #include <string>
 
+#include <common.h>
+#include <llama.h>
+#include <nlohmann/json.hpp>
+#include <zmq.hpp>
+
+#include "config.h"
+#include "query_context.h"
 #include "utils.h"
+
+namespace
+{
 
 using json = nlohmann::json;
 
 struct linear_speculative_context
 {
-    std::vector<llama_token> speculation;
+    llama_tokens speculation;
     std::mutex mtx;
     bool done;
 };
 
 linear_speculative_context spec_ctx;
-mt_queue<std::string> prompt_queue;
+mt_queue<query> prompt_queue;
+query_context   query_ctx_;
 
-json process_request(const json & j)
+json handle_request(const json & j)
 {
     json res;
     res["status"] = "ok";
     if (j.contains("prompt"))
     {
-        std::string prompt = j["prompt"];
-        prompt_queue.push(prompt);
+        query q =
+        {
+            j["prompt"],
+            ""
+        };
+        prompt_queue.push(q);
         return res;
     }
     if (j.contains("spec"))
     {
-        std::vector<llama_token> local_spec = j["spec"];
+        llama_tokens local_spec = j["spec"];
         {
             std::lock_guard<std::mutex> _lock(spec_ctx.mtx);
             if (spec_ctx.done)
@@ -75,29 +81,10 @@ json process_request(const json & j)
     return res;
 }
 
-int serve_loop()
-{
-    zmq::context_t context(1);
-    zmq::socket_t socket(context, ZMQ_REP);
-    // TODO: configure this
-    socket.bind("tcp://*:5555");
-    while (true)
-    {
-        zmq::message_t req_z;
-        socket.recv(req_z, zmq::recv_flags::none);
-
-        auto req_j = json_from_zmsg(req_z);
-        auto res_j = process_request(req_j);
-        auto res_z = json_to_zmsg(res_j);
-        socket.send(res_z, zmq::send_flags::none);
-    }
-    return 0;
-}
-
 int eval_prompt(
-        llama_model                    * model,
-        llama_context                  * ctx,
-        const std::vector<llama_token> & tokens_list)
+        llama_model        * model,
+        llama_context      * ctx,
+        const llama_tokens & tokens_list)
 {
     const int n_len = 1024;
 
@@ -121,7 +108,7 @@ int eval_prompt(
     // how many tokens are currently accepted
     int n_cur  = batch.n_tokens;
 
-    std::vector<llama_token> input_seq, next_tokens;
+    llama_tokens input_seq, next_tokens;
     input_seq.push_back(tokens_list.back());
 
     int logits_from = n_cur - 1;
@@ -256,8 +243,7 @@ int eval_loop(llama_model * model)
 {
     while (true)
     {
-        // blocking wait
-        std::string prompt = prompt_queue.pop();
+        query_ctx_.q = prompt_queue.pop();
 
         const auto t_start = ggml_time_us();
         llama_context_params ctx_params = llama_context_default_params();
@@ -267,9 +253,9 @@ int eval_loop(llama_model * model)
         ctx_params.n_threads_batch = 16;
         llama_context * ctx   = llama_new_context_with_model(model, ctx_params);
 
-        dbg_not_matched(prompt, 0);
+        dbg_not_matched(query_ctx_.q.prompt, 0);
 
-        auto tokens_list = llama_tokenize(ctx, prompt, true);
+        auto tokens_list = llama_tokenize(ctx, query_ctx_.q.prompt, true);
 
         // Init shared speculative context
         spec_ctx.speculation = tokens_list;
@@ -283,6 +269,32 @@ int eval_loop(llama_model * model)
     }
 }
 
+int serve(llama_model * model)
+{
+    zmq::context_t context(1);
+    zmq::socket_t socket(context, ZMQ_REP);
+    // TODO: configure this
+    socket.bind("tcp://*:5555");
+
+    std::thread eval_thread([model]() { eval_loop(model); });
+
+    while (true)
+    {
+        zmq::message_t req_z;
+        socket.recv(req_z, zmq::recv_flags::none);
+
+        auto req_j = json_from_zmsg(req_z);
+        auto res_j = handle_request(req_j);
+        auto res_z = json_to_zmsg(res_j);
+        socket.send(res_z, zmq::send_flags::none);
+    }
+
+    eval_thread.join();
+    return 0;
+}
+
+}
+
 int main(int argc, char ** argv)
 {
     llama_backend_init();
@@ -291,14 +303,10 @@ int main(int argc, char ** argv)
     model_params.n_gpu_layers = 99;
     llama_model * model = llama_load_model_from_file(argv[1], model_params);
 
-    std::thread t_eval(eval_loop, model);
-    std::thread t_serve(serve_loop);
+    int res = serve(model);
 
-    t_eval.join();
     llama_free_model(model);
     llama_backend_free();
-
-    t_serve.join();
 
     return 0;
 }
