@@ -29,7 +29,7 @@ class llama_node
     json handle_request(const json & j);
     int eval_prompt(llama_context * ctx, const llama_tokens & tokens_list);
 
-    zmq::context_t  zmq_context_;
+    zmq::context_t  zmq_ctx_;
     mt_queue<query> queue_;
     llama_model   * model_;
     const config    conf_;
@@ -56,7 +56,7 @@ std::unique_ptr<llama_node> llama_node::create(config conf)
     return self;
 }
 
-llama_node::llama_node(config conf): zmq_context_(1), conf_(conf)
+llama_node::llama_node(config conf): zmq_ctx_(1), conf_(conf)
 {
 }
 
@@ -314,10 +314,8 @@ int llama_node::eval_loop()
 
 int llama_node::serve()
 {
-    zmq::context_t context(1);
-    zmq::socket_t socket(context, ZMQ_REP);
-    // TODO: configure this
-    socket.bind("tcp://*:5555");
+    zmq::socket_t socket(zmq_ctx_, ZMQ_REP);
+    socket.bind(conf_.bind_address);
 
     std::thread eval_thread([this]() { this->eval_loop(); });
 
