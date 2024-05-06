@@ -15,13 +15,6 @@ namespace
 
 using json = nlohmann::json;
 
-struct linear_speculative_context
-{
-    llama_tokens speculation;
-    std::mutex mtx;
-    bool done;
-};
-
 class llama_node
 {
   public:
@@ -32,6 +25,9 @@ class llama_node
 
   private:
     explicit llama_node(config conf);
+
+    json handle_request(const json & j);
+    int eval_prompt(llama_context * ctx, const llama_tokens & tokens_list);
 
     zmq::context_t  zmq_context_;
     mt_queue<query> queue_;
@@ -72,12 +68,7 @@ llama_node::~llama_node()
     }
 }
 
-std::unique_ptr<llama_node> node = nullptr;
-linear_speculative_context spec_ctx;
-mt_queue<query> prompt_queue;
-query_context   query_ctx_;
-
-json handle_request(const json & j)
+json llama_node::handle_request(const json & j)
 {
     json res;
     res["status"] = "ok";
@@ -88,22 +79,22 @@ json handle_request(const json & j)
             j["prompt"],
             ""
         };
-        prompt_queue.push(q);
+        queue_.push(q);
         return res;
     }
     if (j.contains("spec"))
     {
         llama_tokens local_spec = j["spec"];
         {
-            std::lock_guard<std::mutex> _lock(spec_ctx.mtx);
-            if (spec_ctx.done)
+            std::lock_guard<std::mutex> _lock(query_ctx_.spec_ctx.mtx);
+            if (query_ctx_.spec_ctx.done)
             {
                 res["done"] = true;
             } 
             else
             {
                 res["done"] = false;
-                auto& spec = spec_ctx.speculation;
+                auto& spec = query_ctx_.spec_ctx.speculation;
                 bool match = true;
                 size_t n_matched = local_spec.size() - 1;
                 for (size_t i = 0; i < std::min(spec.size(), local_spec.size()); i++)
@@ -132,11 +123,11 @@ json handle_request(const json & j)
     return res;
 }
 
-int eval_prompt(
-        llama_model        * model,
+int llama_node::eval_prompt(
         llama_context      * ctx,
         const llama_tokens & tokens_list)
 {
+    llama_model * model = model_;
     const int n_len = 1024;
 
     llama_batch batch = llama_batch_init(1024, 0, 1);
@@ -152,7 +143,7 @@ int eval_prompt(
 
     if (llama_decode(ctx, batch) != 0)
     {
-        LOG_TEE("%s: llama_decode() failed\n", __func__);
+        fprintf(stderr, "%s: llama_decode() failed\n", __func__);
         return 1;
     }
 
@@ -211,8 +202,8 @@ int eval_prompt(
 
         // CRITICAL SECTION -- reconcile main and speculative
         {
-            std::lock_guard<std::mutex> _lock(spec_ctx.mtx);
-            auto & spec = spec_ctx.speculation;
+            std::lock_guard<std::mutex> _lock(query_ctx_.spec_ctx.mtx);
+            auto & spec = query_ctx_.spec_ctx.speculation;
             size_t n_match = 0;
             for (size_t i = 0; i < next_tokens.size() && i + next_tokens_pos < spec.size(); i++)
             {
@@ -282,8 +273,8 @@ int eval_prompt(
     }
     std::cout << std::endl << std::endl;
     {
-        std::lock_guard<std::mutex> _lock(spec_ctx.mtx);
-        spec_ctx.done = true;
+        std::lock_guard<std::mutex> _lock(query_ctx_.spec_ctx.mtx);
+        query_ctx_.spec_ctx.done = true;
     }
 
     llama_batch_free(batch);
@@ -295,7 +286,7 @@ int llama_node::eval_loop()
     llama_model * model = this->model_;
     while (true)
     {
-        query_ctx_.q = prompt_queue.pop();
+        query_ctx_.q = queue_.pop();
 
         const auto t_start = ggml_time_us();
         llama_context_params ctx_params = llama_context_default_params();
@@ -307,13 +298,13 @@ int llama_node::eval_loop()
 
         dbg_not_matched(query_ctx_.q.prompt, 0);
 
-        auto tokens_list = llama_tokenize(ctx, query_ctx_.q.prompt, true);
+        auto prompt = llama_tokenize(ctx, query_ctx_.q.prompt, true);
 
         // Init shared speculative context
-        spec_ctx.speculation = tokens_list;
-        spec_ctx.done = false;
+        query_ctx_.spec_ctx.speculation = prompt;
+        query_ctx_.spec_ctx.done = false;
 
-        eval_prompt(model, ctx, tokens_list);
+        eval_prompt(ctx, prompt);
 
         llama_free(ctx);
         const auto t_end = ggml_time_us();
@@ -362,7 +353,7 @@ int main(int argc, char ** argv)
         /* n_gpu_layers = */ 99
     };
 
-    node = llama_node::create(conf);
+    auto node = llama_node::create(conf);
     int res = node->serve();
 
     llama_backend_free();

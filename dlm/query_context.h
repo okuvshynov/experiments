@@ -16,11 +16,20 @@ struct query
     std::string expert; // speculator will communicate with expert
 };
 
+struct spec_context
+{
+    llama_tokens speculation;
+    std::mutex mtx;
+    bool done;
+};
+
 struct query_context
 {
     query           q;
     llama_context * llama_ctx;
     zmq::socket_t * client; // where to call 'expert'
     llama_batch     batch;
+    spec_context    spec_ctx;
+
 };
 
