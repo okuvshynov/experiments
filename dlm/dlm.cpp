@@ -22,6 +22,57 @@ struct linear_speculative_context
     bool done;
 };
 
+class llama_node
+{
+  public:
+    static std::unique_ptr<llama_node> create(config conf);
+    ~llama_node();
+    int serve();
+    int eval_loop();
+
+  private:
+    explicit llama_node(config conf);
+
+    zmq::context_t  zmq_context_;
+    mt_queue<query> queue_;
+    llama_model   * model_;
+    const config    conf_;
+
+    // current context, as we operate on one query at a time
+    query_context query_ctx_;
+};
+
+std::unique_ptr<llama_node> llama_node::create(config conf)
+{
+    auto self = std::unique_ptr<llama_node>(new llama_node(conf));
+
+    llama_model_params model_params = llama_model_default_params();
+    model_params.n_gpu_layers       = conf.n_gpu_layers;
+
+    self->model_ = llama_load_model_from_file(conf.model_path.c_str(), model_params);
+
+    if (self->model_ == nullptr)
+    {
+        fprintf(stderr, "Model %s load failed.\n", conf.model_path.c_str());
+        return nullptr;
+    }
+
+    return self;
+}
+
+llama_node::llama_node(config conf): zmq_context_(1), conf_(conf)
+{
+}
+
+llama_node::~llama_node()
+{
+    if (model_ != nullptr)
+    {
+        llama_free_model(model_);
+    }
+}
+
+std::unique_ptr<llama_node> node = nullptr;
 linear_speculative_context spec_ctx;
 mt_queue<query> prompt_queue;
 query_context   query_ctx_;
@@ -239,8 +290,9 @@ int eval_prompt(
     return 0;
 }
 
-int eval_loop(llama_model * model)
+int llama_node::eval_loop()
 {
+    llama_model * model = this->model_;
     while (true)
     {
         query_ctx_.q = prompt_queue.pop();
@@ -269,14 +321,14 @@ int eval_loop(llama_model * model)
     }
 }
 
-int serve(llama_model * model)
+int llama_node::serve()
 {
     zmq::context_t context(1);
     zmq::socket_t socket(context, ZMQ_REP);
     // TODO: configure this
     socket.bind("tcp://*:5555");
 
-    std::thread eval_thread([model]() { eval_loop(model); });
+    std::thread eval_thread([this]() { this->eval_loop(); });
 
     while (true)
     {
@@ -299,13 +351,20 @@ int main(int argc, char ** argv)
 {
     llama_backend_init();
 
-    llama_model_params model_params = llama_model_default_params();
-    model_params.n_gpu_layers = 99;
-    llama_model * model = llama_load_model_from_file(argv[1], model_params);
+    config conf =
+    {
+        /* bind_address = */ "tcp://*:5555",
 
-    int res = serve(model);
+        /* model_path   = */ argv[1],
+        /* n_batch      = */ 512,
+        /* n_ctx        = */ 4096,
+        /* n_threads    = */ 16,
+        /* n_gpu_layers = */ 99
+    };
 
-    llama_free_model(model);
+    node = llama_node::create(conf);
+    int res = node->serve();
+
     llama_backend_free();
 
     return 0;
