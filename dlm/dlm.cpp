@@ -155,7 +155,7 @@ int eval_prompt(
                 break;
             }
         }
-        // empty the main model cache
+        // empty the kv cache
         llama_kv_cache_seq_rm(ctx, 0, n_cur - 1, -1);
 
         bool done = false;

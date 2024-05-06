@@ -18,42 +18,70 @@ namespace {
 
 using json = nlohmann::json;
 
-struct query
+struct config
+{
+    std::string bind_address; // can be any zmq protocol, e.g. inproc://llm_1
+
+    std::string model_path;
+    uint32_t n_threads;
+    uint32_t n_gpu_layers;
+};
+
+struct query_context
 {
     std::string prompt;
     std::string expert; // speculator will communicate with expert
+
+    llama_context * llama_ctx;
+    zmq::socket_t * client;
 };
 
 class speculator
 {
   public:
     // TODO: this should take some config as argument?
-    explicit speculator(llama_model * model);
+    explicit speculator(config conf);
+    ~speculator();
     int serve();
 
   private:
     json handle_request(const json & j);
     void eval_loop();
-    int speculate(
-            const std::string & expert,
-            llama_context     * ctx,
-            const std::vector<llama_token> & tokens_list);
+    int speculate(const std::vector<llama_token> & tokens_list);
+    bool merge_speculation(
+            std::vector<llama_token>   & local_spec,
+            size_t                     & match_len);
 
-    zmq::context_t  context_;
-    mt_queue<query> queue_;
-    llama_model   * model_;
+    zmq::context_t zmq_context_;
+    mt_queue<query_context> queue_;
+    llama_model * model_;
+    const config conf_;
+    query_context * qctx_ = nullptr;
 };
 
-speculator::speculator(llama_model * model): context_(1), model_(model)
+speculator::speculator(config conf): zmq_context_(1), conf_(conf)
 {
+    llama_backend_init();
+    llama_model_params model_params = llama_model_default_params();
+    model_params.n_gpu_layers = conf_.n_gpu_layers;
+    model_ = llama_load_model_from_file(conf_.model_path.c_str(), model_params);
 
+    if (model_ == nullptr)
+    {
+        // TODO: fail
+    }
+}
+
+speculator::~speculator()
+{
+    llama_free_model(model_);
+    llama_backend_free();
 }
 
 int speculator::serve()
 {
-    zmq::socket_t socket(context_, ZMQ_REP);
-    // TODO: configure this
-    socket.bind("tcp://*:5566");
+    zmq::socket_t socket(zmq_context_, ZMQ_REP);
+    socket.bind(conf_.bind_address);
 
     std::thread eval_thread([this]() { eval_loop(); });
 
@@ -78,10 +106,10 @@ json speculator::handle_request(const json & j)
     res["status"] = "ok";
     if (j.contains("prompt"))
     {
-        query q = 
+        query_context q = 
         {
             j["prompt"],
-            j["expert"]
+            j["expert"],
         };
         queue_.push(q);
         return res;
@@ -90,10 +118,7 @@ json speculator::handle_request(const json & j)
     return res;
 }
 
-// returns true/false if completed
-bool merge_speculation(
-        zmq::socket_t              * socket,
-        llama_context              * ctx,
+bool speculator::merge_speculation(
         std::vector<llama_token>   & local_spec,
         size_t                     & match_len)
 {
@@ -101,10 +126,10 @@ bool merge_speculation(
     req_j["spec"] = local_spec;
 
     auto req_z = json_to_zmsg(req_j);
-    socket->send(req_z, zmq::send_flags::none);
+    qctx_->client->send(req_z, zmq::send_flags::none);
 
     zmq::message_t res_z;
-    socket->recv(res_z, zmq::recv_flags::none);
+    qctx_->client->recv(res_z, zmq::recv_flags::none);
 
     auto res_j = json_from_zmsg(res_z);
 
@@ -115,21 +140,16 @@ bool merge_speculation(
     }
     match_len  = res_j["match_len"].get<size_t>();
     local_spec = res_j["spec"].get<std::vector<llama_token>>();
-    llama_kv_cache_seq_rm(ctx, 0, match_len, -1);
     return false;
 }
 
 // Continuous speculation on single prompt
 // TODO: if running indefinitely, this will get out of bounds
-int speculator::speculate(
-        const std::string & expert,
-        llama_context     * ctx,
-        const std::vector<llama_token> & tokens_list)
+int speculator::speculate(const std::vector<llama_token> & tokens_list)
 {
-    // connection to expert
-    zmq::socket_t socket(context_, ZMQ_REQ);
-    socket.connect(expert);
+    llama_context * ctx = qctx_->llama_ctx;
 
+    // TODO: this gets leaked in case of error
     llama_batch batch = llama_batch_init(512, 0, 1);
 
     // evaluate the initial prompt
@@ -143,7 +163,7 @@ int speculator::speculate(
 
     if (llama_decode(ctx, batch) != 0)
     {
-        LOG_TEE("%s: llama_decode() failed\n", __func__);
+        fprintf(stderr, "%s: llama_decode() failed\n", __func__);
         return 1;
     }
 
@@ -162,9 +182,10 @@ int speculator::speculate(
 
         local_spec.push_back(next_tokens[0]);
 
-        if (merge_speculation(&socket, ctx, local_spec, match_len)) {
+        if (merge_speculation(local_spec, match_len)) {
             break;
         }
+        llama_kv_cache_seq_rm(ctx, 0, match_len, -1);
 
         llama_batch_clear(batch);
         for (size_t i = match_len; i < local_spec.size(); i++)
@@ -182,7 +203,6 @@ int speculator::speculate(
     }
 
     llama_batch_free(batch);
-    socket.close();
     return 0;
 }
 
@@ -190,24 +210,37 @@ void speculator::eval_loop()
 {
     while (true)
     {
-        // blocking wait
-        query q = queue_.pop();
+        query_context qctx = queue_.pop();
 
         const auto t_start = ggml_time_us();
         llama_context_params ctx_params = llama_context_default_params();
-        ctx_params.seed  = 1234;
+
+        // TODO: configure these as well
+        // ctx_params.seed  = 1234;
+        // ctx_params.n_threads_batch = 16;
+
         ctx_params.n_ctx = 2048;
-        ctx_params.n_threads = 16;
-        ctx_params.n_threads_batch = 16;
-        llama_context * ctx   = llama_new_context_with_model(model_, ctx_params);
+        ctx_params.n_threads = conf_.n_threads;
+        qctx.llama_ctx = llama_new_context_with_model(model_, ctx_params);
 
-        dbg_not_matched(q.prompt, 0);
+        this->qctx_ = &qctx;
 
-        auto tokens_list = llama_tokenize(ctx, q.prompt, true);
+        auto tokens_list = llama_tokenize(qctx.llama_ctx, qctx.prompt, true);
 
-        speculate(q.expert, ctx, tokens_list);
+        // connection to expert
+        zmq::socket_t socket(zmq_context_, ZMQ_REQ);
+        socket.connect(qctx_->expert);
 
-        llama_free(ctx);
+        qctx_->client = &socket;
+
+
+        if (speculate(tokens_list) != 0)
+        {
+            // TODO: error
+        }
+
+        llama_free(qctx.llama_ctx);
+        socket.close();
         const auto t_end = ggml_time_us();
         printf("Processing time: %.3lf\n", (t_end - t_start) / 1000000.0);
     }
@@ -217,12 +250,14 @@ void speculator::eval_loop()
 
 int main(int argc, char ** argv)
 {
-    llama_backend_init();
+    config conf =
+    {
+        /* bind_address = */ "tcp://*:5566",
 
-    llama_model_params model_params = llama_model_default_params();
-    model_params.n_gpu_layers = 0;
-    llama_model * model = llama_load_model_from_file(argv[1], model_params);
-
-    speculator spec(model);
+        /* model_path   = */ argv[1],
+        /* n_threads    = */ 16,
+        /* n_gpu_layers = */ 0
+    };
+    speculator spec(conf);
     return spec.serve();
 }
