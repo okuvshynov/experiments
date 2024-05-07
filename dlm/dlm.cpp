@@ -162,7 +162,7 @@ int llama_node::generate(const llama_tokens & tokens_list)
 
     while (n_cur <= n_len)
     {
-        bg_index++;
+        bg_index += 1;
         next_tokens = greedy_tokens(model, ctx, logits_from, logits_to);
         if (next_tokens.size() != input_seq.size())
         {
@@ -280,7 +280,6 @@ int llama_node::generate(const llama_tokens & tokens_list)
         query_ctx_.spec_ctx.done = true;
     }
 
-    llama_batch_free(batch);
     return 0;
 }
 

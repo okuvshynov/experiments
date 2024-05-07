@@ -26,7 +26,7 @@ class speculator
     explicit speculator(config conf);
     json handle_request(const json & j);
     void eval_loop();
-    int  speculate(const llama_tokens & prompt);
+    int  generate(const llama_tokens & prompt);
     bool merge_speculation(
             llama_tokens & curr,
             size_t & n_matched);
@@ -138,7 +138,7 @@ bool speculator::merge_speculation(
 
 // Continuous speculation on single prompt
 // TODO: if running indefinitely, this will get out of bounds
-int speculator::speculate(const llama_tokens & prompt)
+int speculator::generate(const llama_tokens & prompt)
 {
     llama_context * ctx   = query_ctx_.llama_ctx;
     llama_batch   & batch = query_ctx_.batch; 
@@ -168,15 +168,18 @@ int speculator::speculate(const llama_tokens & prompt)
     // how many tokens we have validated with main model.
     // can probable start with prompt.size()?
     size_t n_matched = 0;
+    size_t bg_index  = 0;
 
     while (true)
     {
+        bg_index += 1;
         auto next_tokens = greedy_tokens(model_, ctx, logit_idx, logit_idx + 1);
         if (next_tokens.size() != 1)
         {
             fprintf(stderr, "invalid next tokens\n");
             return 1;
         }
+        dbg_not_matched(llama_token_to_piece(ctx, next_tokens[0]), bg_index);
 
         curr.push_back(next_tokens[0]);
 
@@ -223,7 +226,8 @@ void speculator::eval_loop()
         ctx_params.n_threads = conf_.n_threads;
         query_ctx_.llama_ctx = llama_new_context_with_model(model_, ctx_params);
 
-        auto tokens_list = llama_tokenize(query_ctx_.llama_ctx, query_ctx_.q.prompt, true);
+        dbg_not_matched(query_ctx_.q.prompt, 0);
+        auto prompt = llama_tokenize(query_ctx_.llama_ctx, query_ctx_.q.prompt, true);
 
         query_ctx_.batch = llama_batch_init(conf_.n_batch, 0, 1);
 
@@ -233,7 +237,7 @@ void speculator::eval_loop()
 
         query_ctx_.client = &socket;
 
-        if (speculate(tokens_list) != 0)
+        if (generate(prompt) != 0)
         {
             fprintf(stderr, "speculation failed\n");
         }
