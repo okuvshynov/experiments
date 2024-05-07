@@ -28,10 +28,9 @@ class llama_node
     explicit llama_node(config conf);
 
     json handle_request(const json & j);
-    void eval_loop();
+    void eval_loop(zmq::context_t & zmq_ctx);
     int  generate(const llama_tokens & tokens_list);
 
-    zmq::context_t  zmq_ctx_;
     mt_queue<query> queue_;
     llama_model   * model_;
     const config    conf_;
@@ -58,7 +57,7 @@ std::unique_ptr<llama_node> llama_node::create(config conf)
     return self;
 }
 
-llama_node::llama_node(config conf): zmq_ctx_(1), conf_(conf)
+llama_node::llama_node(config conf): conf_(conf)
 {
 }
 
@@ -68,6 +67,29 @@ llama_node::~llama_node()
     {
         llama_free_model(model_);
     }
+}
+
+int llama_node::serve()
+{
+    zmq::context_t zmq_ctx;
+    zmq::socket_t socket(zmq_ctx, ZMQ_REP);
+    socket.bind(conf_.bind_address);
+
+    std::thread eval_thread([this, &zmq_ctx]() { this->eval_loop(zmq_ctx); });
+
+    while (true)
+    {
+        zmq::message_t req_z;
+        socket.recv(req_z, zmq::recv_flags::none);
+
+        auto req_j = json_from_zmsg(req_z);
+        auto res_j = handle_request(req_j);
+        auto res_z = json_to_zmsg(res_j);
+        socket.send(res_z, zmq::send_flags::none);
+    }
+
+    eval_thread.join();
+    return 0;
 }
 
 json llama_node::handle_request(const json & j)
@@ -163,7 +185,7 @@ int llama_node::generate(const llama_tokens & tokens_list)
     size_t bg_index = 0;
 
     const auto t_start = ggml_time_us();
-    while (n_cur <= n_len)
+    while (n_cur < n_len)
     {
         bg_index += 1;
         next_tokens = greedy_tokens(model, ctx, logits_from, logits_to);
@@ -190,7 +212,7 @@ int llama_node::generate(const llama_tokens & tokens_list)
                 break;
             }
         }
-        // empty the kv cache
+        // empty the non-match portion of kv cache
         llama_kv_cache_seq_rm(ctx, 0, n_cur - 1, -1);
 
         bool done = false;
@@ -294,7 +316,7 @@ int llama_node::generate(const llama_tokens & tokens_list)
     return 0;
 }
 
-void llama_node::eval_loop()
+void llama_node::eval_loop(zmq::context_t & zmq_ctx)
 {
     while (true)
     {
@@ -332,28 +354,6 @@ void llama_node::eval_loop()
         const auto t_end = ggml_time_us();
         printf("Processing time: %.3lf\n", (t_end - t_start) / 1000000.0);
     }
-}
-
-int llama_node::serve()
-{
-    zmq::socket_t socket(zmq_ctx_, ZMQ_REP);
-    socket.bind(conf_.bind_address);
-
-    std::thread eval_thread([this]() { this->eval_loop(); });
-
-    while (true)
-    {
-        zmq::message_t req_z;
-        socket.recv(req_z, zmq::recv_flags::none);
-
-        auto req_j = json_from_zmsg(req_z);
-        auto res_j = handle_request(req_j);
-        auto res_z = json_to_zmsg(res_j);
-        socket.send(res_z, zmq::send_flags::none);
-    }
-
-    eval_thread.join();
-    return 0;
 }
 
 }

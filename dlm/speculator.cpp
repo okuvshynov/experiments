@@ -12,7 +12,8 @@
 #include "query_context.h"
 #include "utils.h"
 
-namespace {
+namespace
+{
 
 using json = nlohmann::json;
 
@@ -25,12 +26,12 @@ class speculator
 
   private:
     explicit speculator(config conf);
+    
     json handle_request(const json & j);
-    void eval_loop();
+    void eval_loop(zmq::context_t & zmq_ctx);
     int  generate(const llama_tokens & prompt);
     bool merge(llama_tokens & curr, size_t & n_matched);
 
-    zmq::context_t  zmq_context_;
     mt_queue<query> queue_;
     llama_model   * model_;
     const config    conf_;
@@ -57,7 +58,7 @@ std::unique_ptr<speculator> speculator::create(config conf)
     return self;
 }
 
-speculator::speculator(config conf): zmq_context_(1), conf_(conf)
+speculator::speculator(config conf): conf_(conf)
 {
 }
 
@@ -71,10 +72,11 @@ speculator::~speculator()
 
 int speculator::serve()
 {
-    zmq::socket_t socket(zmq_context_, ZMQ_REP);
+    zmq::context_t zmq_ctx;
+    zmq::socket_t  socket(zmq_ctx, ZMQ_REP);
     socket.bind(conf_.bind_address);
 
-    std::thread eval_thread([this]() { eval_loop(); });
+    std::thread eval_thread([this, &zmq_ctx]() { eval_loop(zmq_ctx); });
 
     while (true)
     {
@@ -206,7 +208,7 @@ int speculator::generate(const llama_tokens & prompt)
     return 0;
 }
 
-void speculator::eval_loop()
+void speculator::eval_loop(zmq::context_t &zmq_ctx)
 {
     while (true)
     {
@@ -229,7 +231,7 @@ void speculator::eval_loop()
         query_ctx_.batch = llama_batch_init(conf_.n_batch, 0, 1);
 
         // connection to main model
-        zmq::socket_t socket(zmq_context_, ZMQ_REQ);
+        zmq::socket_t socket(zmq_ctx, ZMQ_REQ);
         socket.connect(query_ctx_.q.expert);
 
         query_ctx_.client = &socket;
