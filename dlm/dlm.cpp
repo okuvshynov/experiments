@@ -21,13 +21,13 @@ class llama_node
     static std::unique_ptr<llama_node> create(config conf);
     ~llama_node();
     int serve();
-    int eval_loop();
 
   private:
     explicit llama_node(config conf);
 
     json handle_request(const json & j);
-    int generate(const llama_tokens & tokens_list);
+    void eval_loop();
+    int  generate(const llama_tokens & tokens_list);
 
     zmq::context_t  zmq_ctx_;
     mt_queue<query> queue_;
@@ -220,9 +220,9 @@ int llama_node::generate(const llama_tokens & tokens_list)
                 }
             }
 
-            std::string accepted = "";
             // Write accepted/rejected/not matched
             // this is slow and inefficient but for short strings doesn't matter 
+            std::string accepted = "";
             for (size_t i = next_tokens_pos; i < next_tokens_pos + n_match; i++)
             {
                 accepted += llama_token_to_piece(ctx, spec[i]);
@@ -237,11 +237,6 @@ int llama_node::generate(const llama_tokens & tokens_list)
                 }
                 dbg_rejected(rejected, bg_index);
                 // need to modify speculation
-                spec.erase(spec.begin() + next_tokens_pos, spec.end());
-                for (const auto tok: next_tokens)
-                {
-                    spec.push_back(tok);
-                }
                 std::string not_matched = "";
                 for (size_t i = n_match; i < next_tokens.size(); i++)
                 {
@@ -250,6 +245,15 @@ int llama_node::generate(const llama_tokens & tokens_list)
                 dbg_not_matched(not_matched, bg_index);
             }
 
+            // remove non-matched tokens
+            if (n_match != next_tokens.size())
+            {
+                spec.erase(spec.begin() + next_tokens_pos, spec.end());
+                for (const auto tok: next_tokens)
+                {
+                    spec.push_back(tok);
+                }
+            }
             input_seq.assign(spec.begin() + n_cur - 1, spec.end());
         }
 
@@ -283,7 +287,7 @@ int llama_node::generate(const llama_tokens & tokens_list)
     return 0;
 }
 
-int llama_node::eval_loop()
+void llama_node::eval_loop()
 {
     llama_model * model = this->model_;
     while (true)
