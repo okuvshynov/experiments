@@ -27,7 +27,7 @@ class llama_node
     explicit llama_node(config conf);
 
     json handle_request(const json & j);
-    int eval_prompt(llama_context * ctx, const llama_tokens & tokens_list);
+    int generate(const llama_tokens & tokens_list);
 
     zmq::context_t  zmq_ctx_;
     mt_queue<query> queue_;
@@ -77,11 +77,13 @@ json llama_node::handle_request(const json & j)
         query q =
         {
             j["prompt"],
-            ""
+            j.value("expert", "")
         };
         queue_.push(q);
         return res;
     }
+
+    // we received evaluation request from 'child' node 
     if (j.contains("spec"))
     {
         llama_tokens local_spec = j["spec"];
@@ -123,14 +125,15 @@ json llama_node::handle_request(const json & j)
     return res;
 }
 
-int llama_node::eval_prompt(
-        llama_context      * ctx,
-        const llama_tokens & tokens_list)
+int llama_node::generate(const llama_tokens & tokens_list)
 {
-    llama_model * model = model_;
-    const int n_len = 1024;
+    llama_context * ctx   = query_ctx_.llama_ctx;
+    llama_batch   & batch = query_ctx_.batch; 
 
-    llama_batch batch = llama_batch_init(1024, 0, 1);
+    llama_model * model = model_;
+
+    // TODO configure this one as well
+    const int n_len = 1024;
 
     // evaluate the initial prompt
     for (size_t i = 0; i < tokens_list.size(); i++)
@@ -290,23 +293,32 @@ int llama_node::eval_loop()
 
         const auto t_start = ggml_time_us();
         llama_context_params ctx_params = llama_context_default_params();
-        ctx_params.seed  = 1234;
-        ctx_params.n_ctx = 2048;
-        ctx_params.n_threads = 16;
-        ctx_params.n_threads_batch = 16;
-        llama_context * ctx   = llama_new_context_with_model(model, ctx_params);
+        // TODO: configure these as well
+        // ctx_params.seed  = 1234;
+        // ctx_params.n_threads_batch = 16;
+        ctx_params.n_batch   = conf_.n_batch;
+        ctx_params.n_ctx     = conf_.n_ctx;
+        ctx_params.n_threads = conf_.n_threads;
+        query_ctx_.llama_ctx = llama_new_context_with_model(model_, ctx_params);
 
+        // TODO: optional printing?
         dbg_not_matched(query_ctx_.q.prompt, 0);
 
-        auto prompt = llama_tokenize(ctx, query_ctx_.q.prompt, true);
+        auto prompt = llama_tokenize(query_ctx_.llama_ctx, query_ctx_.q.prompt, true);
+
+        query_ctx_.batch = llama_batch_init(conf_.n_batch, 0, 1);
 
         // Init shared speculative context
         query_ctx_.spec_ctx.speculation = prompt;
         query_ctx_.spec_ctx.done = false;
 
-        eval_prompt(ctx, prompt);
+        if (generate(prompt) != 0)
+        {
+            fprintf(stderr, "generation failed\n");
+        }
 
-        llama_free(ctx);
+        llama_batch_free(query_ctx_.batch);
+        llama_free(query_ctx_.llama_ctx);
         const auto t_end = ggml_time_us();
         printf("Processing time: %.3lf\n", (t_end - t_start) / 1000000.0);
     }
