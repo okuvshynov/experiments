@@ -1,4 +1,5 @@
 #include <cstdint>
+#include <cstdio>
 #include <memory>
 #include <string>
 
@@ -27,9 +28,7 @@ class speculator
     json handle_request(const json & j);
     void eval_loop();
     int  generate(const llama_tokens & prompt);
-    bool merge_speculation(
-            llama_tokens & curr,
-            size_t & n_matched);
+    bool merge(llama_tokens & curr, size_t & n_matched);
 
     zmq::context_t  zmq_context_;
     mt_queue<query> queue_;
@@ -111,9 +110,7 @@ json speculator::handle_request(const json & j)
 }
 
 // returns true if main model completed the generation
-bool speculator::merge_speculation(
-    llama_tokens & curr,
-    size_t       & n_matched)
+bool speculator::merge(llama_tokens & curr, /* OUT */ size_t & n_matched)
 {
     json req_j;
     req_j["spec"] = curr;
@@ -185,7 +182,7 @@ int speculator::generate(const llama_tokens & prompt)
 
         // TODO: this is doing a query every time. 
         // TODO: pass delta only
-        if (merge_speculation(curr, n_matched))
+        if (merge(curr, n_matched))
         {
             break;
         }
