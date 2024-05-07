@@ -11,16 +11,16 @@ option(CPPZMQ_BUILD_TESTS "Build the cppzmq tests." OFF)
 include(FetchContent)
 
 FetchContent_Declare(
-    zmq
+    zeromq
     GIT_REPOSITORY https://github.com/zeromq/libzmq.git
-    GIT_TAG        v4.3.2
+    GIT_TAG        v4.3.5
 )
-FetchContent_MakeAvailable(zmq)
+FetchContent_MakeAvailable(zeromq)
 
 FetchContent_Declare(
     cppzmq
     GIT_REPOSITORY https://github.com/zeromq/cppzmq.git
-    GIT_TAG        v4.6.0
+    GIT_TAG        v4.10.0
 )
 FetchContent_MakeAvailable(cppzmq)
 

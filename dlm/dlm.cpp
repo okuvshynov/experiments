@@ -21,7 +21,7 @@ class llama_node
 {
   public:
     static std::unique_ptr<llama_node> create(config conf);
-    ~llama_node();
+    virtual ~llama_node();
     int serve();
 
   private:
@@ -296,12 +296,12 @@ int llama_node::generate(const llama_tokens & tokens_list)
 
 void llama_node::eval_loop()
 {
-    llama_model * model = this->model_;
     while (true)
     {
         query_ctx_.q = queue_.pop();
 
         const auto t_start = ggml_time_us();
+
         llama_context_params ctx_params = llama_context_default_params();
         // TODO: configure these as well
         // ctx_params.seed  = 1234;

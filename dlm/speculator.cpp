@@ -20,7 +20,7 @@ class speculator
 {
   public:
     static std::unique_ptr<speculator> create(config conf);
-    ~speculator();
+    virtual ~speculator();
     int serve();
 
   private:
@@ -228,7 +228,7 @@ void speculator::eval_loop()
 
         query_ctx_.batch = llama_batch_init(conf_.n_batch, 0, 1);
 
-        // connection to expert
+        // connection to main model
         zmq::socket_t socket(zmq_context_, ZMQ_REQ);
         socket.connect(query_ctx_.q.expert);
 
@@ -236,7 +236,7 @@ void speculator::eval_loop()
 
         if (generate(prompt) != 0)
         {
-            fprintf(stderr, "speculation failed\n");
+            fprintf(stderr, "generation failed\n");
         }
 
         llama_batch_free(query_ctx_.batch);
