@@ -162,6 +162,7 @@ int llama_node::generate(const llama_tokens & tokens_list)
     int logits_to   = n_cur;
     size_t bg_index = 0;
 
+    const auto t_start = ggml_time_us();
     while (n_cur <= n_len)
     {
         bg_index += 1;
@@ -285,6 +286,10 @@ int llama_node::generate(const llama_tokens & tokens_list)
         std::lock_guard<std::mutex> _lock(query_ctx_.spec_ctx.mtx);
         query_ctx_.spec_ctx.done = true;
     }
+    size_t n_gen = n_cur - tokens_list.size();
+    const auto duration_us = ggml_time_us() - t_start;
+    double gen_tps = n_gen * 1000000.0 / duration_us;
+    printf("Generation tps: %.3lf\n", gen_tps);
 
     return 0;
 }
