@@ -30,5 +30,6 @@ struct query_context
     zmq::socket_t * client; // where to call 'expert'
     llama_batch     batch;
     spec_context    spec_ctx;
+    size_t          n_len;
 };
 

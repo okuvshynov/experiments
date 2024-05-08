@@ -20,7 +20,7 @@ using json = nlohmann::json;
 using llama_tokens = std::vector<llama_token>;
 
 // returns true if main model completed the generation
-bool call(zmq::socket_t * client, llama_tokens & curr, /* OUT */ size_t & n_matched)
+bool call(zmq::socket_t * client, llama_tokens & curr, /* OUT */ size_t & n_matched, /* out */ size_t & n_len)
 {
     json req_j;
     req_j["spec"] = curr;
@@ -39,6 +39,7 @@ bool call(zmq::socket_t * client, llama_tokens & curr, /* OUT */ size_t & n_matc
         return true;
     }
     n_matched = res_j["n_matched"].get<size_t>();
+    n_matched = res_j["n_len"].get<size_t>();
     curr      = res_j["spec"].get<llama_tokens>();
     return false;
 }
@@ -70,11 +71,12 @@ int loop(config conf)
     
     llama_tokens curr; // empty 
     size_t n_matched = 0;
+    size_t n_len     = 0; // we'll populate this from the server
 
     while (true)
     {
         // get work/reconcile
-        if (call(&socket, curr, n_matched))
+        if (call(&socket, curr, n_matched, n_len))
         {
             fprintf(stderr, "done.\n");
             n_matched = 0;
@@ -84,7 +86,7 @@ int loop(config conf)
             continue;
         }
 
-        if (curr.size() == 0)
+        if (curr.size() == 0 || curr.size() >= n_len)
         {
             std::this_thread::sleep_for(100ms);
             continue;

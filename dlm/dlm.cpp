@@ -108,7 +108,7 @@ json llama_node::handle_request(const json & j)
         return res;
     }
 
-    // we received evaluation request from 'child' node 
+    // we received evaluation request from 'speculator' node 
     if (j.contains("spec"))
     {
         llama_tokens local_spec = j["spec"];
@@ -117,6 +117,7 @@ json llama_node::handle_request(const json & j)
             if (query_ctx_.spec_ctx.done)
             {
                 res["done"] = true;
+                query_ctx_.spec_ctx.speculation.clear();
             } 
             else
             {
@@ -143,6 +144,7 @@ json llama_node::handle_request(const json & j)
                 res["done"]      = false;
                 res["spec"]      = local_spec;
                 res["n_matched"] = n_matched;
+                res["n_len"]     = query_ctx_.n_len;
             }
             return res;
         }
@@ -156,8 +158,6 @@ int llama_node::generate(const llama_tokens & tokens_list)
     llama_batch   & batch = query_ctx_.batch; 
 
     llama_model * model = model_;
-
-    const int n_len = query_ctx_.q.n_predict + tokens_list.size();
 
     // evaluate the initial prompt
     for (size_t i = 0; i < tokens_list.size(); i++)
@@ -185,7 +185,7 @@ int llama_node::generate(const llama_tokens & tokens_list)
     size_t bg_index = 0;
 
     const auto t_start = ggml_time_us();
-    while (n_cur < n_len)
+    while (n_cur < query_ctx_.n_len)
     {
         bg_index += 1;
         next_tokens = greedy_tokens(model, ctx, logits_from, logits_to);
@@ -223,7 +223,7 @@ int llama_node::generate(const llama_tokens & tokens_list)
                 done = true;
             }
         }
-        if (n_cur >= n_len || done)
+        if (n_cur >= query_ctx_.n_len || done)
         {
             break;
         }
@@ -283,8 +283,8 @@ int llama_node::generate(const llama_tokens & tokens_list)
         }
 
         llama_batch_clear(batch);
-        if (input_seq.size() + n_cur > n_len) {
-            input_seq.resize(n_len - n_cur);
+        if (input_seq.size() + n_cur > query_ctx_.n_len) {
+            input_seq.resize(query_ctx_.n_len - n_cur);
         }
         for (size_t i = 0; i < input_seq.size(); i++)
         {
@@ -335,12 +335,11 @@ void llama_node::eval_loop(zmq::context_t & zmq_ctx)
         auto prompt = llama_tokenize(query_ctx_.llama_ctx, query_ctx_.q.prompt, true);
 
         query_ctx_.batch = llama_batch_init(conf_.n_batch, 0, 1);
+        query_ctx_.n_len = query_ctx_.q.n_predict + prompt.size();
 
         // Init shared speculative context
         query_ctx_.spec_ctx.speculation = prompt;
         query_ctx_.spec_ctx.done = false;
-
-        // TODO: notify speculator
 
         if (generate(prompt) != 0)
         {
