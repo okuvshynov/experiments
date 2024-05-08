@@ -150,7 +150,7 @@ int llama_node::serve()
 {
     std::thread eval_thread([this]() { this->eval_loop(); });
     setup_http();
-    http_serv_.listen("0.0.0.0", 8081);
+    http_serv_.listen(conf_.host, conf_.port);
 
     eval_thread.join();
 
