@@ -63,6 +63,7 @@ int loop(config conf)
     }
 
     httplib::Client http_client("localhost", 8081);
+    http_client.set_keep_alive(true);
 
     llama_context_params ctx_params = llama_context_default_params();
     ctx_params.n_batch   = conf.n_batch;
