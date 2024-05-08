@@ -160,24 +160,19 @@ int llama_node::generate(const llama_tokens & tokens_list)
 
     const int n_len = query_ctx_.q.n_predict + tokens_list.size();
 
-    for (size_t i = 0; i < tokens_list.size();)
+    // evaluate the initial prompt
+    for (size_t i = 0; i < tokens_list.size(); i++)
     {
-        llama_batch_clear(batch);
-        size_t j;
-        for (j = 0; j < llama_n_batch(ctx) && j + i < tokens_list.size(); j++)
-        {
-            llama_batch_add(batch, tokens_list[i + j], i + j, { 0 }, false);
-        }
+        llama_batch_add(batch, tokens_list[i], i, { 0 }, false);
+    }
 
-        if (i + j == tokens_list.size())
-        {
-            batch.logits[batch.n_tokens - 1] = true;
-        }
-        if (llama_decode(ctx, batch) != 0)
-        {
-            fprintf(stderr, "%s: llama_decode() failed\n", __func__);
-            return 1;
-        }
+    // llama_decode will output logits only for the last token of the prompt
+    batch.logits[batch.n_tokens - 1] = true;
+
+    if (llama_decode(ctx, batch) != 0)
+    {
+        fprintf(stderr, "%s: llama_decode() failed\n", __func__);
+        return 1;
     }
 
     // how many tokens are currently accepted
@@ -331,6 +326,9 @@ void llama_node::eval_loop(zmq::context_t & zmq_ctx)
         const auto t_start = ggml_time_us();
 
         llama_context_params ctx_params = llama_context_default_params();
+        // TODO: configure these as well
+        // ctx_params.seed  = 1234;
+        // ctx_params.n_threads_batch = 16;
         ctx_params.n_batch   = conf_.n_batch;
         ctx_params.n_ctx     = conf_.n_ctx;
         ctx_params.n_threads = conf_.n_threads;
