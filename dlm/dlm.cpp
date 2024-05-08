@@ -178,6 +178,8 @@ int llama_node::generate(const llama_tokens & tokens_list)
             fprintf(stderr, "%s: llama_decode() failed\n", __func__);
             return 1;
         }
+
+        i += j;
     }
 
     // how many tokens are currently accepted
