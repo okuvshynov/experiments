@@ -9,9 +9,6 @@
 #include <llama.h>
 #include <common.h>
 
-// ZeroMQ
-#include <zmq.hpp>
-
 // json
 #include <nlohmann/json.hpp>
 
@@ -114,19 +111,3 @@ class mt_queue {
         mutable std::mutex mutex;
         std::condition_variable cond_var;
 };
-
-// should we catch exceptions here? transform to optional/error codes?
-nlohmann::json json_from_zmsg(const zmq::message_t& msg)
-{
-    const std::string s(static_cast<const char*>(msg.data()), msg.size());
-    // TODO this might throw
-    return nlohmann::json::parse(s);
-}
-
-zmq::message_t json_to_zmsg(const nlohmann::json & j)
-{
-    auto s = j.dump();
-    zmq::message_t response(s.size());
-    memcpy(response.data(), s.data(), s.size());
-    return std::move(response);
-}

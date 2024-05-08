@@ -8,7 +8,7 @@
 
 struct config
 {
-    std::string bind_address; // can be any zmq endpoint, e.g. inproc://llm_1
+    std::string bind_address;
     std::string attach_to;
 
     std::string model_path;
