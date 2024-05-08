@@ -122,7 +122,7 @@ json llama_node::handle_request(const json & j)
             {
                 auto& spec = query_ctx_.spec_ctx.speculation;
                 bool match = true;
-                size_t n_matched = local_spec.size() - 1;
+                size_t n_matched = local_spec.size();
                 for (size_t i = 0; i < std::min(spec.size(), local_spec.size()); i++)
                 {
                     if (spec[i] != local_spec[i])
