@@ -101,7 +101,8 @@ json llama_node::handle_request(const json & j)
         query q =
         {
             j["prompt"],
-            j.value("expert", "")
+            j.value("expert", ""),
+            static_cast<size_t>(j.value("n_predict", 256))
         };
         queue_.push(q);
         return res;
@@ -156,8 +157,7 @@ int llama_node::generate(const llama_tokens & tokens_list)
 
     llama_model * model = model_;
 
-    // TODO configure this one as well
-    const int n_len = 1024;
+    const int n_len = query_ctx_.q.n_predict + tokens_list.size();
 
     // evaluate the initial prompt
     for (size_t i = 0; i < tokens_list.size(); i++)

@@ -103,6 +103,7 @@ json speculator::handle_request(const json & j)
         {
             j["prompt"],
             j["expert"],
+            static_cast<size_t>(j.value("n_predict", 256))
         };
         queue_.push(q);
         return res;
@@ -137,6 +138,8 @@ bool speculator::merge(llama_tokens & curr, /* OUT */ size_t & n_matched)
 
 // Continuous speculation on single prompt
 // TODO: if running indefinitely, this will get out of bounds
+// We cannot 'stop' generating either, but we can wait for main model call?
+// Basically depends on what's more logical - who calls whom.
 int speculator::generate(const llama_tokens & prompt)
 {
     llama_context * ctx   = query_ctx_.llama_ctx;

@@ -14,6 +14,7 @@ struct query
 {
     std::string prompt;
     std::string expert; // speculator will communicate with expert
+    size_t      n_predict; // new tokens to produce
 };
 
 struct spec_context
@@ -30,6 +31,5 @@ struct query_context
     zmq::socket_t * client; // where to call 'expert'
     llama_batch     batch;
     spec_context    spec_ctx;
-
 };
 

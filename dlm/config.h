@@ -13,4 +13,3 @@ struct config
     uint32_t n_threads;
     uint32_t n_gpu_layers;
 };
-
