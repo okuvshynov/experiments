@@ -15,6 +15,48 @@
 namespace
 {
 
+struct config
+{
+    std::string host;
+    int32_t     port;
+
+    std::string model_path;
+    uint32_t n_batch;
+    uint32_t n_ctx;
+    uint32_t n_threads;
+    uint32_t n_gpu_layers;
+};
+
+config gen_config(int argc, char ** argv)
+{
+    config res = 
+    {
+        /* host = */ "localhost",
+        /* port = */ 5555,
+
+        /* model_path   = */ "",
+        /* n_batch      = */ 512,
+        /* n_ctx        = */ 4096,
+        /* n_threads    = */ 16,
+        /* n_gpu_layers = */ 0
+    };
+    parser<config> p;
+    // main server endpoint to connect to
+    p.add_option({"--host", "-h"},                             &config::host);
+    p.add_option({"--port", "-p"},                             &config::port);
+
+    // llama options
+    p.add_option({"--model", "-m"},                            &config::model_path);
+    p.add_option({"--batch_size", "--batch-size", "-b"},       &config::n_batch);
+    p.add_option({"--n_ctx", "--n-ctx", "-c"},                 &config::n_ctx);
+    p.add_option({"--threads", "-t"},                          &config::n_threads);
+    p.add_option({"--n_gpu_layers", "--n-gpu-layers", "-ngl"}, &config::n_gpu_layers);
+    
+    p.parse_options(argc, argv, res);
+
+    return res;
+}
+
 using json = nlohmann::json;
 
 using llama_tokens = std::vector<llama_token>;
@@ -62,7 +104,7 @@ int loop(config conf)
         return 1;
     }
 
-    httplib::Client http_client("localhost", 8081);
+    httplib::Client http_client(conf.host, conf.port);
     http_client.set_keep_alive(true);
 
     llama_context_params ctx_params = llama_context_default_params();
@@ -136,19 +178,7 @@ int main(int argc, char ** argv)
 {
     int res = 0;
     llama_backend_init();
-    config conf =
-    {
-        /* bind_address = */ "",
-        /* attach_to    = */ "",
-
-        /* model_path   = */ argv[1],
-        /* n_batch      = */ 512,
-        /* n_ctx        = */ 4096,
-        /* n_threads    = */ 16,
-        /* n_gpu_layers = */ 0
-    };
-    parser p;
-    p.parse_options(argc, argv, conf);
+    config conf = gen_config(argc, argv);
 
     res = loop(conf);
 

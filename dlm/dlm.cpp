@@ -16,6 +16,47 @@
 namespace
 {
 
+struct config
+{
+    std::string host;
+    int32_t     port;
+
+    std::string model_path;
+    uint32_t n_batch;
+    uint32_t n_ctx;
+    uint32_t n_threads;
+    uint32_t n_gpu_layers;
+};
+
+config gen_config(int argc, char ** argv)
+{
+    config res = 
+    {
+        /* host = */ "0.0.0.0",
+        /* port = */ 5555,
+
+        /* model_path   = */ "",
+        /* n_batch      = */ 512,
+        /* n_ctx        = */ 4096,
+        /* n_threads    = */ 16,
+        /* n_gpu_layers = */ 0
+    };
+    parser<config> p;
+    p.add_option({"--host", "-h"},                             &config::host);
+    p.add_option({"--port", "-p"},                             &config::port);
+
+    // llama options
+    p.add_option({"--model", "-m"},                            &config::model_path);
+    p.add_option({"--batch_size", "--batch-size", "-b"},       &config::n_batch);
+    p.add_option({"--n_ctx", "--n-ctx", "-c"},                 &config::n_ctx);
+    p.add_option({"--threads", "-t"},                          &config::n_threads);
+    p.add_option({"--n_gpu_layers", "--n-gpu-layers", "-ngl"}, &config::n_gpu_layers);
+
+    p.parse_options(argc, argv, res);
+
+    return res;
+}
+
 using json = nlohmann::json;
 
 class llama_node
@@ -378,20 +419,7 @@ int main(int argc, char ** argv)
 {
     llama_backend_init();
 
-    config conf =
-    {
-        /* bind_address = */ "tcp://*:5555",
-        /* attach_to    = */ "",
- 
-        /* model_path   = */ "",
-        /* n_batch      = */ 512,
-        /* n_ctx        = */ 4096,
-        /* n_threads    = */ 16,
-        /* n_gpu_layers = */ 99
-    };
-
-    parser p;
-    p.parse_options(argc, argv, conf);
+    config conf = gen_config(argc, argv);
 
     auto node = llama_node::create(conf);
     if (node != nullptr)

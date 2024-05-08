@@ -6,35 +6,28 @@
 #include <string>
 #include <sstream>
 
-struct config
-{
-    std::string bind_address;
-    std::string attach_to;
 
-    std::string model_path;
-    uint32_t n_batch;
-    uint32_t n_ctx;
-    uint32_t n_threads;
-    uint32_t n_gpu_layers;
+struct value_parser
+{
+    template<typename value_t>
+    static void parse(const char * value, value_t & field)
+    {
+        std::istringstream iss(value);
+        iss >> field;
+    }
 };
 
+template<>
+void value_parser::parse<std::string>(const char * value, std::string & field)
+{
+    field = value;
+}
+
 // simple and not very efficient option parser
+template<typename config_t>
 struct parser
 {
-    parser()
-    {
-        add_option("--addr",       &config::bind_address);
-        add_option("-a",           &config::attach_to);
-        add_option("-m",           &config::model_path);
-        add_option("--model",      &config::model_path);
-        add_option("-ngl",         &config::n_gpu_layers);
-        add_option("--gpu_layers", &config::n_gpu_layers);
-        add_option("-t",           &config::n_threads);
-        add_option("--threads",    &config::n_threads);
-        add_option("--batch_size", &config::n_batch);
-    }
-
-    int parse_options(int argc, char ** argv, config & conf)
+    int parse_options(int argc, char ** argv, config_t & conf)
     {
         for (int i = 1; i < argc; i++)
         {
@@ -60,28 +53,26 @@ struct parser
         }
         return 0;
     }
-  private:
-    std::map<std::string, std::function<void(const char*, config&)>> setters_;
 
     template<typename T>
-    void add_option(const std::string& key, T config::* field)
+    void add_option(const std::string& key, T config_t::* field)
     {
-        setters_[key] = [field](const char * value, config & conf)
+        setters_[key] = [field](const char * value, config_t & conf)
         {
-            parse_value(value, conf.*field);
+            value_parser::parse(value, conf.*field);
         };
     }
 
     template<typename T>
-    static void parse_value(const char * value, T & field)
+    void add_option(const std::initializer_list<std::string>& keys, T config_t::* field)
     {
-        std::istringstream iss(value);
-        iss >> field;
+        for (const auto& key : keys)
+        {
+            add_option(key, field);
+        }
     }
+
+  private:
+    std::map<std::string, std::function<void(const char*, config_t&)>> setters_;
 };
 
-template<>
-void parser::parse_value<std::string>(const char * value, std::string & field)
-{
-    field = value;
-}
