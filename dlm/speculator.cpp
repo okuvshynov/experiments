@@ -7,7 +7,6 @@
 #include <common.h>
 #include <llama.h>
 #include <nlohmann/json.hpp>
-#include <zmq.hpp>
 #include <httplib.h>
 
 #include "config.h"

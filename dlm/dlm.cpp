@@ -7,7 +7,6 @@
 #include <common.h>
 #include <llama.h>
 #include <nlohmann/json.hpp>
-#include <zmq.hpp>
 #include <httplib.h>
 
 #include "config.h"
@@ -30,7 +29,7 @@ class llama_node
     explicit llama_node(config conf);
 
     json handle_request(const json & j);
-    void eval_loop(zmq::context_t & zmq_ctx);
+    void eval_loop();
     int  generate(const llama_tokens & tokens_list);
     void setup_http();
 
@@ -88,30 +87,28 @@ void llama_node::setup_http()
             std::cerr << e.what() << '\n';
         }
     });
+    http_serv_.Post("/message", [this](const httplib::Request & req, httplib::Response & res)
+    {
+        try
+        {
+            auto req_j = json::parse(req.body);
+            auto res_j = this->handle_request(req_j);
+            res.set_content(res_j.dump(), "application/json");
+        }
+        catch(const std::exception & e)
+        {
+            std::cerr << e.what() << '\n';
+        }
+    });
 } 
 
 int llama_node::serve()
 {
-    zmq::context_t zmq_ctx;
-    zmq::socket_t socket(zmq_ctx, ZMQ_REP);
-    socket.bind(conf_.bind_address);
-
-    std::thread eval_thread([this, &zmq_ctx]() { this->eval_loop(zmq_ctx); });
+    std::thread eval_thread([this]() { this->eval_loop(); });
+    setup_http();
     http_serv_.listen("0.0.0.0", 8081);
 
-    while (true)
-    {
-        zmq::message_t req_z;
-        socket.recv(req_z, zmq::recv_flags::none);
-
-        auto req_j = json_from_zmsg(req_z);
-        auto res_j = handle_request(req_j);
-        auto res_z = json_to_zmsg(res_j);
-        socket.send(res_z, zmq::send_flags::none);
-    }
-
     eval_thread.join();
-
 
     return 0;
 }
@@ -338,7 +335,7 @@ int llama_node::generate(const llama_tokens & tokens_list)
     return 0;
 }
 
-void llama_node::eval_loop(zmq::context_t & zmq_ctx)
+void llama_node::eval_loop()
 {
     while (true)
     {
