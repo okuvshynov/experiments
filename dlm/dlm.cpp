@@ -2,6 +2,7 @@
 #include <cstdio>
 #include <memory>
 #include <string>
+#include <thread>
 
 #include <common.h>
 #include <llama.h>
@@ -50,7 +51,7 @@ std::unique_ptr<llama_node> llama_node::create(config conf)
 
     if (self->model_ == nullptr)
     {
-        fprintf(stderr, "Model %s load failed.\n", conf.model_path.c_str());
+        fprintf(stderr, "Unable to load model from %s\n", conf.model_path.c_str());
         return nullptr;
     }
 
@@ -333,7 +334,6 @@ void llama_node::eval_loop(zmq::context_t & zmq_ctx)
         ctx_params.n_threads = conf_.n_threads;
         query_ctx_.llama_ctx = llama_new_context_with_model(model_, ctx_params);
 
-        // TODO: optional printing?
         dbg_not_matched(query_ctx_.q.prompt, 0);
 
         auto prompt = llama_tokenize(query_ctx_.llama_ctx, query_ctx_.q.prompt, true);
@@ -366,15 +366,21 @@ int main(int argc, char ** argv)
     {
         /* bind_address = */ "tcp://*:5555",
 
-        /* model_path   = */ argv[1],
+        /* model_path   = */ "",
         /* n_batch      = */ 512,
         /* n_ctx        = */ 4096,
         /* n_threads    = */ 16,
         /* n_gpu_layers = */ 99
     };
 
+    parser p;
+    p.parse_options(argc, argv, conf);
+
     auto node = llama_node::create(conf);
-    int res = node->serve();
+    if (node != nullptr)
+    {
+        int res = node->serve();
+    }
 
     llama_backend_free();
 

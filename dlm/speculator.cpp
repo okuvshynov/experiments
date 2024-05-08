@@ -2,6 +2,7 @@
 #include <cstdio>
 #include <memory>
 #include <string>
+#include <thread>
 
 #include <common.h>
 #include <llama.h>
@@ -268,6 +269,9 @@ int main(int argc, char ** argv)
         /* n_threads    = */ 16,
         /* n_gpu_layers = */ 0
     };
+    parser p;
+    p.parse_options(argc, argv, conf);
+
     auto sp = speculator::create(conf);
     if (sp == nullptr)
     {
