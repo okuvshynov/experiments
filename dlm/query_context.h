@@ -13,7 +13,6 @@ using llama_tokens = std::vector<llama_token>;
 struct query
 {
     std::string prompt;
-    std::string expert; // speculator will communicate with expert
     size_t      n_predict; // new tokens to produce
 };
 
@@ -21,7 +20,7 @@ struct spec_context
 {
     llama_tokens speculation;
     std::mutex mtx;
-    bool done;
+    bool done = false;
 };
 
 struct query_context

@@ -9,6 +9,7 @@
 struct config
 {
     std::string bind_address; // can be any zmq endpoint, e.g. inproc://llm_1
+    std::string attach_to;
 
     std::string model_path;
     uint32_t n_batch;
@@ -23,6 +24,7 @@ struct parser
     parser()
     {
         add_option("--addr",       &config::bind_address);
+        add_option("-a",           &config::attach_to);
         add_option("-m",           &config::model_path);
         add_option("--model",      &config::model_path);
         add_option("-ngl",         &config::n_gpu_layers);

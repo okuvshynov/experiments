@@ -102,7 +102,6 @@ json llama_node::handle_request(const json & j)
         query q =
         {
             j["prompt"],
-            j.value("expert", ""),
             static_cast<size_t>(j.value("n_predict", 256))
         };
         queue_.push(q);
@@ -121,7 +120,6 @@ json llama_node::handle_request(const json & j)
             } 
             else
             {
-                res["done"] = false;
                 auto& spec = query_ctx_.spec_ctx.speculation;
                 bool match = true;
                 size_t n_matched = local_spec.size() - 1;
@@ -142,7 +140,8 @@ json llama_node::handle_request(const json & j)
                 {
                     local_spec = spec;
                 }
-                res["spec"] = local_spec;
+                res["done"]      = false;
+                res["spec"]      = local_spec;
                 res["n_matched"] = n_matched;
             }
             return res;
@@ -341,6 +340,8 @@ void llama_node::eval_loop(zmq::context_t & zmq_ctx)
         query_ctx_.spec_ctx.speculation = prompt;
         query_ctx_.spec_ctx.done = false;
 
+        // TODO: notify speculator
+
         if (generate(prompt) != 0)
         {
             fprintf(stderr, "generation failed\n");
@@ -362,7 +363,8 @@ int main(int argc, char ** argv)
     config conf =
     {
         /* bind_address = */ "tcp://*:5555",
-
+        /* attach_to    = */ "",
+ 
         /* model_path   = */ "",
         /* n_batch      = */ 512,
         /* n_ctx        = */ 4096,
