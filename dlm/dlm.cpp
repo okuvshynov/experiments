@@ -8,6 +8,7 @@
 #include <llama.h>
 #include <nlohmann/json.hpp>
 #include <zmq.hpp>
+#include <httplib.h>
 
 #include "config.h"
 #include "query_context.h"
@@ -31,13 +32,15 @@ class llama_node
     json handle_request(const json & j);
     void eval_loop(zmq::context_t & zmq_ctx);
     int  generate(const llama_tokens & tokens_list);
+    void setup_http();
 
     mt_queue<query> queue_;
     llama_model   * model_;
     const config    conf_;
 
     // current context, as we operate on one query at a time
-    query_context query_ctx_;
+    query_context   query_ctx_;
+    httplib::Server http_serv_;
 };
 
 std::unique_ptr<llama_node> llama_node::create(config conf)
@@ -70,6 +73,23 @@ llama_node::~llama_node()
     }
 }
 
+void llama_node::setup_http()
+{
+    http_serv_.Post("/hint", [this](const httplib::Request & req, httplib::Response & res)
+    {
+        try
+        {
+            auto req_j = json::parse(req.body);
+            auto res_j = this->handle_request(req_j);
+            res.set_content(res_j.dump(), "application/json");
+        }
+        catch(const std::exception & e)
+        {
+            std::cerr << e.what() << '\n';
+        }
+    });
+} 
+
 int llama_node::serve()
 {
     zmq::context_t zmq_ctx;
@@ -77,6 +97,7 @@ int llama_node::serve()
     socket.bind(conf_.bind_address);
 
     std::thread eval_thread([this, &zmq_ctx]() { this->eval_loop(zmq_ctx); });
+    http_serv_.listen("0.0.0.0", 8081);
 
     while (true)
     {
@@ -90,6 +111,8 @@ int llama_node::serve()
     }
 
     eval_thread.join();
+
+
     return 0;
 }
 

@@ -8,8 +8,7 @@
 #include <llama.h>
 #include <nlohmann/json.hpp>
 #include <zmq.hpp>
-
-#include <zmq.h>
+#include <httplib.h>
 
 #include "config.h"
 #include "utils.h"
@@ -23,28 +22,31 @@ using llama_tokens = std::vector<llama_token>;
 
 // returns true if main model completed the generation
 // any call might reset the state to new query (e.g. change n_matched to 0)
-bool call(zmq::socket_t * client, llama_tokens & curr, /* out */ size_t & n_matched, /* out */ size_t & n_len)
+bool call(httplib::Client * client, llama_tokens & curr, /* out */ size_t & n_matched, /* out */ size_t & n_len)
 {
-    json req_j;
-    // TODO: do not pass entire speculation back and forth, just the delta
-    req_j["spec"] = curr;
-
-    auto req_z = json_to_zmsg(req_j);
-    client->send(req_z, zmq::send_flags::none);
-
-    zmq::message_t res_z;
-    client->recv(res_z, zmq::recv_flags::none);
-
-    auto res_j = json_from_zmsg(res_z);
-
-    bool done = res_j["done"].get<bool>();
-    if (done)
+    try
     {
-        return true;
+        json req_j;
+        req_j["spec"] = curr;
+        auto res = client->Post("/hint", req_j.dump(), "application/json");
+        if (res)
+        {
+            json res_j = json::parse(res->body);
+            bool done = res_j["done"].get<bool>();
+            if (done)
+            {
+                return true;
+            }
+            n_matched = res_j["n_matched"].get<size_t>();
+            n_len     = res_j["n_len"].get<size_t>();
+            curr      = res_j["spec"].get<llama_tokens>();
+            return false;
+        }
     }
-    n_matched = res_j["n_matched"].get<size_t>();
-    n_len     = res_j["n_len"].get<size_t>();
-    curr      = res_j["spec"].get<llama_tokens>();
+    catch(const std::exception& e)
+    {
+        std::cerr << e.what() << '\n';
+    }
     return false;
 }
 
@@ -61,18 +63,7 @@ int loop(config conf)
         return 1;
     }
 
-    zmq::context_t zmq_ctx(1);
-    zmq::socket_t socket(zmq_ctx, ZMQ_REQ);
-    try
-    {
-        socket.connect(conf.attach_to);
-    }
-    catch (const zmq::error_t& e)
-    {
-        fprintf(stderr, "zeromq error: %s\n", e.what());
-        llama_free_model(model);
-        return 1;
-    }
+    httplib::Client http_client("localhost", 8081);
 
     llama_context_params ctx_params = llama_context_default_params();
     ctx_params.n_batch   = conf.n_batch;
@@ -89,7 +80,7 @@ int loop(config conf)
     while (true)
     {
         // get work/reconcile
-        if (call(&socket, curr, n_matched, n_len))
+        if (call(&http_client, curr, n_matched, n_len))
         {
             fprintf(stderr, "done.\n");
             n_matched = 0;
@@ -135,7 +126,6 @@ int loop(config conf)
 
     llama_batch_free(batch);
     llama_free(llama_ctx);
-    socket.close();
     llama_free_model(model);
     return 0;
 }
