@@ -165,8 +165,6 @@ int speculator::generate(const llama_tokens & prompt)
             fprintf(stderr, "%s: llama_decode() failed\n", __func__);
             return 1;
         }
-
-        i += j;
     }
 
     int32_t logit_idx = batch.n_tokens - 1;
