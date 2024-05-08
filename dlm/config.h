@@ -29,6 +29,7 @@ struct parser
         add_option("--gpu_layers", &config::n_gpu_layers);
         add_option("-t",           &config::n_threads);
         add_option("--threads",    &config::n_threads);
+        add_option("--batch_size", &config::n_batch);
     }
 
     int parse_options(int argc, char ** argv, config & conf)

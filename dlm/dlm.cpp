@@ -326,9 +326,6 @@ void llama_node::eval_loop(zmq::context_t & zmq_ctx)
         const auto t_start = ggml_time_us();
 
         llama_context_params ctx_params = llama_context_default_params();
-        // TODO: configure these as well
-        // ctx_params.seed  = 1234;
-        // ctx_params.n_threads_batch = 16;
         ctx_params.n_batch   = conf_.n_batch;
         ctx_params.n_ctx     = conf_.n_ctx;
         ctx_params.n_threads = conf_.n_threads;
