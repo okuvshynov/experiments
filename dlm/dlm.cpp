@@ -111,7 +111,7 @@ json llama_node::handle_request(const json & j)
     // we received evaluation request from 'speculator' node 
     if (j.contains("spec"))
     {
-        llama_tokens local_spec = j["spec"];
+        llama_tokens remote_spec = j["spec"];
         {
             std::lock_guard<std::mutex> _lock(query_ctx_.spec_ctx.mtx);
             if (query_ctx_.spec_ctx.done)
@@ -123,26 +123,26 @@ json llama_node::handle_request(const json & j)
             {
                 auto& spec = query_ctx_.spec_ctx.speculation;
                 bool match = true;
-                size_t n_matched = local_spec.size();
-                for (size_t i = 0; i < std::min(spec.size(), local_spec.size()); i++)
+                size_t n_matched = remote_spec.size();
+                for (size_t i = 0; i < std::min(spec.size(), remote_spec.size()); i++)
                 {
-                    if (spec[i] != local_spec[i])
+                    if (spec[i] != remote_spec[i])
                     {
                         match = false;
                         n_matched = i;
                         break;
                     }
                 }
-                if (match && spec.size() < local_spec.size())
+                if (match && spec.size() < remote_spec.size())
                 {
-                    spec = local_spec;
+                    spec = remote_spec;
                 }
                 else
                 {
-                    local_spec = spec;
+                    remote_spec = spec;
                 }
                 res["done"]      = false;
-                res["spec"]      = local_spec;
+                res["spec"]      = remote_spec;
                 res["n_matched"] = n_matched;
                 res["n_len"]     = query_ctx_.n_len;
             }
@@ -261,7 +261,6 @@ int llama_node::generate(const llama_tokens & tokens_list)
                     rejected += llama_token_to_piece(ctx, spec[i]);
                 }
                 dbg_rejected(rejected, bg_index);
-                // need to modify speculation
                 std::string not_matched = "";
                 for (size_t i = n_match; i < next_tokens.size(); i++)
                 {

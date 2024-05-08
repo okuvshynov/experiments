@@ -9,6 +9,8 @@
 #include <nlohmann/json.hpp>
 #include <zmq.hpp>
 
+#include <zmq.h>
+
 #include "config.h"
 #include "utils.h"
 
@@ -20,7 +22,8 @@ using json = nlohmann::json;
 using llama_tokens = std::vector<llama_token>;
 
 // returns true if main model completed the generation
-bool call(zmq::socket_t * client, llama_tokens & curr, /* OUT */ size_t & n_matched, /* out */ size_t & n_len)
+// any call might reset the state to new query (e.g. change n_matched to 0)
+bool call(zmq::socket_t * client, llama_tokens & curr, /* out */ size_t & n_matched, /* out */ size_t & n_len)
 {
     json req_j;
     req_j["spec"] = curr;
@@ -59,7 +62,18 @@ int loop(config conf)
 
     zmq::context_t zmq_ctx(1);
     zmq::socket_t socket(zmq_ctx, ZMQ_REQ);
-    socket.connect(conf.attach_to);
+    try
+    {
+        socket.set(zmq::sockopt::sndtimeo, 1000);
+        socket.set(zmq::sockopt::rcvtimeo, 1000);
+        socket.connect(conf.attach_to);
+    }
+    catch (const zmq::error_t& e)
+    {
+        fprintf(stderr, "zeromq error: %s\n", e.what());
+        llama_free_model(model);
+        return 1;
+    }
 
     llama_context_params ctx_params = llama_context_default_params();
     ctx_params.n_batch   = conf.n_batch;
@@ -147,10 +161,7 @@ int main(int argc, char ** argv)
     parser p;
     p.parse_options(argc, argv, conf);
 
-
-
     res = loop(conf);
-    
 
     llama_backend_free();
 
