@@ -99,6 +99,7 @@ int speculator::loop()
     zmq::context_t zmq_ctx(1);
     zmq::socket_t socket(zmq_ctx, ZMQ_REQ);
     socket.connect(conf_.attach_to);
+    query_ctx_.client = &socket;
 
     llama_context_params ctx_params = llama_context_default_params();
     ctx_params.n_batch   = conf_.n_batch;
@@ -129,19 +130,18 @@ int speculator::loop()
             continue;
         }
 
+        llama_kv_cache_seq_rm(ctx, 0, n_matched, -1);
         if (n_matched == curr.size())
         {
-            // TODO: double-check if this can ever happen
-            // at least one input
             n_matched -= 1;
         }
 
-        llama_kv_cache_seq_rm(ctx, 0, n_matched, -1);
         llama_batch_clear(batch);
         for (size_t i = n_matched; i < curr.size(); i++)
         {
-            llama_batch_add(batch, curr[i], i, { 0 }, true);
+            llama_batch_add(batch, curr[i], i, { 0 }, false);
         }
+        batch.logits[batch.n_tokens - 1] = true;
 
         if (llama_decode(ctx, batch) != 0)
         {
