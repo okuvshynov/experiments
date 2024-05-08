@@ -43,7 +43,7 @@ bool call(zmq::socket_t * client, llama_tokens & curr, /* out */ size_t & n_matc
         return true;
     }
     n_matched = res_j["n_matched"].get<size_t>();
-    n_matched = res_j["n_len"].get<size_t>();
+    n_len     = res_j["n_len"].get<size_t>();
     curr      = res_j["spec"].get<llama_tokens>();
     return false;
 }
