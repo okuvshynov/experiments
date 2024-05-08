@@ -52,7 +52,10 @@ config gen_config(int argc, char ** argv)
     p.add_option({"--threads", "-t"},                          &config::n_threads);
     p.add_option({"--n_gpu_layers", "--n-gpu-layers", "-ngl"}, &config::n_gpu_layers);
 
-    p.parse_options(argc, argv, res);
+    if (0 != p.parse_options(argc, argv, res))
+    {
+        exit(-1);
+    }
 
     return res;
 }

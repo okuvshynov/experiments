@@ -41,7 +41,7 @@ struct parser
                 }
                 else
                 {
-                    fprintf(stderr, "No argument value provided for %s\n", argv[i]);
+                    fprintf(stderr, "No argument value provided for %s\n", argv[i - 1]);
                     return 1;
                 }
             }
