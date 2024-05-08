@@ -26,6 +26,7 @@ using llama_tokens = std::vector<llama_token>;
 bool call(zmq::socket_t * client, llama_tokens & curr, /* out */ size_t & n_matched, /* out */ size_t & n_len)
 {
     json req_j;
+    // TODO: do not pass entire speculation back and forth, just the delta
     req_j["spec"] = curr;
 
     auto req_z = json_to_zmsg(req_j);
@@ -64,8 +65,6 @@ int loop(config conf)
     zmq::socket_t socket(zmq_ctx, ZMQ_REQ);
     try
     {
-        socket.set(zmq::sockopt::sndtimeo, 1000);
-        socket.set(zmq::sockopt::rcvtimeo, 1000);
         socket.connect(conf.attach_to);
     }
     catch (const zmq::error_t& e)

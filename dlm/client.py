@@ -12,7 +12,7 @@ def main():
     main_socket.connect(expert)
 
     # Prepare JSON data
-    data = {"prompt": prompt, "n_predict": 256}
+    data = {"prompt": prompt, "n_predict": 1024}
 
     message = json.dumps(data)
 
