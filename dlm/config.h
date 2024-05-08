@@ -6,7 +6,6 @@
 #include <string>
 #include <sstream>
 
-
 struct value_parser
 {
     template<typename value_t>

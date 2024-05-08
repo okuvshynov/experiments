@@ -72,7 +72,6 @@ class llama_node
   private:
     explicit llama_node(config conf);
 
-    json handle_request(const json & j);
     void eval_loop();
     int  generate(const llama_tokens & tokens_list);
     void setup_http();
@@ -122,8 +121,45 @@ void llama_node::setup_http()
     {
         try
         {
+            json res_j;
             auto req_j = json::parse(req.body);
-            auto res_j = this->handle_request(req_j);
+
+            llama_tokens remote_spec = req_j["spec"];
+            {
+                std::lock_guard<std::mutex> _lock(query_ctx_.spec_ctx.mtx);
+                if (query_ctx_.spec_ctx.done)
+                {
+                    res_j["done"] = true;
+                    query_ctx_.spec_ctx.speculation.clear();
+                } 
+                else
+                {
+                    auto& spec = query_ctx_.spec_ctx.speculation;
+                    bool match = true;
+                    size_t n_matched = remote_spec.size();
+                    for (size_t i = 0; i < std::min(spec.size(), remote_spec.size()); i++)
+                    {
+                        if (spec[i] != remote_spec[i])
+                        {
+                            match = false;
+                            n_matched = i;
+                            break;
+                        }
+                    }
+                    if (match && spec.size() < remote_spec.size())
+                    {
+                        spec = remote_spec;
+                    }
+                    else
+                    {
+                        remote_spec = spec;
+                    }
+                    res_j["done"]      = false;
+                    res_j["spec"]      = remote_spec;
+                    res_j["n_matched"] = n_matched;
+                    res_j["n_len"]     = query_ctx_.n_len;
+                }
+            }
             res.set_content(res_j.dump(), "application/json");
         }
         catch(const std::exception & e)
@@ -136,7 +172,14 @@ void llama_node::setup_http()
         try
         {
             auto req_j = json::parse(req.body);
-            auto res_j = this->handle_request(req_j);
+            json res_j;
+            res_j["status"] = "ok";
+            query q =
+            {
+                req_j.value("prompt", ""),
+                static_cast<size_t>(req_j.value("n_predict", 256))
+            };
+            queue_.push(q);
             res.set_content(res_j.dump(), "application/json");
         }
         catch(const std::exception & e)
@@ -155,65 +198,6 @@ int llama_node::serve()
     eval_thread.join();
 
     return 0;
-}
-
-json llama_node::handle_request(const json & j)
-{
-    json res;
-    res["status"] = "ok";
-    if (j.contains("prompt"))
-    {
-        query q =
-        {
-            j["prompt"],
-            static_cast<size_t>(j.value("n_predict", 256))
-        };
-        queue_.push(q);
-        return res;
-    }
-
-    // we received evaluation request from 'speculator' node 
-    if (j.contains("spec"))
-    {
-        llama_tokens remote_spec = j["spec"];
-        {
-            std::lock_guard<std::mutex> _lock(query_ctx_.spec_ctx.mtx);
-            if (query_ctx_.spec_ctx.done)
-            {
-                res["done"] = true;
-                query_ctx_.spec_ctx.speculation.clear();
-            } 
-            else
-            {
-                auto& spec = query_ctx_.spec_ctx.speculation;
-                bool match = true;
-                size_t n_matched = remote_spec.size();
-                for (size_t i = 0; i < std::min(spec.size(), remote_spec.size()); i++)
-                {
-                    if (spec[i] != remote_spec[i])
-                    {
-                        match = false;
-                        n_matched = i;
-                        break;
-                    }
-                }
-                if (match && spec.size() < remote_spec.size())
-                {
-                    spec = remote_spec;
-                }
-                else
-                {
-                    remote_spec = spec;
-                }
-                res["done"]      = false;
-                res["spec"]      = remote_spec;
-                res["n_matched"] = n_matched;
-                res["n_len"]     = query_ctx_.n_len;
-            }
-            return res;
-        }
-    }
-    return res;
 }
 
 int llama_node::generate(const llama_tokens & tokens_list)
