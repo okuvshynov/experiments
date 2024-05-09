@@ -74,4 +74,3 @@ struct parser
   private:
     std::map<std::string, std::function<void(const char*, config_t&)>> setters_;
 };
-

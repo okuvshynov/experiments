@@ -230,12 +230,9 @@ int llama_node::generate(const llama_tokens & tokens_list)
 
     int logits_from = n_cur - 1;
     int logits_to   = n_cur;
-    size_t bg_index = 0;
-
     const auto t_start = ggml_time_us();
     while (n_cur < query_ctx_.n_len)
     {
-        bg_index += 1;
         next_tokens = greedy_tokens(model, ctx, logits_from, logits_to);
         if (next_tokens.size() != input_seq.size())
         {
@@ -300,7 +297,7 @@ int llama_node::generate(const llama_tokens & tokens_list)
             {
                 accepted += llama_token_to_piece(ctx, spec[i]);
             }
-            dbg_accepted(accepted, bg_index);
+            dbg_accepted(accepted);
             if (n_match != next_tokens.size())
             {
                 std::string rejected = "";
@@ -308,13 +305,13 @@ int llama_node::generate(const llama_tokens & tokens_list)
                 {
                     rejected += llama_token_to_piece(ctx, spec[i]);
                 }
-                dbg_rejected(rejected, bg_index);
+                dbg_rejected(rejected);
                 std::string not_matched = "";
                 for (size_t i = n_match; i < next_tokens.size(); i++)
                 {
                     not_matched += llama_token_to_piece(ctx, next_tokens[i]);
                 }
-                dbg_not_matched(not_matched, bg_index);
+                dbg_not_matched(not_matched);
             }
 
             // remove non-matched tokens
@@ -348,7 +345,7 @@ int llama_node::generate(const llama_tokens & tokens_list)
 
     for (size_t i = 0; i < next_tokens.size(); i++)
     {
-        dbg_not_matched(llama_token_to_piece(ctx, next_tokens[i]), bg_index);
+        dbg_not_matched(llama_token_to_piece(ctx, next_tokens[i]));
     }
     std::cout << std::endl << std::endl;
     {
@@ -377,7 +374,7 @@ void llama_node::eval_loop()
         ctx_params.n_threads = conf_.n_threads;
         query_ctx_.llama_ctx = llama_new_context_with_model(model_, ctx_params);
 
-        dbg_not_matched(query_ctx_.q.prompt, 0);
+        dbg_not_matched(query_ctx_.q.prompt);
 
         auto prompt = llama_tokenize(query_ctx_.llama_ctx, query_ctx_.q.prompt, true);
 
