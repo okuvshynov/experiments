@@ -63,6 +63,17 @@ config gen_config(int argc, char ** argv)
 
 using json = nlohmann::json;
 
+std::string llama3_strip_eot(const std::string& str)
+{
+    const std::string tag = "<|eot_id|>";
+    size_t len = str.size();
+    while (len >= tag.size() && str.substr(len - tag.size(), tag.size()) == tag)
+    {
+        len -= tag.size();
+    }
+    return str.substr(0, len);
+}
+
 std::string llama3_instruct_fmt_msg(const json& j)
 {
     /* parsing json like this:
@@ -96,16 +107,14 @@ class llama_node
   public:
     static std::unique_ptr<llama_node> create(config conf);
     virtual ~llama_node();
-    int serve();
+    void serve();
 
   private:
     explicit llama_node(config conf);
 
-    void eval_loop();
     int  generate(const llama_tokens & tokens_list);
     void setup_http();
 
-    mt_queue<query> queue_;
     llama_model   * model_;
     const config    conf_;
 
@@ -198,21 +207,57 @@ void llama_node::setup_http()
     });
     http_serv_.Post("/messages", [this](const httplib::Request & req, httplib::Response & res)
     {
+        // we process one message at a time anyway.
+        std::lock_guard<std::mutex> _lock(query_ctx_.out_ctx.mtx);
         try
         {
-            std::cout << req.body << std::endl;
             auto req_j = json::parse(req.body);
 
-            auto prompt = llama3_instruct_fmt_msg(req_j);
+            auto llama3_prompt = llama3_instruct_fmt_msg(req_j);
 
-            json res_j;
-            res_j["status"] = "ok";
-            query q =
+            query_ctx_.q =
             {
-                prompt,
+                llama3_prompt,
                 static_cast<size_t>(req_j.value("max_tokens", 1024))
             };
-            queue_.push(q);
+            const auto t_start = ggml_time_us();
+
+            llama_context_params ctx_params = llama_context_default_params();
+            ctx_params.n_batch   = conf_.n_batch;
+            ctx_params.n_ctx     = conf_.n_ctx;
+            ctx_params.n_threads = conf_.n_threads;
+            query_ctx_.llama_ctx = llama_new_context_with_model(model_, ctx_params);
+
+            dbg_not_matched(query_ctx_.q.prompt);
+
+            auto prompt = llama_tokenize(query_ctx_.llama_ctx, query_ctx_.q.prompt, true);
+
+            query_ctx_.batch = llama_batch_init(conf_.n_batch, 0, 1);
+            query_ctx_.n_len = query_ctx_.q.n_predict + prompt.size();
+            query_ctx_.out_ctx.output = "";
+            query_ctx_.out_ctx.done   = false;
+
+            // Init speculation context
+            {
+                std::lock_guard<std::mutex> _lock(query_ctx_.spec_ctx.mtx);
+                query_ctx_.spec_ctx.speculation = prompt;
+                query_ctx_.spec_ctx.done        = false;
+            }
+
+            if (generate(prompt) != 0)
+            {
+                fprintf(stderr, "generation failed\n");
+            }
+
+            llama_batch_free(query_ctx_.batch);
+            llama_free(query_ctx_.llama_ctx);
+            const auto t_end = ggml_time_us();
+            printf("Processing time: %.3lf\n", (t_end - t_start) / 1000000.0);
+
+            auto output = llama3_strip_eot(query_ctx_.out_ctx.output);
+            
+            json res_j = { {"content",  {{"text", output}}} };
+
             res.set_content(res_j.dump(), "application/json");
         }
         catch(const std::exception & e)
@@ -222,15 +267,10 @@ void llama_node::setup_http()
     });
 } 
 
-int llama_node::serve()
+void llama_node::serve()
 {
-    std::thread eval_thread([this]() { this->eval_loop(); });
     setup_http();
     http_serv_.listen(conf_.host, conf_.port);
-
-    eval_thread.join();
-
-    return 0;
 }
 
 int llama_node::generate(const llama_tokens & tokens_list)
@@ -297,13 +337,23 @@ int llama_node::generate(const llama_tokens & tokens_list)
                 break;
             }
         }
+        // append next_tokens to the output
+        std::string next_str;
+        for (llama_token tok : next_tokens)
+        {
+            next_str += llama_token_to_piece(ctx, tok);
+        }
+        query_ctx_.out_ctx.output += next_str;
+
+
         // empty the non-match portion of kv cache
         llama_kv_cache_seq_rm(ctx, 0, n_cur - 1, -1);
 
         bool done = false;
         for (llama_token new_token_id: next_tokens)
         {
-            if (new_token_id == llama_token_eos(model))
+            // TODO: what should we do here
+            if (new_token_id == llama_token_eos(model) || new_token_id == 128009)
             {
                 done = true;
             }
@@ -391,10 +441,16 @@ int llama_node::generate(const llama_tokens & tokens_list)
         logits_to = input_seq.size();
     }
 
+    std::string next_str = "";
     for (size_t i = 0; i < next_tokens.size(); i++)
     {
-        dbg_not_matched(llama_token_to_piece(ctx, next_tokens[i]));
+        auto sp = llama_token_to_piece(ctx, next_tokens[i]);
+        dbg_not_matched(sp);
+        // not very efficient
+        next_str += sp;
     }
+    query_ctx_.out_ctx.output += next_str;
+    query_ctx_.out_ctx.done = true;
     std::cout << std::endl << std::endl;
     {
         std::lock_guard<std::mutex> _lock(query_ctx_.spec_ctx.mtx);
@@ -408,43 +464,6 @@ int llama_node::generate(const llama_tokens & tokens_list)
     return 0;
 }
 
-void llama_node::eval_loop()
-{
-    while (true)
-    {
-        query_ctx_.q = queue_.pop();
-
-        const auto t_start = ggml_time_us();
-
-        llama_context_params ctx_params = llama_context_default_params();
-        ctx_params.n_batch   = conf_.n_batch;
-        ctx_params.n_ctx     = conf_.n_ctx;
-        ctx_params.n_threads = conf_.n_threads;
-        query_ctx_.llama_ctx = llama_new_context_with_model(model_, ctx_params);
-
-        dbg_not_matched(query_ctx_.q.prompt);
-
-        auto prompt = llama_tokenize(query_ctx_.llama_ctx, query_ctx_.q.prompt, true);
-
-        query_ctx_.batch = llama_batch_init(conf_.n_batch, 0, 1);
-        query_ctx_.n_len = query_ctx_.q.n_predict + prompt.size();
-
-        // Init shared speculative context
-        query_ctx_.spec_ctx.speculation = prompt;
-        query_ctx_.spec_ctx.done = false;
-
-        if (generate(prompt) != 0)
-        {
-            fprintf(stderr, "generation failed\n");
-        }
-
-        llama_batch_free(query_ctx_.batch);
-        llama_free(query_ctx_.llama_ctx);
-        const auto t_end = ggml_time_us();
-        printf("Processing time: %.3lf\n", (t_end - t_start) / 1000000.0);
-    }
-}
-
 }
 
 int main(int argc, char ** argv)
@@ -456,7 +475,7 @@ int main(int argc, char ** argv)
     auto node = llama_node::create(conf);
     if (node != nullptr)
     {
-        int res = node->serve();
+        node->serve();
     }
 
     llama_backend_free();
