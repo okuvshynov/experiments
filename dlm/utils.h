@@ -50,24 +50,28 @@ static void dbg_rejected(const std::string & rejected)
 static std::vector<llama_token> greedy_tokens(
         llama_model * model,
         llama_context * ctx,
-        int from_idx,
-        int to_idx)
+        int32_t from_idx,
+        int32_t to_idx)
 {
     auto n_vocab = llama_n_vocab(model);
-    std::vector<llama_token_data> candidates;
-    candidates.resize(n_vocab);
     std::vector<llama_token> res;
+    if (n_vocab <= 0)
+    {
+        return res;
+    }
 
-    for (int idx = from_idx; idx < to_idx; idx++) {
+    for (int idx = from_idx; idx < to_idx; idx++)
+    {
         auto * logits  = llama_get_logits_ith(ctx, idx);
-        for (llama_token token_id = 0; token_id < n_vocab; token_id++) {
-            candidates[token_id] = llama_token_data{ token_id, logits[token_id], 0.0f };
+        llama_token new_token_id = 0;
+        for (llama_token token_id = 1; token_id < n_vocab; token_id++)
+        {
+            if (logits[token_id] > logits[new_token_id])
+            {
+                new_token_id = token_id;
+            }
         }
 
-        llama_token_data_array candidates_p = { candidates.data(), candidates.size(), false };
-
-        // sample the most likely token
-        const llama_token new_token_id = llama_sample_token_greedy(ctx, &candidates_p);
         res.push_back(new_token_id);
     }
     return res;
