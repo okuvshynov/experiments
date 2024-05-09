@@ -76,17 +76,6 @@ std::string llama3_strip_eot(const std::string& str)
 
 std::string llama3_instruct_fmt_msg(const json& j)
 {
-    /* parsing json like this:
-    {
-        "max_tokens": 1024,
-        "messages": [
-            {"role": "user", "content": "Hello, world"},
-            {"role": "assistant", "content": "Hello, world"},
-            {"role": "user", "content": "Hello, world"},
-        ],
-        "system": "here's a prompt",
-    }
-    */
     std::ostringstream oss;
     oss << "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n";
     oss << j.value("system", "") << "<|eot_id|>\n";
@@ -100,7 +89,6 @@ std::string llama3_instruct_fmt_msg(const json& j)
     oss << "<|start_header_id|>assistant<|end_header_id|>";
     return oss.str();
 }
-
 
 class llama_node
 {
@@ -350,12 +338,14 @@ int llama_node::generate(const llama_tokens & tokens_list)
         llama_kv_cache_seq_rm(ctx, 0, n_cur - 1, -1);
 
         bool done = false;
-        for (llama_token new_token_id: next_tokens)
+        for (size_t i = 0; i < next_tokens.size(); i++)
         {
             // TODO: what should we do here
-            if (new_token_id == llama_token_eos(model) || new_token_id == 128009)
+            if (next_tokens[i] == llama_token_eos(model) || next_tokens[i] == 128009)
             {
                 done = true;
+                next_tokens.erase(next_tokens.begin() + i, next_tokens.end());
+                break;
             }
         }
         if (n_cur >= query_ctx_.n_len || done)
