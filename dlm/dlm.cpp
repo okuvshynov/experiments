@@ -327,7 +327,8 @@ int llama_node::generate(const llama_tokens & tokens_list)
         }
 
         llama_batch_clear(batch);
-        if (input_seq.size() + n_cur > query_ctx_.n_len) {
+        if (input_seq.size() + n_cur > query_ctx_.n_len)
+        {
             input_seq.resize(query_ctx_.n_len - n_cur);
         }
         for (size_t i = 0; i < input_seq.size(); i++)

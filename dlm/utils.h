@@ -79,19 +79,22 @@ static std::vector<llama_token> greedy_tokens(
 
 // simple and not too performant thread-safe queue
 template<typename T>
-class mt_queue {
+class mt_queue
+{
     public:
         mt_queue() = default;
         mt_queue(const mt_queue<T>&) = delete;
         mt_queue& operator=(const mt_queue<T>&) = delete;
 
-        void push(T value) {
+        void push(T value)
+        {
             std::lock_guard<std::mutex> lock(mutex);
             queue.push(std::move(value));
             cond_var.notify_one();
         }
 
-        T pop() {
+        T pop()
+        {
             std::unique_lock<std::mutex> lock(mutex);
             cond_var.wait(lock, [this]{ return !queue.empty(); });
             T value = std::move(queue.front());
@@ -99,12 +102,14 @@ class mt_queue {
             return value;
         }
 
-        bool empty() const {
+        bool empty() const
+        {
             std::lock_guard<std::mutex> lock(mutex);
             return queue.empty();
         }
 
-        size_t size() const {
+        size_t size() const
+        {
             std::lock_guard<std::mutex> lock(mutex);
             return queue.size();
         }
