@@ -208,28 +208,38 @@ int llama_node::generate(const llama_tokens & tokens_list)
     llama_model * model = model_;
 
     // evaluate the initial prompt
-    for (size_t i = 0; i < tokens_list.size(); i++)
+    auto bsz = conf_.n_batch;
+    for (size_t i = 0; i < tokens_list.size();)
     {
-        llama_batch_add(batch, tokens_list[i], i, { 0 }, false);
+        llama_batch_clear(batch);
+        size_t j;
+        for (j = 0; j < bsz && i + j < tokens_list.size(); j++)
+        {
+            llama_batch_add(batch, tokens_list[i + j], i + j, { 0 }, false);
+        }
+        if (i + j == tokens_list.size())
+        {
+            batch.logits[batch.n_tokens - 1] = true;
+        }
+        if (llama_decode(ctx, batch) != 0)
+        {
+            fprintf(stderr, "%s: llama_decode() failed\n", __func__);
+            return 1;
+        }
+        i += j;
     }
 
     // llama_decode will output logits only for the last token of the prompt
-    batch.logits[batch.n_tokens - 1] = true;
 
-    if (llama_decode(ctx, batch) != 0)
-    {
-        fprintf(stderr, "%s: llama_decode() failed\n", __func__);
-        return 1;
-    }
 
     // how many tokens are currently accepted
-    int n_cur  = batch.n_tokens;
+    int n_cur  = tokens_list.size();
 
     llama_tokens input_seq, next_tokens;
     input_seq.push_back(tokens_list.back());
 
-    int logits_from = n_cur - 1;
-    int logits_to   = n_cur;
+    int logits_from = batch.n_tokens - 1;
+    int logits_to   = batch.n_tokens;
     const auto t_start = ggml_time_us();
     while (n_cur < query_ctx_.n_len)
     {
@@ -330,6 +340,13 @@ int llama_node::generate(const llama_tokens & tokens_list)
         if (input_seq.size() + n_cur > query_ctx_.n_len)
         {
             input_seq.resize(query_ctx_.n_len - n_cur);
+        }
+        // TODO: in some cases this might be not the most efficient thing to do
+        // for correctness just make the input size <= batch size
+        if (input_seq.size() > bsz)
+        {
+            fprintf(stderr, "warn: trimming speculation to fit in batch size\n");
+            input_seq.resize(bsz);
         }
         for (size_t i = 0; i < input_seq.size(); i++)
         {

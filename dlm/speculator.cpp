@@ -147,17 +147,25 @@ int loop(config conf)
             n_matched -= 1;
         }
 
-        llama_batch_clear(batch);
-        for (size_t i = n_matched; i < curr.size(); i++)
+        auto bsz = conf.n_batch;
+        for (size_t i = n_matched; i < curr.size();)
         {
-            llama_batch_add(batch, curr[i], i, { 0 }, false);
-        }
-        batch.logits[batch.n_tokens - 1] = true;
-
-        if (llama_decode(llama_ctx, batch) != 0)
-        {
-            fprintf(stderr, "%s : failed to eval, return code %d\n", __func__, 1);
-            continue;
+            llama_batch_clear(batch);
+            size_t j;
+            for (j = 0; j < bsz && i + j < curr.size(); j++)
+            {
+                llama_batch_add(batch, curr[i + j], i + j, { 0 }, false);
+            }
+            if (i + j == curr.size())
+            {
+                batch.logits[batch.n_tokens - 1] = true;
+            }
+            if (llama_decode(llama_ctx, batch) != 0)
+            {
+                fprintf(stderr, "%s: llama_decode() failed\n", __func__);
+                continue;
+            }
+            i += j;
         }
         auto next_tokens = greedy_tokens(model, llama_ctx, batch.n_tokens - 1, batch.n_tokens);
         if (next_tokens.size() != 1)
