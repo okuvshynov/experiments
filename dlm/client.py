@@ -1,13 +1,21 @@
 import json
 import requests
 
-prompt = "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\nYou are a helpful, respectful and honest assistant.<|eot_id|><|start_header_id|>user<|end_header_id|>\n\nPlease give a detailed description of concurrency and parallelism in Python. Provide some examples.<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
+#prompt = "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\nYou are a helpful, respectful and honest assistant.<|eot_id|><|start_header_id|>user<|end_header_id|>\n\nPlease give a detailed description of concurrency and parallelism in Python. Provide some examples.<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
+
 
 def main():
-    url = "http://localhost:5555/message" 
-    data = {"prompt": prompt, "n_predict": 1024}
+    message = {
+        "system": "You are a helpful, respectful and honest assistant.",
+        "max_tokens": 2048,
+        "messages": [
+            {"role": "user", "content": "Please give a detailed description of concurrency and parallelism in Python. Provide some examples."},
+        ]
+    }
 
-    message = json.dumps(data)
+    url = "http://localhost:5555/messages" 
+
+    message = json.dumps(message)
     headers = {'Content-Type': 'application/json'}
 
     response = requests.post(url, headers=headers, data=message)

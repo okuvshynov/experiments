@@ -1,6 +1,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <memory>
+#include <sstream>
 #include <string>
 #include <thread>
 
@@ -61,6 +62,34 @@ config gen_config(int argc, char ** argv)
 }
 
 using json = nlohmann::json;
+
+std::string llama3_instruct_fmt_msg(const json& j)
+{
+    /* parsing json like this:
+    {
+        "max_tokens": 1024,
+        "messages": [
+            {"role": "user", "content": "Hello, world"},
+            {"role": "assistant", "content": "Hello, world"},
+            {"role": "user", "content": "Hello, world"},
+        ],
+        "system": "here's a prompt",
+    }
+    */
+    std::ostringstream oss;
+    oss << "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n";
+    oss << j.value("system", "") << "<|eot_id|>\n";
+
+    for (const auto& msg: j["messages"])
+    {
+        oss << "<|start_header_id|>" << msg["role"].get<std::string>() << "<|end_header_id|>\n\n";
+        oss << msg["content"].get<std::string>() << "<|eot_id|>";
+    }
+
+    oss << "<|start_header_id|>assistant<|end_header_id|>";
+    return oss.str();
+}
+
 
 class llama_node
 {
@@ -167,17 +196,21 @@ void llama_node::setup_http()
             std::cerr << e.what() << '\n';
         }
     });
-    http_serv_.Post("/message", [this](const httplib::Request & req, httplib::Response & res)
+    http_serv_.Post("/messages", [this](const httplib::Request & req, httplib::Response & res)
     {
         try
         {
+            std::cout << req.body << std::endl;
             auto req_j = json::parse(req.body);
+
+            auto prompt = llama3_instruct_fmt_msg(req_j);
+
             json res_j;
             res_j["status"] = "ok";
             query q =
             {
-                req_j.value("prompt", ""),
-                static_cast<size_t>(req_j.value("n_predict", 256))
+                prompt,
+                static_cast<size_t>(req_j.value("max_tokens", 1024))
             };
             queue_.push(q);
             res.set_content(res_j.dump(), "application/json");
@@ -228,9 +261,6 @@ int llama_node::generate(const llama_tokens & tokens_list)
         }
         i += j;
     }
-
-    // llama_decode will output logits only for the last token of the prompt
-
 
     // how many tokens are currently accepted
     int n_cur  = tokens_list.size();
