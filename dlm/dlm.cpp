@@ -21,7 +21,6 @@ using llama_tokens = std::vector<llama_token>;
 struct spec_context
 {
     llama_tokens speculation;
-    bool done = false;
     std::mutex mtx;
 };
 
@@ -33,7 +32,6 @@ struct query_context
     llama_batch  batch;          // llama batch we reuse
     size_t       n_len;          // how many tokens do we need (prompt + generated)
     size_t       n_predict;      // how many tokens to produce
-    bool         done = false;   // are we finished with the query?
     std::mutex   mtx;            // ensure we process 1 query at a time
 };
 
@@ -192,37 +190,31 @@ void llama_node::serve()
             llama_tokens remote_spec = req_j["spec"];
             {
                 std::lock_guard<std::mutex> _lock(spec_ctx_.mtx);
-                if (spec_ctx_.done)
+                auto& spec = spec_ctx_.speculation;
+                bool match = true;
+                size_t n_matched = remote_spec.size();
+                for (size_t i = 0; i < std::min(spec.size(), remote_spec.size()); i++)
                 {
-                    res_j["done"] = true;
-                } 
+                    if (spec[i] != remote_spec[i])
+                    {
+                        match = false;
+                        n_matched = i;
+                        break;
+                    }
+                }
+                if (match && spec.size() < remote_spec.size())
+                {
+                    spec = remote_spec;
+                }
                 else
                 {
-                    auto& spec = spec_ctx_.speculation;
-                    bool match = true;
-                    size_t n_matched = remote_spec.size();
-                    for (size_t i = 0; i < std::min(spec.size(), remote_spec.size()); i++)
-                    {
-                        if (spec[i] != remote_spec[i])
-                        {
-                            match = false;
-                            n_matched = i;
-                            break;
-                        }
-                    }
-                    if (match && spec.size() < remote_spec.size())
-                    {
-                        spec = remote_spec;
-                    }
-                    else
-                    {
-                        remote_spec = spec;
-                    }
-                    res_j["done"]      = false;
-                    res_j["spec"]      = remote_spec;
-                    res_j["n_matched"] = n_matched;
-                    res_j["n_len"]     = query_ctx_.n_len;
+                    remote_spec = spec;
                 }
+                res_j["spec"]      = remote_spec;
+                res_j["n_matched"] = n_matched;
+
+                // TODO this is probably not thread-safe
+                res_j["n_len"]     = query_ctx_.n_len;
             }
             res.set_content(res_j.dump(), "application/json");
         }
@@ -263,13 +255,11 @@ void llama_node::serve()
             query_ctx_.batch = llama_batch_init(conf_.n_batch, 0, 1);
             query_ctx_.n_len = query_ctx_.n_predict + prompt.size();
             query_ctx_.output.clear();
-            query_ctx_.done   = false;
 
             // Init speculation context
             {
                 std::lock_guard<std::mutex> _lock(spec_ctx_.mtx);
                 spec_ctx_.speculation = prompt;
-                spec_ctx_.done        = false;
             }
 
             // check the match of the prefix for prompt + previously generated part
@@ -484,11 +474,6 @@ int llama_node::generate(const llama_tokens & tokens_list, size_t n_reuse)
     {
         auto sp = llama_token_to_piece(llama_ctx_, next_tokens[i]);
         dbg_not_matched(sp);
-    }
-    query_ctx_.done = true;
-    {
-        std::lock_guard<std::mutex> _lock(spec_ctx_.mtx);
-        spec_ctx_.done = true;
     }
     size_t n_gen = n_cur - tokens_list.size();
     const auto duration_us = ggml_time_us() - t_start;

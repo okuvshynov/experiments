@@ -64,9 +64,8 @@ using json = nlohmann::json;
 
 using llama_tokens = std::vector<llama_token>;
 
-// returns true if main model completed the generation
 // any call might reset the state to new query (e.g. change n_matched to 0)
-bool call(httplib::Client * client, llama_tokens & curr, /* out */ size_t & n_matched, /* out */ size_t & n_len)
+void call(httplib::Client * client, llama_tokens & curr, /* out */ size_t & n_matched, /* out */ size_t & n_len)
 {
     try
     {
@@ -76,22 +75,16 @@ bool call(httplib::Client * client, llama_tokens & curr, /* out */ size_t & n_ma
         if (res)
         {
             json res_j = json::parse(res->body);
-            bool done = res_j["done"].get<bool>();
-            if (done)
-            {
-                return true;
-            }
+            std::cerr << res_j << std::endl;
             n_matched = res_j["n_matched"].get<size_t>();
             n_len     = res_j["n_len"].get<size_t>();
             curr      = res_j["spec"].get<llama_tokens>();
-            return false;
         }
     }
     catch(const std::exception& e)
     {
         std::cerr << e.what() << '\n';
     }
-    return false;
 }
 
 int loop(config conf)
@@ -124,20 +117,12 @@ int loop(config conf)
 
     while (true)
     {
-        // get work/reconcile
-        if (call(&http_client, curr, n_matched, n_len))
-        {
-            fprintf(stderr, "done.\n");
-            n_matched = 0;
-            curr.clear();
-
-            std::this_thread::sleep_for(100ms);
-            continue;
-        }
+        call(&http_client, curr, n_matched, n_len);
 
         if (curr.size() == 0 || curr.size() >= n_len)
         {
-            std::this_thread::sleep_for(100ms);
+            std::cerr << "I: waiting" << std::endl;
+            std::this_thread::sleep_for(500ms);
             continue;
         }
 
