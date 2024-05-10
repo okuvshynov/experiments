@@ -63,6 +63,7 @@ config gen_config(int argc, char ** argv)
         /* n_gpu_layers = */ 0
     };
     parser<config> p;
+    // server options
     p.add_option({"--host", "-h"},                             &config::host);
     p.add_option({"--port", "-p"},                             &config::port);
 
@@ -378,14 +379,14 @@ int llama_node::generate(const llama_tokens & tokens_list, size_t n_reuse)
             }
         }
 
-        // empty the non-match portion of kv cache
+        // empty the non-matching portion of kv cache
         llama_kv_cache_seq_rm(llama_ctx_, 0, n_cur - 1, -1);
 
         bool done = false;
         for (size_t i = 0; i < next_tokens.size(); i++)
         {
-            // TODO: what should we do here
-            if (next_tokens[i] == llama_token_eos(model_) || next_tokens[i] == 128009)
+            // TODO: what should we do here, is this correct
+            if (next_tokens[i] == llama_token_eos(model_) || llama_token_is_eog(model_, next_tokens[i]))
             {
                 done = true;
                 next_tokens.erase(next_tokens.begin() + i, next_tokens.end());
@@ -400,7 +401,7 @@ int llama_node::generate(const llama_tokens & tokens_list, size_t n_reuse)
             break;
         }
 
-        // CRITICAL SECTION -- reconcile main and speculative
+        // reconcile main and speculative
         {
             std::lock_guard<std::mutex> _lock(spec_ctx_.mtx);
             auto & spec = spec_ctx_.speculation;
@@ -458,7 +459,7 @@ int llama_node::generate(const llama_tokens & tokens_list, size_t n_reuse)
         {
             input_seq.resize(query_ctx_.n_len - n_cur);
         }
-        // TODO: in some cases this might be not the most efficient thing to do
+        // in some cases this might be not the most efficient thing to do
         // for correctness just make the input size <= batch size
         if (input_seq.size() > bsz)
         {
