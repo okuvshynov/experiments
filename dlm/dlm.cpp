@@ -18,8 +18,6 @@ namespace
 
 using llama_tokens = std::vector<llama_token>;
 
-// mutable part of context which might be accessed by 
-// multiple threads. Protected by single mutex for simplicify.
 struct spec_context
 {
     llama_tokens speculation;
@@ -27,34 +25,29 @@ struct spec_context
     std::mutex mtx;
 };
 
-struct output_context
-{
-    bool done = false;
-    std::string             output;
-    std::mutex              mtx;
-};
-
 struct query_context
 {
-    std::string     prompt;
-    size_t          n_predict; // new tokens to produce
-    llama_context * llama_ctx;
-    llama_batch     batch;
-    spec_context    spec_ctx;
-    size_t          n_len;
-    output_context  out_ctx;
+    std::string     prompt;         // original input
+    size_t          n_predict;      // how many tokens to produce
+    llama_context * llama_ctx;      // llama context.
+    llama_batch     batch;          // llama batch we reuse
+    spec_context    spec_ctx;       // speculative context
+    size_t          n_len;          // how many tokens do we need (prompt + generated)
+    bool            done = false;   // are we finished with the query?
+    std::string     output;         // generated output w/o prompt
+    std::mutex      mtx;            // ensure we process 1 query at a time
 };
 
 struct config
 {
-    std::string host;
-    int32_t     port;
+    std::string host;               // interface to listen on. "0.0.0.0" is default. 
+    int32_t     port;               // port to listen on. 5555 is default.
 
-    std::string model_path;
-    uint32_t n_batch;
-    uint32_t n_ctx;
-    uint32_t n_threads;
-    uint32_t n_gpu_layers;
+    std::string model_path;         // path to gguf file
+    uint32_t n_batch;               // batch size
+    uint32_t n_ctx;                 // context size (n_len must be <= n_ctx)
+    uint32_t n_threads;             // how many threads to use for CPU evaluation
+    uint32_t n_gpu_layers;          // how many layers to offload to GPU.
 };
 
 config gen_config(int argc, char ** argv)
@@ -91,6 +84,7 @@ config gen_config(int argc, char ** argv)
 
 using json = nlohmann::json;
 
+// This is llama3 specific and should be changed
 std::string llama3_strip_eot(const std::string& str)
 {
     const std::string tag = "<|eot_id|>";
@@ -127,14 +121,10 @@ class llama_node
 
   private:
     explicit llama_node(config conf);
-
-    int  generate(const llama_tokens & tokens_list);
-    void setup_http();
+    int generate(const llama_tokens & tokens_list);
 
     llama_model   * model_;
     const config    conf_;
-
-    // current context, as we operate on one query at a time
     query_context   query_ctx_;
     httplib::Server http_serv_;
 };
@@ -150,7 +140,7 @@ std::unique_ptr<llama_node> llama_node::create(config conf)
 
     if (self->model_ == nullptr)
     {
-        fprintf(stderr, "Unable to load model from %s\n", conf.model_path.c_str());
+        std::cerr << "F: Unable to load model from " << conf.model_path << std::endl;
         return nullptr;
     }
 
@@ -169,7 +159,7 @@ llama_node::~llama_node()
     }
 }
 
-void llama_node::setup_http()
+void llama_node::serve()
 {
     http_serv_.Post("/hint", [this](const httplib::Request & req, httplib::Response & res)
     {
@@ -218,20 +208,21 @@ void llama_node::setup_http()
         }
         catch(const std::exception & e)
         {
-            std::cerr << e.what() << '\n';
+            std::cerr << "E: " << e.what() << '\n';
         }
     });
+
     http_serv_.Post("/messages", [this](const httplib::Request & req, httplib::Response & res)
     {
         // we process one message at a time anyway.
-        std::lock_guard<std::mutex> _lock(query_ctx_.out_ctx.mtx);
+        std::lock_guard<std::mutex> _lock(query_ctx_.mtx);
         try
         {
             auto req_j = json::parse(req.body);
 
             query_ctx_.prompt    = llama3_instruct_fmt_msg(req_j);
             query_ctx_.n_predict = static_cast<size_t>(req_j.value("max_tokens", 1024));
-            const auto t_start = ggml_time_us();
+            const auto t_start   = ggml_time_us();
 
             llama_context_params ctx_params = llama_context_default_params();
             ctx_params.n_batch   = conf_.n_batch;
@@ -245,8 +236,8 @@ void llama_node::setup_http()
 
             query_ctx_.batch = llama_batch_init(conf_.n_batch, 0, 1);
             query_ctx_.n_len = query_ctx_.n_predict + prompt.size();
-            query_ctx_.out_ctx.output = "";
-            query_ctx_.out_ctx.done   = false;
+            query_ctx_.output = "";
+            query_ctx_.done   = false;
 
             // Init speculation context
             {
@@ -257,12 +248,12 @@ void llama_node::setup_http()
 
             if (generate(prompt) != 0)
             {
-                fprintf(stderr, "generation failed\n");
+                std::cerr << "E: generation failed" << std::endl;
             }
 
             const auto t_end = ggml_time_us();
             printf("Processing time: %.3lf\n", (t_end - t_start) / 1000000.0);
-            auto output = llama3_strip_eot(query_ctx_.out_ctx.output);
+            auto output = llama3_strip_eot(query_ctx_.output);
             
             json res_j = { {"content",  {{"text", output}}} };
             res.set_content(res_j.dump(), "application/json");
@@ -270,16 +261,11 @@ void llama_node::setup_http()
             llama_batch_free(query_ctx_.batch);
             llama_free(query_ctx_.llama_ctx);
         }
-        catch(const std::exception & e)
+        catch (const std::exception & e)
         {
-            std::cerr << e.what() << '\n';
+            std::cerr << "E: " << e.what() << '\n';
         }
     });
-} 
-
-void llama_node::serve()
-{
-    setup_http();
     http_serv_.listen(conf_.host, conf_.port);
 }
 
@@ -304,7 +290,7 @@ int llama_node::generate(const llama_tokens & tokens_list)
         }
         if (llama_decode(ctx, batch) != 0)
         {
-            fprintf(stderr, "%s: llama_decode() failed\n", __func__);
+            std::cerr << "E: llama_decode() failed" << std::endl;
             return 1;
         }
         i += j;
@@ -324,7 +310,7 @@ int llama_node::generate(const llama_tokens & tokens_list)
         next_tokens = greedy_tokens(model_, ctx, logits_from, logits_to);
         if (next_tokens.size() != input_seq.size())
         {
-            fprintf(stderr, "invalid next tokens\n");
+            std::cerr << "E: invalid next tokens" << std::endl;
             return 1;
         }
 
@@ -345,13 +331,7 @@ int llama_node::generate(const llama_tokens & tokens_list)
                 break;
             }
         }
-        // append next_tokens to the output
-        std::string next_str;
-        for (llama_token tok : next_tokens)
-        {
-            next_str += llama_token_to_piece(ctx, tok);
-        }
-        query_ctx_.out_ctx.output += next_str;
+
 
 
         // empty the non-match portion of kv cache
@@ -368,6 +348,14 @@ int llama_node::generate(const llama_tokens & tokens_list)
                 break;
             }
         }
+        // append next_tokens to the output
+        std::string next_str;
+        for (llama_token tok : next_tokens)
+        {
+            next_str += llama_token_to_piece(ctx, tok);
+        }
+        query_ctx_.output += next_str;
+
         if (n_cur >= query_ctx_.n_len || done)
         {
             break;
@@ -435,7 +423,7 @@ int llama_node::generate(const llama_tokens & tokens_list)
         // for correctness just make the input size <= batch size
         if (input_seq.size() > bsz)
         {
-            fprintf(stderr, "warn: trimming speculation to fit in batch size\n");
+            std::cerr << "W: trimming speculation to fit in batch size" << std::endl;
             input_seq.resize(bsz);
         }
         for (size_t i = 0; i < input_seq.size(); i++)
@@ -444,7 +432,7 @@ int llama_node::generate(const llama_tokens & tokens_list)
         }
         if (llama_decode(ctx, batch))
         {
-            fprintf(stderr, "%s : failed to eval, return code %d\n", __func__, 1);
+            std::cerr << "E: llama_decode() failed" << std::endl;
             return 1;
         }
         logits_from = 0;
@@ -456,12 +444,8 @@ int llama_node::generate(const llama_tokens & tokens_list)
     {
         auto sp = llama_token_to_piece(ctx, next_tokens[i]);
         dbg_not_matched(sp);
-        // not very efficient
-        next_str += sp;
     }
-    query_ctx_.out_ctx.output += next_str;
-    query_ctx_.out_ctx.done = true;
-    std::cout << std::endl << std::endl;
+    query_ctx_.done = true;
     {
         std::lock_guard<std::mutex> _lock(query_ctx_.spec_ctx.mtx);
         query_ctx_.spec_ctx.done = true;
@@ -469,7 +453,7 @@ int llama_node::generate(const llama_tokens & tokens_list)
     size_t n_gen = n_cur - tokens_list.size();
     const auto duration_us = ggml_time_us() - t_start;
     double gen_tps = n_gen * 1000000.0 / duration_us;
-    printf("Generation tps: %.3lf\n", gen_tps);
+    std::cerr << "I: Generation tps: " << gen_tps << std::endl;
 
     return 0;
 }
