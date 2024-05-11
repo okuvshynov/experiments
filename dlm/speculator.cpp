@@ -12,7 +12,7 @@
 #include "config.h"
 #include "utils.h"
 
-namespace
+namespace llama_peer
 {
 
 struct config
@@ -221,7 +221,7 @@ int main(int argc, char ** argv)
 {
     int res = 0;
     llama_backend_init();
-    config conf = gen_config(argc, argv);
+    auto conf = llama_peer::gen_config(argc, argv);
     res = loop(conf);
 
     llama_backend_free();

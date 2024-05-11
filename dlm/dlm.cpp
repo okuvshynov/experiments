@@ -13,7 +13,7 @@
 #include "config.h"
 #include "utils.h"
 
-namespace
+namespace llama_peer
 {
 
 using llama_tokens = std::vector<llama_token>;
@@ -85,8 +85,9 @@ config gen_config(int argc, char ** argv)
 using json = nlohmann::json;
 
 // This is llama3 specific and should be changed
-std::string llama3_strip_eot(const std::string& str)
+std::string llama3_strip_eot(const std::string & str)
 {
+    return str;
     const std::string tag = "<|eot_id|>";
     size_t len = str.size();
     while (len >= tag.size() && str.substr(len - tag.size(), tag.size()) == tag)
@@ -96,7 +97,7 @@ std::string llama3_strip_eot(const std::string& str)
     return str.substr(0, len);
 }
 
-std::string llama3_instruct_fmt_msg(const json& j)
+std::string llama3_instruct_fmt_msg(const json & j)
 {
     std::ostringstream oss;
     oss << "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n";
@@ -104,8 +105,11 @@ std::string llama3_instruct_fmt_msg(const json& j)
 
     for (const auto& msg: j["messages"])
     {
-        oss << "<|start_header_id|>" << msg["role"].get<std::string>() << "<|end_header_id|>\n\n";
-        oss << msg["content"].get<std::string>() << "<|eot_id|>";
+        oss 
+            << "<|start_header_id|>"
+            << msg["role"].get<std::string>()
+            << "<|end_header_id|>\n\n"
+            << msg["content"].get<std::string>() << "<|eot_id|>";
     }
 
     oss << "<|start_header_id|>assistant<|end_header_id|>";
@@ -353,6 +357,13 @@ void llama_node::serve()
 
 int llama_node::generate(const llama_tokens & tokens_list, size_t n_reuse)
 {
+    std::cerr << std::endl;
+    for (size_t i = 0; i < n_reuse; i++)
+    {
+        std::cerr << llama_token_to_piece(llama_ctx_, tokens_list[i]);
+    }
+    std::cerr << std::endl;
+    std::cerr << std::endl;
     std::cerr << "I: generating and reusing " << n_reuse << " tokens." << std::endl;
     llama_batch & batch = query_ctx_.batch; 
 
@@ -535,9 +546,9 @@ int llama_node::generate(const llama_tokens & tokens_list, size_t n_reuse)
 int main(int argc, char ** argv)
 {
     llama_backend_init();
-    config conf = gen_config(argc, argv);
+    auto conf = llama_peer::gen_config(argc, argv);
 
-    auto node = llama_node::create(conf);
+    auto node = llama_peer::llama_node::create(conf);
     if (node != nullptr)
     {
         node->serve();

@@ -6,6 +6,9 @@
 #include <string>
 #include <sstream>
 
+namespace llama_peer
+{
+
 struct value_parser
 {
     template<typename value_t>
@@ -74,3 +77,5 @@ struct parser
   private:
     std::map<std::string, std::function<void(const char*, config_t&)>> setters_;
 };
+
+}
