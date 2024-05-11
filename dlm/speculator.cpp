@@ -25,6 +25,8 @@ struct config
     uint32_t n_ctx;
     uint32_t n_threads;
     uint32_t n_gpu_layers;
+
+    size_t   n_ahead;      // after we reach n_ahead non-validated tokens we wait.
 };
 
 config gen_config(int argc, char ** argv)
@@ -38,7 +40,9 @@ config gen_config(int argc, char ** argv)
         /* n_batch      = */ 512,
         /* n_ctx        = */ 4096,
         /* n_threads    = */ 16,
-        /* n_gpu_layers = */ 0
+        /* n_gpu_layers = */ 0,
+
+        /* n_ahead      = */ 16,
     };
     parser<config> p;
     // main server endpoint to connect to
@@ -51,7 +55,8 @@ config gen_config(int argc, char ** argv)
     p.add_option({"--n_ctx", "--n-ctx", "-c"},                 &config::n_ctx);
     p.add_option({"--threads", "-t"},                          &config::n_threads);
     p.add_option({"--n_gpu_layers", "--n-gpu-layers", "-ngl"}, &config::n_gpu_layers);
-    
+    p.add_option({"--n_ahead", "--n-ahead", "-na"},            &config::n_ahead);
+
     if (0 != p.parse_options(argc, argv, res))
     {
         exit(-1);
@@ -99,22 +104,49 @@ int loop(config conf)
         try
         {
             json req;
+            
+            // curr[:n_approved] was confirmed by main model. However, as we are not really making 
+            // assumptions that, for example, main server was not restarted, we need to make sure we 
+            // are working on the same sequence. So we pass the length of the prefix (=n_prefix) and 
+            // its crc32 checksum. Main server will check that it matches ground truth sequence.
+            // Alternative way to handle this would be to have some sort of query_id generated.
+            // At small context lengths this doesn't matter and we could just pass entire speculation.
+            // For longer conversation/large contexts from data sources it would become slow to pass
+            // entire token lists back and forth.
+
             req["spec"]         = llama_tokens(curr.begin() + n_approved, curr.end());
+            // what's the offset of the tokens we pass.
             req["n_prefix"]     = n_approved;
+            // what's the checksum of the omitted prefix.
             req["crc32_prefix"] = crc32_approved;
-            //std::cout << "REQ: " << req << std::endl;
+
+            // should this be some long poll when we wait?
             auto res = http_client.Post("/hint", req.dump(), "application/json");
             if (res)
             {
                 json res_j = json::parse(res->body);
-                //std::cout << "RES: " << res_j << std::endl;
+                
+                // new candidate
                 updated  = res_j["spec"].get<llama_tokens>();
+
+                // at what offset does it start?
                 n_prefix = res_j["n_prefix"].get<size_t>();
+
+                // remove everything non-matching. 
+                // TODO: this will probably remove everything or nothing
                 curr.erase(curr.begin() + n_prefix, curr.end());
                 curr.insert(curr.end(), updated.begin(), updated.end());
 
+                // how many tokens 'matched'. Not all of them were approved yet,
+                // but none were rejected by main model yet. Should come up with better name.
+                // n_matched is relative to n_prefix, so total number of non-rejected tokens is 
+                // n_matched + n_prefix.
                 n_matched  = res_j["n_matched"].get<size_t>();
+
+                // How many tokens were validated by main model
                 n_approved = res_j["n_approved"].get<size_t>();
+
+                // what's the checksum of that
                 crc32_approved = res_j["crc32_approved"].get<uint32_t>();
             }
         }
@@ -125,19 +157,26 @@ int loop(config conf)
             continue;
         }
 
-        if (curr.size() == 0 || updated.size() == 0 || (n_approved > 0 && curr.size() > n_approved + 32))
+        if (curr.size() == 0 || updated.size() == 0 || (n_approved > 0 && curr.size() > n_approved + conf.n_ahead))
         {
-            std::cerr << "I: waiting" << std::endl;
+            std::cerr 
+                << "I: waiting; curr.size() = " << curr.size()
+                << ", updated.size() = " << updated.size()
+                << ", n_approved = " << n_approved << std::endl;
             std::this_thread::sleep_for(500ms);
             continue;
         }
 
+        // remove the mismatched entries from KV cache
         llama_kv_cache_seq_rm(llama_ctx, 0, n_prefix + n_matched, -1);
+
+        // generate at least one
         if (n_prefix + n_matched == curr.size())
         {
             n_matched -= 1;
         }
 
+        // batched evaluation. Only last token produces logits.
         auto bsz = conf.n_batch;
         for (size_t i = n_prefix + n_matched; i < curr.size();)
         {
@@ -158,10 +197,13 @@ int loop(config conf)
             }
             i += j;
         }
+
+        // pick greedily
+        std::cerr << "D: evaluating batch of " << batch.n_tokens << std::endl;
         auto next_tokens = greedy_tokens(model, llama_ctx, batch.n_tokens - 1, batch.n_tokens);
         if (next_tokens.size() != 1)
         {
-            fprintf(stderr, "invalid next tokens size\n");
+            std::cerr << "E: invalid next tokens size" << std::endl;
             continue;
         }
 
