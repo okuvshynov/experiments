@@ -146,7 +146,7 @@ int loop(config conf)
                 // How many tokens were validated by main model
                 n_approved = res_j["n_approved"].get<size_t>();
 
-                // what's the checksum of that
+                // what's the checksum of that validated prefix
                 crc32_approved = res_j["crc32_approved"].get<uint32_t>();
             }
         }
@@ -199,7 +199,6 @@ int loop(config conf)
         }
 
         // pick greedily
-        std::cerr << "D: evaluating batch of " << batch.n_tokens << std::endl;
         auto next_tokens = greedy_tokens(model, llama_ctx, batch.n_tokens - 1, batch.n_tokens);
         if (next_tokens.size() != 1)
         {

@@ -128,7 +128,7 @@ class llama_node
     spec_context    spec_ctx_;       // speculative context
 
     llama_model   * model_;
-    llama_context * llama_ctx_;      // llama context.
+    llama_context * llama_ctx_;      // llama context
 
     httplib::Server http_server_;
 };
@@ -159,7 +159,6 @@ std::unique_ptr<llama_node> llama_node::create(config conf)
         std::cerr << "F: Unable to create llama context " << std::endl;
         return nullptr;
     }
-
 
     return self;
 }
