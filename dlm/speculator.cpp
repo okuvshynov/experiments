@@ -94,9 +94,9 @@ int loop(config conf)
     llama_batch         batch = llama_batch_init(conf.n_batch, 0, 1);
     
     llama_tokens curr, updated; // empty 
-    size_t n_matched  = 0;
-    size_t n_approved = 0;
-    size_t n_prefix   = 0;
+    size_t n_not_rejected   = 0;
+    size_t n_approved       = 0;
+    size_t n_prefix         = 0;
     uint32_t crc32_approved = 0;  
 
     while (true)
@@ -114,7 +114,7 @@ int loop(config conf)
             // For longer conversation/large contexts from data sources it would become slow to pass
             // entire token lists back and forth.
 
-            req["spec"]         = llama_tokens(curr.begin() + n_approved, curr.end());
+            req["candidate"]     = llama_tokens(curr.begin() + n_approved, curr.end());
             // what's the offset of the tokens we pass.
             req["n_prefix"]     = n_approved;
             // what's the checksum of the omitted prefix.
@@ -127,7 +127,7 @@ int loop(config conf)
                 json res_j = json::parse(res->body);
                 
                 // new candidate
-                updated  = res_j["spec"].get<llama_tokens>();
+                updated  = res_j["candidate"].get<llama_tokens>();
 
                 // at what offset does it start?
                 n_prefix = res_j["n_prefix"].get<size_t>();
@@ -137,11 +137,11 @@ int loop(config conf)
                 curr.erase(curr.begin() + n_prefix, curr.end());
                 curr.insert(curr.end(), updated.begin(), updated.end());
 
-                // how many tokens 'matched'. Not all of them were approved yet,
-                // but none were rejected by main model yet. Should come up with better name.
-                // n_matched is relative to n_prefix, so total number of non-rejected tokens is 
-                // n_matched + n_prefix.
-                n_matched  = res_j["n_matched"].get<size_t>();
+                // how many tokens 'matched'. Not all of them were approved,
+                // but none were rejected by main model yet.
+                // n_not_rejected is relative to n_prefix, so total number of non-rejected tokens is 
+                // n_not_rejected + n_prefix.
+                n_not_rejected  = res_j["n_not_rejected"].get<size_t>();
 
                 // How many tokens were validated by main model
                 n_approved = res_j["n_approved"].get<size_t>();
@@ -168,17 +168,17 @@ int loop(config conf)
         }
 
         // remove the mismatched entries from KV cache
-        llama_kv_cache_seq_rm(llama_ctx, 0, n_prefix + n_matched, -1);
+        llama_kv_cache_seq_rm(llama_ctx, 0, n_prefix + n_not_rejected, -1);
 
         // generate at least one
-        if (n_prefix + n_matched == curr.size())
+        if (n_prefix + n_not_rejected == curr.size())
         {
-            n_matched -= 1;
+            n_not_rejected -= 1;
         }
 
         // batched evaluation. Only last token produces logits.
         auto bsz = conf.n_batch;
-        for (size_t i = n_prefix + n_matched; i < curr.size();)
+        for (size_t i = n_prefix + n_not_rejected; i < curr.size();)
         {
             llama_batch_clear(batch);
             size_t j;
@@ -223,10 +223,8 @@ int main(int argc, char ** argv)
     int res = 0;
     llama_backend_init();
     config conf = gen_config(argc, argv);
-
     res = loop(conf);
 
     llama_backend_free();
-
     return res;
 }

@@ -20,8 +20,8 @@ using llama_tokens = std::vector<llama_token>;
 
 struct spec_context
 {
-    llama_tokens speculation;
-    size_t       n_approved     = 0;     // how many were validated by main model
+    llama_tokens candidate;          // current shared candidate
+    size_t       n_approved     = 0; // how many were validated by main model
     uint32_t     crc32_approved = 0; // crc32 checksum of approved part 
     std::mutex   mtx;
 };
@@ -130,7 +130,7 @@ class llama_node
     llama_model   * model_;
     llama_context * llama_ctx_;      // llama context.
 
-    httplib::Server http_serv_;
+    httplib::Server http_server_;
 };
 
 std::unique_ptr<llama_node> llama_node::create(config conf)
@@ -182,32 +182,30 @@ llama_node::~llama_node()
 
 void llama_node::serve()
 {
-    http_serv_.Post("/hint", [this](const httplib::Request & req, httplib::Response & res)
+    http_server_.Post("/hint", [this](const httplib::Request & req, httplib::Response & res)
     {
         try
         {
             json res_j;
             auto req_j = json::parse(req.body);
 
-            llama_tokens remote_spec = req_j["spec"];
-            size_t   n_prefix        = req_j["n_prefix"]; // offset based on what we approved in the past
-            uint32_t crc32_prefix    = req_j["crc32_prefix"]; // crc32 checksum of non-passed prefix
+            llama_tokens remote_candidate = req_j["candidate"];
+            size_t       n_prefix         = req_j["n_prefix"]; // offset based on what we approved in the past
+            uint32_t     crc32_prefix     = req_j["crc32_prefix"]; // crc32 checksum of non-passed prefix
             {
                 std::lock_guard<std::mutex> _lock(spec_ctx_.mtx);
-                auto& spec = spec_ctx_.speculation;
-                //std::cerr << "spec[" << spec.size() << "]";
+                auto& candidate = spec_ctx_.candidate;
                 bool prefix_mismatch = false;
 
-                // first, check prefix crc32
-                // if we cannot match, need to return entire spec
+                // first, check prefix crc32. if we cannot match, need to return entire candidate
                 // likely it's a new query processing, etc.
-                if (n_prefix > spec.size())
+                if (n_prefix > candidate.size())
                 {
                     prefix_mismatch = true;
                 }
                 else
                 {
-                    uint32_t local_crc32_prefix = crc32(spec.begin(), spec.begin() + n_prefix);
+                    uint32_t local_crc32_prefix = crc32(candidate.begin(), candidate.begin() + n_prefix);
                     if (local_crc32_prefix != crc32_prefix)
                     {
                         prefix_mismatch = true;
@@ -215,11 +213,11 @@ void llama_node::serve()
                 }
                 if (prefix_mismatch)
                 {
-                    res_j["spec"]           = spec;
-                    // we pass entire spec from position 0
+                    res_j["candidate"]      = candidate;
+                    // we pass entire candidate from position 0
                     res_j["n_prefix"]       = 0;
-                    // n_matched means 'how many do we need to recompute on speculator'
-                    res_j["n_matched"]      = 0;
+                    // n_not_rejected means 'how many do we not need to recompute on speculator'
+                    res_j["n_not_rejected"] = 0;
                     // n_approved means 'out of spec we return, how many were approved by main model'
                     res_j["n_approved"]     = spec_ctx_.n_approved;
                     res_j["crc32_approved"] = spec_ctx_.crc32_approved;
@@ -227,37 +225,37 @@ void llama_node::serve()
                 else
                 {
                     bool match = true;
-                    size_t n_matched = remote_spec.size();
-                    for (size_t i = 0; i < remote_spec.size() && i + n_prefix < spec.size(); i++)
+                    size_t n_not_rejected = remote_candidate.size();
+                    for (size_t i = 0; i < remote_candidate.size() && i + n_prefix < candidate.size(); i++)
                     {
-                        if (spec[i + n_prefix] != remote_spec[i])
+                        if (candidate[i + n_prefix] != remote_candidate[i])
                         {
                             match = false;
-                            n_matched = i;
+                            n_not_rejected = i;
                             break;
                         }
                     }
-                    if (match && spec.size() < n_prefix + remote_spec.size())
+                    if (match && candidate.size() < n_prefix + remote_candidate.size())
                     {
-                        // append newly speculated tokens to local spec
-                        for (size_t i = 0; i < remote_spec.size(); i++)
+                        // append newly speculated tokens to local candidate
+                        for (size_t i = 0; i < remote_candidate.size(); i++)
                         {
-                            if (i + n_prefix < spec.size())
+                            if (i + n_prefix < candidate.size())
                             {
                                 continue;
                             }
-                            spec.push_back(remote_spec[i]);
+                            candidate.push_back(remote_candidate[i]);
                         }
                     }
                     else
                     {
                         // we start at the same offset and copy local part of it
-                        remote_spec = llama_tokens(spec.begin() + n_prefix, spec.end());
+                        remote_candidate = llama_tokens(candidate.begin() + n_prefix, candidate.end());
                     }
-                    // passing at the same offset
+                    // passing back the same offset
                     res_j["n_prefix"]       = n_prefix;
-                    res_j["spec"]           = remote_spec;
-                    res_j["n_matched"]      = n_matched;
+                    res_j["candidate"]      = remote_candidate;
+                    res_j["n_not_rejected"] = n_not_rejected;
                     res_j["n_approved"]     = spec_ctx_.n_approved;
                     res_j["crc32_approved"] = spec_ctx_.crc32_approved;
                 }
@@ -270,7 +268,7 @@ void llama_node::serve()
         }
     });
 
-    http_serv_.Post("/messages", [this](const httplib::Request & req, httplib::Response & res)
+    http_server_.Post("/messages", [this](const httplib::Request & req, httplib::Response & res)
     {
         // we process one message at a time anyway.
         std::lock_guard<std::mutex> _lock(query_ctx_.mtx);
@@ -305,7 +303,7 @@ void llama_node::serve()
             // Init speculation context
             {
                 std::lock_guard<std::mutex> _lock(spec_ctx_.mtx);
-                spec_ctx_.speculation = prompt;
+                spec_ctx_.candidate      = prompt;
                 spec_ctx_.n_approved     = 0;
                 spec_ctx_.crc32_approved = 0;
             }
@@ -351,7 +349,7 @@ void llama_node::serve()
             std::cerr << "E: " << e.what() << '\n';
         }
     });
-    http_serv_.listen(conf_.host, conf_.port);
+    http_server_.listen(conf_.host, conf_.port);
 }
 
 int llama_node::generate(const llama_tokens & tokens_list, size_t n_reuse)
@@ -442,7 +440,7 @@ int llama_node::generate(const llama_tokens & tokens_list, size_t n_reuse)
         // reconcile main and speculative
         {
             std::lock_guard<std::mutex> _lock(spec_ctx_.mtx);
-            auto & spec = spec_ctx_.speculation;
+            auto & spec = spec_ctx_.candidate;
             size_t n_match = 0;
             for (size_t i = 0; i < next_tokens.size() && i + next_tokens_pos < spec.size(); i++)
             {
@@ -538,7 +536,6 @@ int llama_node::generate(const llama_tokens & tokens_list, size_t n_reuse)
 int main(int argc, char ** argv)
 {
     llama_backend_init();
-
     config conf = gen_config(argc, argv);
 
     auto node = llama_node::create(conf);
@@ -546,7 +543,6 @@ int main(int argc, char ** argv)
     {
         node->serve();
     }
-
     llama_backend_free();
 
     return 0;

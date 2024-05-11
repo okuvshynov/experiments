@@ -71,8 +71,9 @@ static std::vector<llama_token> greedy_tokens(
         res.push_back(new_token_id);
     }
     return res;
-} 
+}
 
+// not very efficient implementation
 template<typename iter_t>
 uint32_t crc32(iter_t begin, iter_t end)
 {
