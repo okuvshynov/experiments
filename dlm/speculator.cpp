@@ -64,29 +64,6 @@ using json = nlohmann::json;
 
 using llama_tokens = std::vector<llama_token>;
 
-// any call might reset the state to new query (e.g. change n_matched to 0)
-void call(httplib::Client * client, llama_tokens & curr, /* out */ size_t & n_matched, /* out */ size_t & n_len)
-{
-    try
-    {
-        json req_j;
-        req_j["spec"] = curr;
-        auto res = client->Post("/hint", req_j.dump(), "application/json");
-        if (res)
-        {
-            json res_j = json::parse(res->body);
-            std::cerr << res_j << std::endl;
-            n_matched = res_j["n_matched"].get<size_t>();
-            n_len     = res_j["n_len"].get<size_t>();
-            curr      = res_j["spec"].get<llama_tokens>();
-        }
-    }
-    catch(const std::exception& e)
-    {
-        std::cerr << e.what() << '\n';
-    }
-}
-
 int loop(config conf)
 {
     using namespace std::chrono_literals;
@@ -111,29 +88,58 @@ int loop(config conf)
     llama_context * llama_ctx = llama_new_context_with_model(model, ctx_params);
     llama_batch         batch = llama_batch_init(conf.n_batch, 0, 1);
     
-    llama_tokens curr; // empty 
-    size_t n_matched = 0;
-    size_t n_len     = 0; // we'll populate this from the server
+    llama_tokens curr, updated; // empty 
+    size_t n_matched  = 0;
+    size_t n_approved = 0;
+    size_t n_prefix   = 0;
+    uint32_t crc32_approved = 0;  
 
     while (true)
     {
-        call(&http_client, curr, n_matched, n_len);
+        try
+        {
+            json req;
+            req["spec"]         = llama_tokens(curr.begin() + n_approved, curr.end());
+            req["n_prefix"]     = n_approved;
+            req["crc32_prefix"] = crc32_approved;
+            //std::cout << "REQ: " << req << std::endl;
+            auto res = http_client.Post("/hint", req.dump(), "application/json");
+            if (res)
+            {
+                json res_j = json::parse(res->body);
+                //std::cout << "RES: " << res_j << std::endl;
+                updated  = res_j["spec"].get<llama_tokens>();
+                n_prefix = res_j["n_prefix"].get<size_t>();
+                curr.erase(curr.begin() + n_prefix, curr.end());
+                curr.insert(curr.end(), updated.begin(), updated.end());
 
-        if (curr.size() == 0 || curr.size() >= n_len)
+                n_matched  = res_j["n_matched"].get<size_t>();
+                n_approved = res_j["n_approved"].get<size_t>();
+                crc32_approved = res_j["crc32_approved"].get<uint32_t>();
+            }
+        }
+        catch(const std::exception& e)
+        {
+            std::cerr << e.what() << '\n';
+            std::this_thread::sleep_for(500ms);
+            continue;
+        }
+
+        if (curr.size() == 0 || updated.size() == 0 || (n_approved > 0 && curr.size() > n_approved + 32))
         {
             std::cerr << "I: waiting" << std::endl;
             std::this_thread::sleep_for(500ms);
             continue;
         }
 
-        llama_kv_cache_seq_rm(llama_ctx, 0, n_matched, -1);
-        if (n_matched == curr.size())
+        llama_kv_cache_seq_rm(llama_ctx, 0, n_prefix + n_matched, -1);
+        if (n_prefix + n_matched == curr.size())
         {
             n_matched -= 1;
         }
 
         auto bsz = conf.n_batch;
-        for (size_t i = n_matched; i < curr.size();)
+        for (size_t i = n_prefix + n_matched; i < curr.size();)
         {
             llama_batch_clear(batch);
             size_t j;

@@ -72,3 +72,26 @@ static std::vector<llama_token> greedy_tokens(
     }
     return res;
 } 
+
+template<typename iter_t>
+uint32_t crc32(iter_t begin, iter_t end)
+{
+    uint32_t crc = 0xFFFFFFFF;
+    for (auto it = begin; it != end; ++it)
+    {
+        const auto val = *it; 
+        const uint8_t * bytes = reinterpret_cast<const uint8_t*>(&val);
+        for (int i = 0; i < sizeof(val); ++i)
+        {
+            crc = crc ^ bytes[i];
+            for (int j = 0; j < 8; j++)
+            {
+                if (crc & 1)
+                    crc = (crc >> 1) ^ 0xEDB88320;
+                else
+                    crc = crc >> 1;
+            }
+        }
+    }
+    return ~crc;
+}

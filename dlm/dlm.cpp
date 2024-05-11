@@ -21,7 +21,9 @@ using llama_tokens = std::vector<llama_token>;
 struct spec_context
 {
     llama_tokens speculation;
-    std::mutex mtx;
+    size_t       n_approved     = 0;     // how many were validated by main model
+    uint32_t     crc32_approved = 0; // crc32 checksum of approved part 
+    std::mutex   mtx;
 };
 
 struct query_context
@@ -188,33 +190,77 @@ void llama_node::serve()
             auto req_j = json::parse(req.body);
 
             llama_tokens remote_spec = req_j["spec"];
+            size_t   n_prefix        = req_j["n_prefix"]; // offset based on what we approved in the past
+            uint32_t crc32_prefix    = req_j["crc32_prefix"]; // crc32 checksum of non-passed prefix
             {
                 std::lock_guard<std::mutex> _lock(spec_ctx_.mtx);
                 auto& spec = spec_ctx_.speculation;
-                bool match = true;
-                size_t n_matched = remote_spec.size();
-                for (size_t i = 0; i < std::min(spec.size(), remote_spec.size()); i++)
+                //std::cerr << "spec[" << spec.size() << "]";
+                bool prefix_mismatch = false;
+
+                // first, check prefix crc32
+                // if we cannot match, need to return entire spec
+                // likely it's a new query processing, etc.
+                if (n_prefix > spec.size())
                 {
-                    if (spec[i] != remote_spec[i])
-                    {
-                        match = false;
-                        n_matched = i;
-                        break;
-                    }
-                }
-                if (match && spec.size() < remote_spec.size())
-                {
-                    spec = remote_spec;
+                    prefix_mismatch = true;
                 }
                 else
                 {
-                    remote_spec = spec;
+                    uint32_t local_crc32_prefix = crc32(spec.begin(), spec.begin() + n_prefix);
+                    if (local_crc32_prefix != crc32_prefix)
+                    {
+                        prefix_mismatch = true;
+                    }
                 }
-                res_j["spec"]      = remote_spec;
-                res_j["n_matched"] = n_matched;
-
-                // TODO this is probably not thread-safe
-                res_j["n_len"]     = query_ctx_.n_len;
+                if (prefix_mismatch)
+                {
+                    res_j["spec"]           = spec;
+                    // we pass entire spec from position 0
+                    res_j["n_prefix"]       = 0;
+                    // n_matched means 'how many do we need to recompute on speculator'
+                    res_j["n_matched"]      = 0;
+                    // n_approved means 'out of spec we return, how many were approved by main model'
+                    res_j["n_approved"]     = spec_ctx_.n_approved;
+                    res_j["crc32_approved"] = spec_ctx_.crc32_approved;
+                }
+                else
+                {
+                    bool match = true;
+                    size_t n_matched = remote_spec.size();
+                    for (size_t i = 0; i < remote_spec.size() && i + n_prefix < spec.size(); i++)
+                    {
+                        if (spec[i + n_prefix] != remote_spec[i])
+                        {
+                            match = false;
+                            n_matched = i;
+                            break;
+                        }
+                    }
+                    if (match && spec.size() < n_prefix + remote_spec.size())
+                    {
+                        // append newly speculated tokens to local spec
+                        for (size_t i = 0; i < remote_spec.size(); i++)
+                        {
+                            if (i + n_prefix < spec.size())
+                            {
+                                continue;
+                            }
+                            spec.push_back(remote_spec[i]);
+                        }
+                    }
+                    else
+                    {
+                        // we start at the same offset and copy local part of it
+                        remote_spec = llama_tokens(spec.begin() + n_prefix, spec.end());
+                    }
+                    // passing at the same offset
+                    res_j["n_prefix"]       = n_prefix;
+                    res_j["spec"]           = remote_spec;
+                    res_j["n_matched"]      = n_matched;
+                    res_j["n_approved"]     = spec_ctx_.n_approved;
+                    res_j["crc32_approved"] = spec_ctx_.crc32_approved;
+                }
             }
             res.set_content(res_j.dump(), "application/json");
         }
@@ -260,6 +306,8 @@ void llama_node::serve()
             {
                 std::lock_guard<std::mutex> _lock(spec_ctx_.mtx);
                 spec_ctx_.speculation = prompt;
+                spec_ctx_.n_approved     = 0;
+                spec_ctx_.crc32_approved = 0;
             }
 
             // check the match of the prefix for prompt + previously generated part
@@ -441,6 +489,8 @@ int llama_node::generate(const llama_tokens & tokens_list, size_t n_reuse)
                     spec.push_back(tok);
                 }
             }
+            spec_ctx_.n_approved     = next_tokens_pos + next_tokens.size();
+            spec_ctx_.crc32_approved = crc32(spec.begin(), spec.begin() + next_tokens_pos + next_tokens.size());
             input_seq.assign(spec.begin() + n_cur - 1, spec.end());
         }
 
