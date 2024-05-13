@@ -29,24 +29,24 @@ void dbg_color(const std::string & s, const std::string & fg)
     index = 1 - index;
 }
 
-static void dbg_accepted(const std::string & accepted)
+void dbg_accepted(const std::string & accepted)
 {
     static const std::string kGreen = "\033[32m";
     dbg_color(accepted, kGreen);
 }
 
-static void dbg_not_matched(const std::string & accepted)
+void dbg_not_matched(const std::string & accepted)
 {
     dbg_color(accepted, "");
 }
 
-static void dbg_rejected(const std::string & rejected)
+void dbg_rejected(const std::string & rejected)
 {
     static const std::string kRed = "\033[31m";
     dbg_color(rejected, kRed);
 }
 
-static std::vector<llama_token> greedy_tokens(
+std::vector<llama_token> greedy_tokens(
         llama_model * model,
         llama_context * ctx,
         int32_t from_idx,
@@ -85,10 +85,10 @@ uint32_t crc32(iter_t begin, iter_t end)
     {
         const auto val = *it; 
         const uint8_t * bytes = reinterpret_cast<const uint8_t*>(&val);
-        for (int i = 0; i < sizeof(val); ++i)
+        for (uint32_t i = 0; i < sizeof(val); ++i)
         {
             crc = crc ^ bytes[i];
-            for (int j = 0; j < 8; j++)
+            for (uint32_t j = 0; j < 8; j++)
             {
                 if (crc & 1)
                     crc = (crc >> 1) ^ 0xEDB88320;

@@ -40,3 +40,12 @@ target_link_libraries(speculator PRIVATE httplib)
 
 configure_file(${llama.cpp_SOURCE_DIR}/ggml-metal.metal ggml-metal.metal COPYONLY)
 configure_file(${llama.cpp_SOURCE_DIR}/ggml-common.h ggml-common.h COPYONLY)
+
+if(MSVC)
+  target_compile_options(dlm PRIVATE /W4 /WX)
+  target_compile_options(speculator PRIVATE /W4 /WX)
+else()
+  target_compile_options(dlm PRIVATE -Wall -Wextra -Wpedantic)
+  target_compile_options(speculator PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+

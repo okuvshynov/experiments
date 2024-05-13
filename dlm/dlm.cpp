@@ -43,10 +43,15 @@ struct config
     int32_t     port;               // 5555 is default.
 
     std::string model_path;         // path to gguf file
-    uint32_t n_batch;               // batch size
-    uint32_t n_ctx;                 // context size (n_len must be <= n_ctx)
-    uint32_t n_threads;             // how many threads to use for CPU eval.
-    uint32_t n_gpu_layers;          // how many layers to offload to GPU.
+    uint32_t    n_batch;            // batch size
+    uint32_t    n_ctx;              // context size (n_len must be <= n_ctx)
+    uint32_t    n_threads;          // how many threads to use for CPU eval.
+    uint32_t    n_gpu_layers;       // how many layers to offload to GPU.
+
+    std::string print_mode;         // how to print the output. "none", "all", "accepted"
+                                    // none      -- no text output
+                                    // all       -- everythong including rejected tokens
+                                    // accepted  -- non-rejected tokens only
 };
 
 config gen_config(int argc, char ** argv)
@@ -60,7 +65,8 @@ config gen_config(int argc, char ** argv)
         /* n_batch      = */ 512,
         /* n_ctx        = */ 4096,
         /* n_threads    = */ 16,
-        /* n_gpu_layers = */ 0
+        /* n_gpu_layers = */ 0,
+        /* print_mode   = */ "accepted"
     };
     parser<config> p;
     // server options
@@ -73,6 +79,7 @@ config gen_config(int argc, char ** argv)
     p.add_option({"--n_ctx", "--n-ctx", "-c"},                 &config::n_ctx);
     p.add_option({"--threads", "-t"},                          &config::n_threads);
     p.add_option({"--n_gpu_layers", "--n-gpu-layers", "-ngl"}, &config::n_gpu_layers);
+    p.add_option({"--print_mode", "--print-mode", "-pm"},      &config::print_mode);
 
     if (0 != p.parse_options(argc, argv, res))
     {
@@ -83,21 +90,6 @@ config gen_config(int argc, char ** argv)
 }
 
 using json = nlohmann::json;
-
-// This is llama3 specific and should be changed.
-// Maybe we won't need it eventually
-std::string llama3_strip_eot(const std::string & str)
-{
-    return str;
-    const std::string tag = "<|eot_id|>";
-    size_t len = str.size();
-    while (len >= tag.size() && str.substr(len - tag.size(), tag.size()) == tag)
-    {
-        std::cerr << "stripped!" << std::endl;
-        len -= tag.size();
-    }
-    return str.substr(0, len);
-}
 
 std::string llama3_instruct_fmt_msg(const json & j)
 {
@@ -286,7 +278,10 @@ void llama_node::serve()
             query_ctx_.n_predict = static_cast<size_t>(req_j.value("max_tokens", 1024));
             const auto t_start   = ggml_time_us();
 
-            dbg_not_matched(query_ctx_.prompt);
+            if (conf_.print_mode != "none")
+            {
+                dbg_not_matched(query_ctx_.prompt);
+            }
 
             auto prompt = llama_tokenize(llama_ctx_, query_ctx_.prompt, false);
             
@@ -341,7 +336,7 @@ void llama_node::serve()
             }
 
             const auto t_end = ggml_time_us();
-            fprintf(stderr, "I: generation time: %.3lf\n", (t_end - t_start) / 1000000.0);
+            std::cerr << "I: total generation time: " << (t_end - t_start) / 1000000.0 << std::endl;
 
             std::string output;
             for (auto tok: query_ctx_.output)
@@ -349,7 +344,7 @@ void llama_node::serve()
                 output += llama_token_to_piece(llama_ctx_, tok);
             }
             
-            json res_j = { {"content",  {{"text", llama3_strip_eot(output)}}} };
+            json res_j = { {"content",  {{"text", output}}} };
             res.set_content(res_j.dump(), "application/json");
 
             llama_batch_free(query_ctx_.batch);
@@ -371,6 +366,7 @@ int llama_node::generate(const llama_tokens & tokens_list, size_t n_reuse)
     std::cerr << "I: generating, reusing " << n_reuse << " tokens." << std::endl;
     llama_batch & batch = query_ctx_.batch; 
 
+    auto encode_started_us = ggml_time_us();
     // evaluate the initial prompt
     auto bsz = conf_.n_batch;
     for (size_t i = n_reuse; i < tokens_list.size();)
@@ -392,9 +388,12 @@ int llama_node::generate(const llama_tokens & tokens_list, size_t n_reuse)
         }
         i += j;
     }
+    double encode_dur_s = (ggml_time_us() - encode_started_us) / 1000000.0;
+    size_t n_encoded    = tokens_list.size() - n_reuse;
+    fprintf(stderr, "I: encoded %4zu tokens in %8.3f seconds, speed: %8.3f t/s\n", n_encoded, encode_dur_s, n_encoded / encode_dur_s);
 
     // how many tokens are currently accepted
-    int n_cur  = tokens_list.size();
+    size_t n_cur  = tokens_list.size();
 
     llama_tokens input_seq, next_tokens;
     input_seq.push_back(tokens_list.back());
@@ -412,7 +411,7 @@ int llama_node::generate(const llama_tokens & tokens_list, size_t n_reuse)
         }
 
         // this is where next_tokens start
-        int next_tokens_pos = n_cur;
+        size_t next_tokens_pos = n_cur;
         // we always accept at least one new token
         n_cur += 1;
         for (size_t i = 0; i + 1 < input_seq.size(); i++)
@@ -429,7 +428,8 @@ int llama_node::generate(const llama_tokens & tokens_list, size_t n_reuse)
             }
         }
 
-        // empty the non-matching portion of kv cache
+        // empty the non-matching portion of kv cache. 
+        // n_cur is incremented at least once and will be > 0
         llama_kv_cache_seq_rm(llama_ctx_, 0, n_cur - 1, -1);
 
         bool done = false;
@@ -470,26 +470,35 @@ int llama_node::generate(const llama_tokens & tokens_list, size_t n_reuse)
 
             // Write accepted/rejected/not matched
             // this is slow and inefficient but for short strings doesn't matter 
-            std::string accepted = "";
-            for (size_t i = next_tokens_pos; i < next_tokens_pos + n_match; i++)
+            if (conf_.print_mode != "none")
             {
-                accepted += llama_token_to_piece(llama_ctx_, spec[i]);
+                std::string accepted = "";
+                for (size_t i = next_tokens_pos; i < next_tokens_pos + n_match; i++)
+                {
+                    accepted += llama_token_to_piece(llama_ctx_, spec[i]);
+                }
+                dbg_accepted(accepted);
             }
-            dbg_accepted(accepted);
             if (n_match != next_tokens.size())
             {
-                std::string rejected = "";
-                for (size_t i = next_tokens_pos + n_match; i < spec.size(); i++)
+                if (conf_.print_mode == "all")
                 {
-                    rejected += llama_token_to_piece(llama_ctx_, spec[i]);
+                    std::string rejected = "";
+                    for (size_t i = next_tokens_pos + n_match; i < spec.size(); i++)
+                    {
+                        rejected += llama_token_to_piece(llama_ctx_, spec[i]);
+                    }
+                    dbg_rejected(rejected);
                 }
-                dbg_rejected(rejected);
-                std::string not_matched = "";
-                for (size_t i = n_match; i < next_tokens.size(); i++)
+                if (conf_.print_mode != "none")
                 {
-                    not_matched += llama_token_to_piece(llama_ctx_, next_tokens[i]);
+                    std::string not_matched = "";
+                    for (size_t i = n_match; i < next_tokens.size(); i++)
+                    {
+                        not_matched += llama_token_to_piece(llama_ctx_, next_tokens[i]);
+                    }
+                    dbg_not_matched(not_matched);
                 }
-                dbg_not_matched(not_matched);
             }
 
             // remove non-matched tokens
@@ -531,16 +540,17 @@ int llama_node::generate(const llama_tokens & tokens_list, size_t n_reuse)
         logits_to = input_seq.size();
     }
 
-    std::string next_str = "";
-    for (size_t i = 0; i < next_tokens.size(); i++)
+    if (conf_.print_mode != "none")
     {
-        auto sp = llama_token_to_piece(llama_ctx_, next_tokens[i]);
-        dbg_not_matched(sp);
+        for (size_t i = 0; i < next_tokens.size(); i++)
+        {
+            auto sp = llama_token_to_piece(llama_ctx_, next_tokens[i]);
+            dbg_not_matched(sp);
+        }
     }
-    size_t n_gen = n_cur - tokens_list.size();
-    const auto duration_us = ggml_time_us() - t_start;
-    double gen_tps = n_gen * 1000000.0 / duration_us;
-    std::cerr << "I: Generation tps: " << gen_tps << std::endl;
+    double decode_dur_s = (ggml_time_us() - t_start) / 1000000.0;
+    size_t n_decoded    = n_cur - tokens_list.size();
+    fprintf(stderr, "I: decoded %4zu tokens in %8.3f seconds, speed: %8.3f t/s\n", n_decoded, decode_dur_s, n_decoded / decode_dur_s);
 
     return 0;
 }
