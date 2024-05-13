@@ -26,7 +26,7 @@ struct config
     uint32_t n_threads;
     uint32_t n_gpu_layers;
 
-    size_t   n_ahead;      // after we reach n_ahead non-validated tokens we wait.
+    size_t   n_ahead; // after we reach n_ahead non-validated tokens we wait.
 };
 
 config gen_config(int argc, char ** argv)
@@ -105,12 +105,12 @@ int loop(config conf)
         {
             json req;
             
-            // curr[:n_approved] was confirmed by main model. However, as we are not really making 
-            // assumptions that, for example, main server was not restarted, we need to make sure we 
+            // curr[:n_approved] was confirmed by main model. However, we need to make sure we 
             // are working on the same sequence. So we pass the length of the prefix (=n_prefix) and 
             // its crc32 checksum. Main server will check that it matches ground truth sequence.
-            // Alternative way to handle this would be to have some sort of query_id generated.
-            // At small context lengths this doesn't matter and we could just pass entire speculation.
+            // Alternative way to handle this would be to have some sort of query_id or session_id.
+            // 
+            // At small context lengths wouldn't be needed and we could just pass entire speculation.
             // For longer conversation/large contexts from data sources it would become slow to pass
             // entire token lists back and forth.
 

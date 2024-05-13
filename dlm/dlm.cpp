@@ -28,24 +28,24 @@ struct spec_context
 
 struct query_context
 {
-    std::string  prompt;         // original input
-    llama_tokens last_session;   // prompt + output for the latest completion. 
-    llama_tokens output;         // generated output w/o prompt
-    llama_batch  batch;          // llama batch we reuse
-    size_t       n_len;          // how many tokens do we need (prompt + generated)
-    size_t       n_predict;      // how many tokens to produce
-    std::mutex   mtx;            // ensure we process 1 query at a time
+    std::string  prompt;       // original input
+    llama_tokens last_session; // prompt + output for the latest completion. 
+    llama_tokens output;       // generated output w/o prompt
+    llama_batch  batch;        // llama batch we reuse
+    size_t       n_len;        // how many tokens at most (prompt + generated)
+    size_t       n_predict;    // how many tokens to produce
+    std::mutex   mtx;          // ensure we process 1 query at a time
 };
 
 struct config
 {
-    std::string host;               // interface to listen on. "0.0.0.0" is default. 
-    int32_t     port;               // port to listen on. 5555 is default.
+    std::string host;               // to listen on. "0.0.0.0" is default. 
+    int32_t     port;               // 5555 is default.
 
     std::string model_path;         // path to gguf file
     uint32_t n_batch;               // batch size
     uint32_t n_ctx;                 // context size (n_len must be <= n_ctx)
-    uint32_t n_threads;             // how many threads to use for CPU evaluation
+    uint32_t n_threads;             // how many threads to use for CPU eval.
     uint32_t n_gpu_layers;          // how many layers to offload to GPU.
 };
 
@@ -84,7 +84,8 @@ config gen_config(int argc, char ** argv)
 
 using json = nlohmann::json;
 
-// This is llama3 specific and should be changed
+// This is llama3 specific and should be changed.
+// Maybe we won't need it eventually
 std::string llama3_strip_eot(const std::string & str)
 {
     return str;
@@ -301,6 +302,8 @@ void llama_node::serve()
 
             query_ctx_.batch = llama_batch_init(conf_.n_batch, 0, 1);
             query_ctx_.n_len = query_ctx_.n_predict + prompt.size();
+            // TODO come up with naming which would make it clear if something 
+            // is a string or list of tokens
             query_ctx_.output.clear();
 
             // Init speculation context
