@@ -33,7 +33,6 @@ struct query_context
     llama_tokens output;       // generated output w/o prompt
     llama_batch  batch;        // llama batch we reuse
     size_t       n_len;        // how many tokens at most (prompt + generated)
-    size_t       n_predict;    // how many tokens to produce
     std::mutex   mtx;          // ensure we process 1 query at a time
 };
 
@@ -275,9 +274,9 @@ void llama_node::serve()
             auto req_j = json::parse(req.body);
 
             query_ctx_.prompt    = llama3_instruct_fmt_msg(req_j);
-            query_ctx_.n_predict = static_cast<size_t>(req_j.value("max_tokens", 1024));
+            size_t n_predict     = static_cast<size_t>(req_j.value("max_tokens", 1024));
+            
             const auto t_start   = ggml_time_us();
-
             if (conf_.print_mode != "none")
             {
                 dbg_not_matched(query_ctx_.prompt);
@@ -295,14 +294,14 @@ void llama_node::serve()
                 // TODO: return error to client
                 return;
             }
-            if (conf_.n_ctx < query_ctx_.n_predict + prompt.size())
+            if (conf_.n_ctx < n_predict + prompt.size())
             {
-                std::cerr << "W: context not large enough, might trim output" << std::endl;
-                query_ctx_.n_predict = conf_.n_ctx - prompt.size();
+                std::cerr << "W: context not large enough, might trim output." << std::endl;
+                n_predict = conf_.n_ctx - prompt.size();
             }
 
             query_ctx_.batch = llama_batch_init(conf_.n_batch, 0, 1);
-            query_ctx_.n_len = query_ctx_.n_predict + prompt.size();
+            query_ctx_.n_len = n_predict + prompt.size();
             // TODO come up with naming which would make it clear if something 
             // is a string or list of tokens
             query_ctx_.output.clear();

@@ -1,0 +1,40 @@
+1. Compare with speculate.cpp:
+    - ./speculative -m ../llms/gguf/Meta-Llama-3-70B-Instruct-v2.Q8_0-00001-of-00003.gguf -md ../llms/gguf/Meta-Llama-3-8B-Instruct-v2.Q4_0.gguf -p "Please illustate the difference between concurrency and parallalism with some python snippet." -e -ngl 99 -t 4 -n 1024 -c 4096 -s 8 --top_k 1
+
+```
+encoded   18 tokens in    0.577 seconds, speed:   31.190 t/s
+decoded  605 tokens in   68.075 seconds, speed:    8.887 t/s
+
+n_draft   = 5
+n_predict = 605
+n_drafted = 670
+n_accept  = 470
+accept    = 70.149%
+
+draft:
+
+llama_print_timings:        load time =     291.36 ms
+llama_print_timings:      sample time =      23.97 ms /   670 runs   (    0.04 ms per token, 27948.11 tokens per second)
+llama_print_timings: prompt eval time =   61447.90 ms /   285 tokens (  215.61 ms per token,     4.64 tokens per second)
+llama_print_timings:        eval time =    5987.46 ms /   536 runs   (   11.17 ms per token,    89.52 tokens per second)
+llama_print_timings:       total time =   68653.47 ms /   821 tokens
+
+target:
+
+llama_print_timings:        load time =    2324.75 ms
+llama_print_timings:      sample time =    4248.42 ms /   135 runs   (   31.47 ms per token,    31.78 tokens per second)
+llama_print_timings: prompt eval time =   54015.48 ms /   822 tokens (   65.71 ms per token,    15.22 tokens per second)
+llama_print_timings:        eval time =       0.00 ms /     1 runs   (    0.00 ms per token,      inf tokens per second)
+llama_print_timings:       total time =   69207.73 ms /   823 tokens
+```
+
+2. Local run on M2 Ultra GPU + CPU: 
+
+./dlm -m ../../../llms/gguf/Meta-Llama-3-70B-Instruct-v2.Q8_0-00001-of-00003.gguf -ngl 99 -pm none
+./speculator -m ../../../llms/gguf/Meta-Llama-3-8B-Instruct-v2.Q4_0.gguf
+
+I: generating, reusing 0 tokens.
+I: encoded  102 tokens in    3.228 seconds, speed:   31.603 t/s
+I: decoded  132 tokens in   10.927 seconds, speed:   12.080 t/s
+I: total generation time: 14.1571
+
