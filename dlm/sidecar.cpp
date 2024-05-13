@@ -110,8 +110,9 @@ int loop(config conf)
             // its crc32 checksum. Main server will check that it matches ground truth sequence.
             // Alternative way to handle this would be to have some sort of query_id or session_id.
             // 
-            // At small context lengths wouldn't be needed and we could just pass entire speculation.
-            // For longer conversation/large contexts from data sources it would become slow to pass
+            // At small context lengths delta passing wouldn't be needed and 
+            // we could just pass entire speculation. For longer conversation
+            // with large contexts would become slow to pass
             // entire token lists back and forth.
 
             req["candidate"]     = llama_tokens(curr.begin() + n_approved, curr.end());
@@ -120,7 +121,7 @@ int loop(config conf)
             // what's the checksum of the omitted prefix.
             req["crc32_prefix"] = crc32_approved;
 
-            // should this be some long poll when we wait?
+            // TODO: should this be some long poll when we wait?
             auto res = http_client.Post("/hint", req.dump(), "application/json");
             if (res)
             {

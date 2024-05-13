@@ -30,11 +30,14 @@ llama_print_timings:       total time =   69207.73 ms /   823 tokens
 
 2. Local run on M2 Ultra GPU + CPU: 
 
-./dlm -m ../../../llms/gguf/Meta-Llama-3-70B-Instruct-v2.Q8_0-00001-of-00003.gguf -ngl 99 -pm none
-./speculator -m ../../../llms/gguf/Meta-Llama-3-8B-Instruct-v2.Q4_0.gguf
+./service -m ../../../llms/gguf/Meta-Llama-3-70B-Instruct-v2.Q8_0-00001-of-00003.gguf -ngl 99 -pm none
+./sidecar -m ../../../llms/gguf/Meta-Llama-3-8B-Instruct-v2.Q4_0.gguf
 
 I: generating, reusing 0 tokens.
 I: encoded  102 tokens in    3.228 seconds, speed:   31.603 t/s
 I: decoded  132 tokens in   10.927 seconds, speed:   12.080 t/s
 I: total generation time: 14.1571
+
+3. M2 Ultra only 
+
 

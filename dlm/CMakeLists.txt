@@ -27,25 +27,25 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(llama.cpp)
 
-add_executable(serv serv.cpp)
-add_executable(hint hint.cpp)
+add_executable(service service.cpp)
+add_executable(sidecar sidecar.cpp)
 
-target_link_libraries(serv PRIVATE common) # from llama.cpp
-target_link_libraries(serv PRIVATE nlohmann_json::nlohmann_json)
-target_link_libraries(serv PRIVATE httplib)
+target_link_libraries(service PRIVATE common) # from llama.cpp
+target_link_libraries(service PRIVATE nlohmann_json::nlohmann_json)
+target_link_libraries(service PRIVATE httplib)
 
-target_link_libraries(hint PRIVATE common) # from llama.cpp
-target_link_libraries(hint PRIVATE nlohmann_json::nlohmann_json)
-target_link_libraries(hint PRIVATE httplib)
+target_link_libraries(sidecar PRIVATE common) # from llama.cpp
+target_link_libraries(sidecar PRIVATE nlohmann_json::nlohmann_json)
+target_link_libraries(sidecar PRIVATE httplib)
 
 configure_file(${llama.cpp_SOURCE_DIR}/ggml-metal.metal ggml-metal.metal COPYONLY)
 configure_file(${llama.cpp_SOURCE_DIR}/ggml-common.h ggml-common.h COPYONLY)
 
 if(MSVC)
-  target_compile_options(serv PRIVATE /W4 /WX)
-  target_compile_options(hint PRIVATE /W4 /WX)
+  target_compile_options(service PRIVATE /W4 /WX)
+  target_compile_options(sidecar PRIVATE /W4 /WX)
 else()
-  target_compile_options(serv PRIVATE -Wall -Wextra -Wpedantic)
-  target_compile_options(hint PRIVATE -Wall -Wextra -Wpedantic)
+  target_compile_options(service PRIVATE -Wall -Wextra -Wpedantic)
+  target_compile_options(sidecar PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
