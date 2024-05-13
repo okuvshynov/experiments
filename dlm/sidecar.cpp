@@ -9,7 +9,6 @@
 #include <nlohmann/json.hpp>
 #include <httplib.h>
 
-#include "config.h"
 #include "utils.h"
 
 namespace llama_peer
