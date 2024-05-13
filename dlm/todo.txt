@@ -41,3 +41,16 @@ I: total generation time: 14.1571
 3. M2 Ultra only 
 
 
+
+4. M2 + M1
+
+
+==================
+[ ] reuse cache for conversations - now we reuse large part of it but not most recent assistant reply. For example, if we have 4 questions by user and 4 replies, on the next query we'll reuse the cache for 4 questions and 3 replies.
+[ ] other models
+[ ] experiment on large CPU-only instances
+[ ] can it work on iPad?
+[ ] non greedy -- beam search, tree, etc.
+[ ] minimal web ui. Incremental precompute from web UI?
+[ ] make it work with qna
+[ ] streaming-like API

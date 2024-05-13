@@ -12,7 +12,7 @@
 
 #include "utils.h"
 
-namespace llama_peer
+namespace llama_duo
 {
 
 using llama_tokens = std::vector<llama_token>;
@@ -558,9 +558,9 @@ int llama_service::generate(const llama_tokens & tokens_list, size_t n_reuse)
 int main(int argc, char ** argv)
 {
     llama_backend_init();
-    auto conf = llama_peer::gen_config(argc, argv);
+    auto conf = llama_duo::gen_config(argc, argv);
 
-    auto node = llama_peer::llama_service::create(conf);
+    auto node = llama_duo::llama_service::create(conf);
     if (node != nullptr)
     {
         node->serve();

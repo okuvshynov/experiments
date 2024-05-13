@@ -9,7 +9,7 @@
 #include <llama.h>
 #include <common.h>
 
-namespace llama_peer
+namespace llama_duo
 {
 
 // debug visualization utils for tokens which were:
