@@ -93,6 +93,7 @@ std::string llama3_strip_eot(const std::string & str)
     size_t len = str.size();
     while (len >= tag.size() && str.substr(len - tag.size(), tag.size()) == tag)
     {
+        std::cerr << "stripped!" << std::endl;
         len -= tag.size();
     }
     return str.substr(0, len);
@@ -287,7 +288,12 @@ void llama_node::serve()
 
             dbg_not_matched(query_ctx_.prompt);
 
-            auto prompt = llama_tokenize(llama_ctx_, query_ctx_.prompt, true);
+            auto prompt = llama_tokenize(llama_ctx_, query_ctx_.prompt, false);
+            
+            // TODO: adding these two separate newlines for llama3 makes it match the last sequence
+            // What's the right way to handle this?
+            // prompt.push_back(198);
+            // prompt.push_back(198);
             if (conf_.n_ctx < prompt.size())
             {
                 std::cerr << "E: context not large enough, unable to process prompt" << std::endl;
@@ -315,7 +321,9 @@ void llama_node::serve()
             }
 
             // check the match of the prefix for prompt + previously generated part
-            // leave at least 1 input token in prompt
+            // leave at least 1 input token in prompt. 
+            // TODO: seems like there's some mismatch between \n\n in the middle and \n\n 
+            // in end of string, so last reply of assistant has to be reprocessed. 
             size_t i = 0;
             for (i = 0; i < query_ctx_.last_session.size() && i + 1 < prompt.size(); i++)
             {
@@ -360,14 +368,7 @@ void llama_node::serve()
 
 int llama_node::generate(const llama_tokens & tokens_list, size_t n_reuse)
 {
-    std::cerr << std::endl;
-    for (size_t i = 0; i < n_reuse; i++)
-    {
-        std::cerr << llama_token_to_piece(llama_ctx_, tokens_list[i]);
-    }
-    std::cerr << std::endl;
-    std::cerr << std::endl;
-    std::cerr << "I: generating and reusing " << n_reuse << " tokens." << std::endl;
+    std::cerr << "I: generating, reusing " << n_reuse << " tokens." << std::endl;
     llama_batch & batch = query_ctx_.batch; 
 
     // evaluate the initial prompt
