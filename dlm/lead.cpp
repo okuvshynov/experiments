@@ -108,15 +108,15 @@ std::string llama3_instruct_fmt_msg(const json & j)
     return oss.str();
 }
 
-class llama_service
+class llama_lead
 {
   public:
-    static std::unique_ptr<llama_service> create(config conf);
-    virtual ~llama_service();
+    static std::unique_ptr<llama_lead> create(config conf);
+    virtual ~llama_lead();
     void serve();
 
   private:
-    explicit llama_service(config conf);
+    explicit llama_lead(config conf);
     int generate(const llama_tokens & tokens_list, size_t n_reuse = 0);
 
     const config    conf_;
@@ -129,9 +129,9 @@ class llama_service
     httplib::Server http_server_;
 };
 
-std::unique_ptr<llama_service> llama_service::create(config conf)
+std::unique_ptr<llama_lead> llama_lead::create(config conf)
 {
-    auto self = std::unique_ptr<llama_service>(new llama_service(conf));
+    auto self = std::unique_ptr<llama_lead>(new llama_lead(conf));
 
     llama_model_params model_params = llama_model_default_params();
     model_params.n_gpu_layers       = conf.n_gpu_layers;
@@ -159,11 +159,11 @@ std::unique_ptr<llama_service> llama_service::create(config conf)
     return self;
 }
 
-llama_service::llama_service(config conf): conf_(conf)
+llama_lead::llama_lead(config conf): conf_(conf)
 {
 }
 
-llama_service::~llama_service()
+llama_lead::~llama_lead()
 {
     if (llama_ctx_ != nullptr)
     {
@@ -175,7 +175,7 @@ llama_service::~llama_service()
     }
 }
 
-void llama_service::serve()
+void llama_lead::serve()
 {
     http_server_.Post("/hint", [this](const httplib::Request & req, httplib::Response & res)
     {
@@ -359,7 +359,7 @@ void llama_service::serve()
     http_server_.listen(conf_.host, conf_.port);
 }
 
-int llama_service::generate(const llama_tokens & tokens_list, size_t n_reuse)
+int llama_lead::generate(const llama_tokens & tokens_list, size_t n_reuse)
 {
     std::cerr << "I: generating, reusing " << n_reuse << " tokens." << std::endl;
     llama_batch & batch = query_ctx_.batch; 
@@ -560,7 +560,7 @@ int main(int argc, char ** argv)
     llama_backend_init();
     auto conf = llama_duo::gen_config(argc, argv);
 
-    auto node = llama_duo::llama_service::create(conf);
+    auto node = llama_duo::llama_lead::create(conf);
     if (node != nullptr)
     {
         node->serve();
