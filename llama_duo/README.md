@@ -197,101 +197,160 @@ Within S, tokens might be in the following states:
 
 Let's look at the following example:
 
-consider prompt 'The quick brown'. All sequences L, B and S are initialized with it.
+```lead``` got a request from chat.py with prompt ```[The, quick, brown]```. Sequences L and S are initialized with it.
 
-```lead``` and ```back``` start working on it in parallel. All operations involving S are guarded with mutex so that lead and back would not modify it simultaneously. Let's consider the following event sequence.
+```lead``` and ```back``` start working on it in parallel. All operations involving read/write from/to S are guarded with mutex so that lead and back would not modify it simultaneously. Let's consider the following event sequence.
 
-```
+0. Initialization
+<pre>
+L = [the, quick, brown]
+B = []
+S = [<b>the, quick, brown</b>]
+</pre>
+
+1. ```back``` calls ```lead``` peridically to check if there's some work. If yes, set B := S
+<pre>
 L = [the, quick, brown]
 B = [the, quick, brown]
-S = [the, quick, brown]
+S = [<b>the, quick, brown</b>]
+</pre>
 
-back produces 'fox'.
+2. back produces 'fox'.
+<pre>
 L = [the, quick, brown]
 B = [the, quick, brown, fox]
-S = [the, quick, brown]
+S = [<b>the, quick, brown</b>]
+</pre>
 
-back calls lead and compares B with S. 'fox' and appended to the S in 'not_rejected' state. 
+
+3. ```back``` calls ```lead``` and compares B with S. 'fox' and appended to the S in 'not_rejected' state.
+<pre>
 L = [the, quick, brown]
 B = [the, quick, brown, fox]
-S = [the, quick, brown, fox]
+S = [<b>the, quick, brown</b>, fox]  
+</pre>
 
-back produces 'jumps'.
+
+4. ```back``` produces 'jumps'.
+<pre>
 L = [the, quick, brown]
 B = [the, quick, brown, fox, jumps]
-S = [the, quick, brown, fox]
+S = [<b>the, quick, brown</b>, fox]  
+</pre>
 
-back calls lead and compares B with S. 'jumps' is appended to S in 'not_rejected' state. 
+
+5. ```back``` calls ```lead``` and compares B with S. 'jumps' is appended to S in 'not_rejected' state.
+<pre>
 L = [the, quick, brown]
 B = [the, quick, brown, fox, jumps]
-S = [the, quick, brown, fox, jumps]
+S = [<b>the, quick, brown</b>, fox, jumps]
+</pre>
 
-back produces 'into'.
+
+6. ```back``` produces 'into'.
+<pre>
 L = [the, quick, brown]
 B = [the, quick, brown, fox, jumps, into]
-S = [the, quick, brown, fox, jumps]
+S = [<b>the, quick, brown</b>, fox, jumps]
+</pre>
 
-back calls lead and compares B with S. 'into' is appended to S in 'not_rejected' state. 
+
+7. ```back``` calls ```lead``` and compares B with S. 'into' is appended to S in 'not_rejected' state.
+<pre>
 L = [the, quick, brown]
 B = [the, quick, brown, fox, jumps, into]
-S = [the, quick, brown, fox, jumps, into]
+S = [<b>the, quick, brown</b>, fox, jumps, into]
+</pre>
 
-lead produces 'fox'. 'fox' is appended to L.
+
+8. ```lead``` produces 'fox'. 'fox' is appended to L.
+<pre>
 L = [the, quick, brown, fox]
 B = [the, quick, brown, fox, jumps, into]
-S = [the, quick, brown, fox, jumps, into]
+S = [<b>the, quick, brown</b>, fox, jumps, into]
+</pre>
 
-lead compares L with S. As 'fox' matches, it is marked is approved, 'jumps into' stays not_rejected, main model starts working on input of 3 tokens 'fox jumps into'.
+
+9. ```lead``` compares L with S. As 'fox' matches, it is marked is approved, 'jumps into' stays not_rejected, main model starts working on input of 3 tokens 'fox jumps into'.
+<pre>
 L = [the, quick, brown, fox]
 B = [the, quick, brown, fox, jumps, into]
-S = [the, quick, brown, fox, jumps, into]
+S = [<b>the, quick, brown, fox</b>, jumps, into]
+</pre>
 
-back produces 'the'.
+
+10. ```back``` produces 'the'.
+<pre>
 L = [the, quick, brown, fox]
 B = [the, quick, brown, fox, jumps, into, the]
-S = [the, quick, brown, fox, jumps, into]
+S = [<b>the, quick, brown, fox</b>, jumps, into]
+</pre>
 
-back calls lead and compares B with S. 'the' is appended to S in 'not_rejected' state.
+
+11. ```back``` calls ```lead``` and compares B with S. 'the' is appended to S in 'not_rejected' state.
+<pre>
 L = [the, quick, brown, fox]
 B = [the, quick, brown, fox, jumps, into, the]
-S = [the, quick, brown, fox, jumps, into, the]
+S = [<b>the, quick, brown, fox</b>, jumps, into, the]
+</pre>
 
-back produces 'big'.
+
+12. ```back``` produces 'big'.
+<pre>
 L = [the, quick, brown, fox]
 B = [the, quick, brown, fox, jumps, into, the, big]
-S = [the, quick, brown, fox, jumps, into, the]
+S = [<b>the, quick, brown, fox</b>, jumps, into, the]
+</pre>
 
-back calls lead and compares B with S. 'big' is appended to S in 'not_rejected' state.
+
+13. ```back``` calls ```lead``` and compares B with S. 'big' is appended to S in 'not_rejected' state.
+<pre>
 L = [the, quick, brown, fox]
 B = [the, quick, brown, fox, jumps, into, the, big]
-S = [the, quick, brown, fox, jumps, into, the, big]
+S = [<b>the, quick, brown, fox</b>, jumps, into, the, big]
+</pre>
 
-lead produces 'jumps over the'. First, we need to compare the output with input (in this case, 'fox jumps into'). As 'jumps' matches, but 'over' != 'into', we accept 'jumps over' and append it to L. We cannot accept 'the', because it was produced as an continuation to the sequence 'the quick brown fox jumps into', and we now know that 'into' was wrong.
+
+14. ```lead``` produces 'jumps over the'. First, we need to compare the output with input (in this case, 'fox jumps into'). As 'jumps' matches, but 'over' != 'into', we accept 'jumps over' and append it to L. We cannot accept 'the', because it was produced as an continuation to the sequence 'the quick brown fox jumps into', and we now know that 'into' was wrong.
+<pre>
 L = [the, quick, brown, fox, jumps, over]
 B = [the, quick, brown, fox, jumps, into, the, big]
-S = [the, quick, brown, fox, jumps, into, the, big]
+S = [<b>the, quick, brown, fox</b>, jumps, into, the, big]
+</pre>
 
-lead compares L with S. We mark 'into the big' as rejected, remove them from the sequence S and assign S := L. ```lead``` works on a single input 'over'.
+
+15. ```lead``` compares L with S. We mark 'into the big' as rejected, remove them from the sequence S and assign S := L. ```lead``` works on a single input 'over'.
+<pre>
 L = [the, quick, brown, fox, jumps, over]
 B = [the, quick, brown, fox, jumps, into, the, big]
-S = [the, quick, brown, fox, jumps, over]
+S = [<b>the, quick, brown, fox, jumps, over</b>]
+</pre>
 
-back produces 'puddle'.
+
+16. ```back``` produces 'puddle'.
+<pre>
 L = [the, quick, brown, fox, jumps, over]
 B = [the, quick, brown, fox, jumps, into, the, big, puddle]
-S = [the, quick, brown, fox, jumps, over]
+S = [<b>the, quick, brown, fox, jumps, over</b>]
+</pre>
 
-back calls lead and compares B with S. We see a mismatch, append nothing to S, and assign B := S.
+
+17. ```back``` calls lead and compares B with S. We see a mismatch, append nothing to S, and assign B := S.
+<pre>
 L = [the, quick, brown, fox, jumps, over]
 B = [the, quick, brown, fox, jumps, over]
-S = [the, quick, brown, fox, jumps, over]
+S = [<b>the, quick, brown, fox, jumps, over</b>]
+</pre>
 
-```
+The actual implementation is a little more complicated because:
+1. communication between lead and back involves passing 'deltas' rather than entire sequences - otherwise we'd end up with considerable network latency for large contexts.
+2. ```back``` needs to support starting in the middle;
 
-The actual implementation is a little more complicated because communication between lead and back involves passing 'deltas' rather than entire sequences - otherwise we'd end up with considerable network latency for large contexts.
+It's probably best to check the code to see the details.
 
 
 ## Comparison with synchronous speculative decoding 
+
 
 ## Configuration options
 
