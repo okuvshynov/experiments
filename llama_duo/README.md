@@ -3,27 +3,29 @@
 llama duo is an attempt to make a simple speculative decoding work in parallel with the main model.
 Not every hardware/model combination would benefit from such setup, here are some examples where it worked reasonably well:
 1. Llama3-8B @ fp16 running on Apple M2 24Gb laptop and Llama3-8B@Q4 running Apple M1 16Gb mac mini.
-2. Llama3-70B @ Q8 running on M2 Ultra GPU and Llama3-8B @Q3 running on same M2 Ultra CPUs.
+2. Llama3-70B @ Q8 running on M2 Ultra GPU and Llama3-8B @Q4 running on same M2 Ultra CPUs.
 
 The benefits of doing it:
 1. You can run a decent speculative model without incurring large latency cost for synchronous speculative model evaluation.
 2. You can fit a decent speculative model into memory, if you have an extra device.
+3. You are likely to find such speculative model (smaller size of the same family, quantization) and not have to retrain/tune model or its part.
 
 ## Dependencies
 
-1. llama.cpp
-2. nlohmann/json
-3. cpp-httplib
+1. [llama.cpp](https://github.com/ggerganov/llama.cpp)
+2. [nlohmann/json](https://github.com/nlohmann/json)
+3. [cpp-httplib](https://github.com/yhirose/cpp-httplib)
 
-For the chat.py, needs python and requests.
+For the CLI chat.py, needs python and requests module.
 
 ## Installation
 
-1. clone this repo
-2. ```mkdir _build && cd _build```
-3. ```cmake ..```
-4. ```make -j 4```
-5. ```pip install requests```
+```
+mkdir _build && cd _build
+cmake ..
+make -j 4
+pip install requests
+```
 
 After this step you should have two binaries built: ```lead``` and ```back```. 
 
@@ -31,21 +33,29 @@ After this step you should have two binaries built: ```lead``` and ```back```.
 
 Here we run it on single M2 Ultra.
 
-Start lead with Llama3-70B@Q8 model with all layers on GPU and default settings for interface/port (0.0.0.0:5555):
+Start lead with Llama3-70B@Q8 model with all layers on GPU and default settings for interface/port 0.0.0.0:5555:
 
-```./lead -m ../../../llms/gguf/Meta-Llama-3-70B-Instruct-v2.Q8_0-00001-of-00003.gguf --n-gpu-layers 99```
+```
+./lead -m ../../../llms/gguf/Meta-Llama-3-70B-Instruct-v2.Q8_0-00001-of-00003.gguf --n-gpu-layers 99
+```
 
 Start back with Llama3-8B@Q4 model on 16 CPU threads. It looks for lead service on localhost:5555 by default.
 
-```./back -m ../../../llms/gguf/Meta-Llama-3-8B-Instruct-v2.Q4_0.gguf --n-gpu-layers 0 --threads 16```
+```
+./back -m ../../../llms/gguf/Meta-Llama-3-8B-Instruct-v2.Q4_0.gguf --n-gpu-layers 0 --threads 16
+```
 
 Start basic chat command-line interface (also defaults to localhost:5555):
 
-```python chat.py```
+```
+python chat.py
+```
 
 In chat window ask the model something: 
 
-```You: Illustrate the difference between concurrency and parallelism in python.```
+```
+You: Illustrate the difference between concurrency and parallelism in python.
+```
 
 What we should observe:
 
@@ -70,13 +80,19 @@ I: total generation time: 78.2696
 
 Note that ```back``` service is optional - we can turn it off, run the main model as before:
 
-```./lead -m ../../../llms/gguf/Meta-Llama-3-70B-Instruct-v2.Q8_0-00001-of-00003.gguf --n-gpu-layers 99```
+```
+./lead -m ../../../llms/gguf/Meta-Llama-3-70B-Instruct-v2.Q8_0-00001-of-00003.gguf --n-gpu-layers 99
+```
 
-```python chat.py```
+```
+python chat.py
+```
 
 In chat window ask the same question: 
 
-```You: Illustrate the difference between concurrency and parallelism in python.```
+```
+You: Illustrate the difference between concurrency and parallelism in python.
+```
 
 And observe the same output.
 
@@ -92,17 +108,25 @@ As we can see, it is slower.
 
 We can also start/stop/simulate non-availability/failure for ```back``` service. As in previous example, start main model and chat:
 
-```./lead -m ../../../llms/gguf/Meta-Llama-3-70B-Instruct-v2.Q8_0-00001-of-00003.gguf --n-gpu-layers 99```
+```
+./lead -m ../../../llms/gguf/Meta-Llama-3-70B-Instruct-v2.Q8_0-00001-of-00003.gguf --n-gpu-layers 99
+```
 
-```python chat.py```
+```
+python chat.py
+```
 
 In chat window ask the model the same question: 
 
-```You: Illustrate the difference between concurrency and parallelism in python.```
+```
+You: Illustrate the difference between concurrency and parallelism in python.
+```
 
 At some moment during generation start the ```back``` service:
 
-```./back -m ../../../llms/gguf/Meta-Llama-3-8B-Instruct-v2.Q4_0.gguf --n-gpu-layers 0 --threads 16```
+```
+./back -m ../../../llms/gguf/Meta-Llama-3-8B-Instruct-v2.Q4_0.gguf --n-gpu-layers 0 --threads 16
+```
 
 ```back``` service would catch up with ```lead``` by processing input prompt + the tokens generated to this point and start speculating.
 The performance would be somewhere in between the two runs above
@@ -135,9 +159,10 @@ Both of these services will run on GPUs. The model they run is essentially the s
 
 Now on the macbook start the chat and ask the same question:
 
-```python chat.py```
-
-```You: Illustrate the difference between concurrency and parallelism in python.```
+```
+python chat.py
+You: Illustrate the difference between concurrency and parallelism in python.
+```
 
 ```
 ...
