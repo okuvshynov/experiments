@@ -104,6 +104,30 @@ We can also kill the back service sometime in the middle of query processing.
 
 ## Distributed example
 
+On M2 Macbook with 24 Gb memory start lead service with full fp16 precision 8B model:
+```
+./lead -m ../../../llms/gguf/Meta-Llama-3-8B-Instruct-fp16.gguf -ngl 99
+```
+
+On M1 Mini with 16Gb memory start back service and specify the host:
+```
+./back -m ../../../llms/gguf/Meta-Llama-3-8B-Instruct.Q3_K_M.gguf --host 169.254.226.241 -ngl 99
+```
+
+Both of these services will run on GPUs. The model they run is essentially the same, except smaller and slower machine runs more aggressively quantized version.
+
+Now on the macbook start the chat and ask the same question:
+```python chat.py```
+```You: Illustrate the difference between concurrency and parallelism in python.```
+
+```
+I: encoded  105 tokens in   19.255 seconds, speed:    5.453 t/s
+...
+I: decoded  737 tokens in   81.129 seconds, speed:    9.084 t/s
+I: total generation time: 100.386
+```
+
+Running same model without speculation would be much slower:
 
 
 ## How it works
