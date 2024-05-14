@@ -46,7 +46,7 @@ struct config
     uint32_t    n_threads;          // how many threads to use for CPU eval.
     uint32_t    n_gpu_layers;       // how many layers to offload to GPU.
 
-    std::string print_mode;         // how to print the output. "none", "all", "accepted"
+    std::string print_mode;         // how to print the output to stdout. 
                                     // none      -- no text output
                                     // all       -- everythong including rejected tokens
                                     // accepted  -- non-rejected tokens only
@@ -56,8 +56,8 @@ config gen_config(int argc, char ** argv)
 {
     config res = 
     {
-        /* host = */ "0.0.0.0",
-        /* port = */ 5555,
+        /* host         = */ "0.0.0.0",
+        /* port         = */ 5555,
 
         /* model_path   = */ "",
         /* n_batch      = */ 512,
@@ -112,7 +112,7 @@ class llama_lead
 {
   public:
     static std::unique_ptr<llama_lead> create(config conf);
-    virtual ~llama_lead();
+    ~llama_lead();
     void serve();
 
   private:
@@ -121,10 +121,9 @@ class llama_lead
 
     const config    conf_;
     query_context   query_ctx_;
-    spec_context    spec_ctx_;       // speculative context
-
+    spec_context    spec_ctx_;
     llama_model   * model_;
-    llama_context * llama_ctx_;      // llama context
+    llama_context * llama_ctx_;
 
     httplib::Server http_server_;
 };
@@ -185,15 +184,18 @@ void llama_lead::serve()
             auto req_j = json::parse(req.body);
 
             llama_tokens remote_candidate = req_j["candidate"];
-            size_t       n_prefix         = req_j["n_prefix"]; // offset based on what we approved in the past
-            uint32_t     crc32_prefix     = req_j["crc32_prefix"]; // crc32 checksum of non-passed prefix
+
+            // offset based on what we approved in the past
+            size_t       n_prefix         = req_j["n_prefix"];
+            // crc32 checksum of non-passed prefix
+            uint32_t     crc32_prefix     = req_j["crc32_prefix"]; 
             {
                 std::lock_guard<std::mutex> _lock(spec_ctx_.mtx);
                 auto& candidate = spec_ctx_.candidate;
                 bool prefix_mismatch = false;
 
-                // first, check prefix crc32. if we cannot match, need to return entire candidate
-                // likely it's a new query processing, etc.
+                // first, check prefix crc32. if we cannot match, need to return
+                // entire candidate. likely it's a new query processing, etc.
                 if (n_prefix > candidate.size())
                 {
                     prefix_mismatch = true;
@@ -211,10 +213,11 @@ void llama_lead::serve()
                     res_j["candidate"]      = candidate;
                     // we pass entire candidate from position 0
                     res_j["n_prefix"]       = 0;
-                    // n_not_rejected means 'how many do we not need to recompute on speculator'
+                    // how many do we not need to recompute on speculator
                     res_j["n_not_rejected"] = 0;
-                    // n_approved means 'out of spec we return, how many were approved by main model'
+                    // how many were approved by main model
                     res_j["n_approved"]     = spec_ctx_.n_approved;
+                    // crc checksum of the approved part
                     res_j["crc32_approved"] = spec_ctx_.crc32_approved;
                 }
                 else
@@ -265,7 +268,7 @@ void llama_lead::serve()
 
     http_server_.Post("/messages", [this](const httplib::Request & req, httplib::Response & res)
     {
-        // we process one message at a time anyway.
+        // we process one message at a time anyway for now.
         std::lock_guard<std::mutex> _lock(query_ctx_.mtx);
 
         try
@@ -388,7 +391,14 @@ int llama_lead::generate(const llama_tokens & tokens_list, size_t n_reuse)
     }
     double encode_dur_s = (ggml_time_us() - encode_started_us) / 1000000.0;
     size_t n_encoded    = tokens_list.size() - n_reuse;
-    fprintf(stderr, "I: encoded %4zu tokens in %8.3f seconds, speed: %8.3f t/s\n", n_encoded, encode_dur_s, n_encoded / encode_dur_s);
+    fprintf
+    (
+        stderr,
+        "I: encoded %4zu tokens in %8.3f seconds, speed: %8.3f t/s\n",
+        n_encoded,
+        encode_dur_s,
+        n_encoded / encode_dur_s
+    );
 
     // how many tokens are currently accepted
     size_t n_cur  = tokens_list.size();
@@ -420,7 +430,7 @@ int llama_lead::generate(const llama_tokens & tokens_list, size_t n_reuse)
             }
             else
             {
-                // reject. next_tokens[i] is the last 'correct' one.
+                // reject. next_tokens[i] is the last correct one.
                 next_tokens.erase(next_tokens.begin() + i + 1, next_tokens.end());
                 break;
             }

@@ -20,20 +20,19 @@ struct config
     int32_t     port;
 
     std::string model_path;
-    uint32_t n_batch;
-    uint32_t n_ctx;
-    uint32_t n_threads;
-    uint32_t n_gpu_layers;
-
-    size_t   n_ahead; // after we reach n_ahead non-validated tokens we wait.
+    uint32_t    n_batch;
+    uint32_t    n_ctx;
+    uint32_t    n_threads;
+    uint32_t    n_gpu_layers;
+    size_t      n_ahead;      // wait after n_ahead non-validated tokens.
 };
 
 config gen_config(int argc, char ** argv)
 {
     config res = 
     {
-        /* host = */ "localhost",
-        /* port = */ 5555,
+        /* host         = */ "localhost",
+        /* port         = */ 5555,
 
         /* model_path   = */ "",
         /* n_batch      = */ 512,
@@ -192,7 +191,7 @@ int loop(config conf)
             }
             if (llama_decode(llama_ctx, batch) != 0)
             {
-                fprintf(stderr, "%s: llama_decode() failed\n", __func__);
+                fprintf(stderr, "E: %s: llama_decode() failed\n", __func__);
                 continue;
             }
             i += j;
