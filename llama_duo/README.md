@@ -351,7 +351,37 @@ It's probably best to check the code to see the details.
 
 ## Comparison with synchronous speculative decoding 
 
+Test set up:
+1. Same hardware - M2 Ultra
+2. SW - [speculative](https://github.com/ggerganov/llama.cpp/tree/master/examples/speculative) from llama.cpp with same models
+3. Same formatted prompt:
 
-## Configuration options
+prompt:
+```
+<|begin_of_text|><|start_header_id|>system<|end_header_id|>
 
-## Next steps
+You are a helpful, respectful and honest assistant.<|eot_id|>
+<|start_header_id|>user<|end_header_id|>
+
+Illustrate the difference between concurrency and parallelism in python.<|eot_id|><|start_header_id|>assistant<|end_header_id|>
+```
+
+4. Command:
+```
+./speculative -m ../llms/gguf/Meta-Llama-3-70B-Instruct-v2.Q8_0-00001-of-00003.gguf -md ../llms/gguf/Meta-Llama-3-8B-Instruct-v2.Q4_0.gguf -f /tmp/p.txt -e -ngl 99 -t 4 -n 1024 -c 4096 -s 8 --top_k 1 -ngld 99
+```
+
+Results in decoding speed of 8.496 t/s
+
+## limitations
+* llama3 instruct hardcoded prompt format
+* only tested on Apple devices (M2 Ultra, M2, M1).
+
+## TODO
+
+```
+[ ] No hardcoded models
+[ ] Tree-based speculation
+[ ] Saving cache between sessions
+[ ] can some part of it work on iPad/phone? e.g. phone runs speculation and main model is on large remote device?
+```
