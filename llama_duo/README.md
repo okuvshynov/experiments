@@ -375,7 +375,7 @@ S = [<b>the, quick, brown, fox, jumps, over</b>]
 </pre>
 
 
-17. ```back``` calls lead and compares ```B``` with ```S```. We see a mismatch, append nothing to ```S```, and assign ```B``` := ```S```.
+17. ```back``` calls lead and compares ```B``` with ```S```. We see a mismatch, append nothing to ```S```, and assign ```B := S```.
 <pre>
 L = [the, quick, brown, fox, jumps, over]
 B = [the, quick, brown, fox, jumps, over]
