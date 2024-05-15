@@ -183,9 +183,6 @@ I: decoded  737 tokens in  222.631 seconds, speed:    3.306 t/s
 I: total generation time: 224.635
 ```
 
-
-On the other hand, if ```lead``` service would run a smaller model (like llama3-8B @ Q8) there would not be much benefit in distributed speculation.
-
 ## Inverted distributed example
 
 We use the same M2 Macbook and M1 Mini, but ```lead``` now runs on Mac Mini:
