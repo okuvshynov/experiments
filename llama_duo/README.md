@@ -381,6 +381,7 @@ Results in decoding speed of 8.496 t/s
 
 ```
 [ ] No hardcoded models
+    [ ] test on something like Raspberry Pi + Phi model
 [ ] Tree-based speculation
 [ ] Saving cache between sessions
 [ ] can some part of it work on iPad/phone? e.g. phone runs speculation and main model is on large remote device?

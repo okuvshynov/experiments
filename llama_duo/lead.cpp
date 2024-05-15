@@ -563,7 +563,7 @@ int llama_lead::generate(const llama_tokens & tokens_list, size_t n_reuse)
     return 0;
 }
 
-}
+} // namespace llama_duo
 
 int main(int argc, char ** argv)
 {
