@@ -9,11 +9,6 @@ Apple M1 (16GB RAM) runs Llama3-8B-Instruct @ Q8 and Apple M2 (24GB RAM) runs Ll
 Example of configuration which doesn't get much value:
 Apple M1 (16GB RAM) + Apple M2 Ultra (192GB RAM). M2 Ultra is order of magnitude faster and second model is unable to keep up.
 
-
-The benefits of doing it:
-1. We can run a decent speculative model without incurring large latency cost for synchronous speculative model evaluation. It should be possible to get one - smaller size of the same family, quantization and not have to retrain/tune model or its part;
-2. We effectively have more memory, and speculative model which would otherwise not fit into RAM alongside the main model can take space on second machine. 
-
 It is very experimental, with some improvements in progress. 
 Likely we can do better combining the two approaches - we generate speculation tokens asynchronously, but if we get only one to evaluate due to rejection, we can speculate in place as well.
 
