@@ -1,14 +1,15 @@
 # llama duo - asyncronous speculative decoding for llama3. 
 
-llama duo is an attempt to make a simple speculative decoding work in parallel with the main model.
+llama duo is an attempt to make a simple speculative decoding work in parallel with the main model. It is mostly intended to work in situations when 2 machines are available anyway (e.g. Mac Mini and laptop) and we attempt to use the second device to speed up the text generation.
+
 Not every hardware/model combination would benefit from such setup, here are some examples where it worked reasonably well:
-1. Llama3-8B @ fp16 running on Apple M2 24Gb laptop and Llama3-8B@Q4 running Apple M1 16Gb mac mini.
-2. Llama3-70B @ Q8 running on M2 Ultra GPU and Llama3-8B @Q4 running on same M2 Ultra CPUs.
+1. Llama3-8B @ fp16 running on Apple M2 24GB and Llama3-8B @ Q4 running Apple M1 16GB mac mini.
+2. Llama3-70B @ Q8 running on M2 Ultra GPU and Llama3-8B @ Q4 running on same M2 Ultra CPUs.
+3. Llama3-8B @ Q8 running on Apple M1 16GB and Llama3-8B @ Q4 running on Apple M2.
 
 The benefits of doing it:
-1. You can run a decent speculative model without incurring large latency cost for synchronous speculative model evaluation.
-2. You can fit a decent speculative model into memory, if you have an extra device.
-3. You are likely to find such speculative model (smaller size of the same family, quantization) and not have to retrain/tune model or its part.
+1. We can run a decent speculative model without incurring large latency cost for synchronous speculative model evaluation. It should be possible to get one - smaller size of the same family, quantization and not have to retrain/tune model or its part;
+2. We effectively have more memory, and speculative model which would otherwise not fit into RAM alongside the main model can take space on second machine. 
 
 It is very experimental, with some improvements in progress.
 
@@ -17,6 +18,8 @@ It is very experimental, with some improvements in progress.
 1. [llama.cpp](https://github.com/ggerganov/llama.cpp)
 2. [nlohmann/json](https://github.com/nlohmann/json)
 3. [cpp-httplib](https://github.com/yhirose/cpp-httplib)
+
+For now dependencies are being pulled using cmake FetchContent, so there's no need to install these libraries manually.
 
 For the CLI chat.py, needs python and requests module.
 
@@ -145,13 +148,13 @@ We can also kill the back service sometime in the middle of query processing, st
 
 ## Distributed example
 
-On M2 Macbook with 24 Gb memory start ```lead``` service with full fp16 precision 8B model:
+On M2 Macbook with 24 GB memory start ```lead``` service with full fp16 precision 8B model:
 
 ```
 ./lead -m ../../../llms/gguf/Meta-Llama-3-8B-Instruct-fp16.gguf -ngl 99
 ```
 
-On M1 Mini with 16Gb memory start ```back``` service and specify the ```lead``` host:
+On M1 Mini with 16GB memory start ```back``` service and specify the ```lead``` host:
 
 ```
 ./back -m ../../../llms/gguf/Meta-Llama-3-8B-Instruct.Q3_K_M.gguf --host 169.254.226.241 -ngl 99
@@ -413,6 +416,9 @@ Illustrate the difference between concurrency and parallelism in python.<|eot_id
 
 Results in decoding speed of 8.496 t/s
 
+Likely we can do even better combining the two approaches - we generate speculation tokens asynchronously, but if we get only one to evaluate due to rejections, we can speculate in place as well.
+
+
 ## limitations
 * llama3 instruct hardcoded prompt format
 * only tested on Apple devices (M2 Ultra, M2, M1).
@@ -423,7 +429,9 @@ Results in decoding speed of 8.496 t/s
 [ ] Both async and sync speculation - if we don't have good candidate, generate N new tokens in place.
 [ ] Tree-based speculation
 [ ] No hardcoded models
-[ ] test on something like Raspberry Pi + Phi model
 [ ] Saving cache between sessions.
-[ ] can some part of it work on iPad/phone? e.g. phone runs speculation and main model is on large remote device?
+[ ] Hardware to try it on:
+  [ ] something small -  Raspberry Pi + Phi model
+  [ ] large CPU-only servers with a lot of RAM.
+  [ ] iPhone/iPad for chat + speculation model?
 ```
