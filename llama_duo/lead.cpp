@@ -37,19 +37,19 @@ struct query_context
 
 struct config
 {
-    std::string host;               // to listen on. "0.0.0.0" is default. 
-    int32_t     port;               // 5555 is default.
+    std::string host;          // to listen on. "0.0.0.0" is default. 
+    int32_t     port;          // 5555 is default.
 
-    std::string model_path;         // path to gguf file
-    uint32_t    n_batch;            // batch size
-    uint32_t    n_ctx;              // context size (n_len must be <= n_ctx)
-    uint32_t    n_threads;          // how many threads to use for CPU eval.
-    uint32_t    n_gpu_layers;       // how many layers to offload to GPU.
+    std::string model_path;    // path to gguf file
+    uint32_t    n_batch;       // batch size
+    uint32_t    n_ctx;         // context size (n_len must be <= n_ctx)
+    uint32_t    n_threads;     // how many threads to use for CPU eval.
+    uint32_t    n_gpu_layers;  // how many layers to offload to GPU.
 
-    std::string print_mode;         // how to print the output to stdout. 
-                                    // none      -- no text output
-                                    // all       -- everythong including rejected tokens
-                                    // accepted  -- non-rejected tokens only
+    std::string print_mode;    // how to print the output to stdout. 
+                               // none      -- no text output
+                               // all       -- everything including rejected tokens
+                               // accepted  -- non-rejected tokens only
 };
 
 config gen_config(int argc, char ** argv)
