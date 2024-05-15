@@ -10,6 +10,8 @@ The benefits of doing it:
 2. You can fit a decent speculative model into memory, if you have an extra device.
 3. You are likely to find such speculative model (smaller size of the same family, quantization) and not have to retrain/tune model or its part.
 
+It is very experimental, with some improvements in progress.
+
 ## Dependencies
 
 1. [llama.cpp](https://github.com/ggerganov/llama.cpp)
@@ -353,7 +355,7 @@ It's probably best to check the code to see the details.
 
 Test set up:
 1. Same hardware - M2 Ultra
-2. SW - [speculative](https://github.com/ggerganov/llama.cpp/tree/master/examples/speculative) from llama.cpp with same models
+2. software - [speculative](https://github.com/ggerganov/llama.cpp/tree/master/examples/speculative) from llama.cpp with same models
 3. Same formatted prompt:
 
 prompt:
@@ -380,10 +382,10 @@ Results in decoding speed of 8.496 t/s
 ## TODO
 
 ```
-[ ] No hardcoded models
-    [ ] test on something like Raspberry Pi + Phi model
+[ ] Both async and sync speculation - if we don't have good candidate, generate N new tokens in place.
 [ ] Tree-based speculation
-[ ] Both async and sync speculation
-[ ] Saving cache between sessions
+[ ] No hardcoded models
+[ ] test on something like Raspberry Pi + Phi model
+[ ] Saving cache between sessions.
 [ ] can some part of it work on iPad/phone? e.g. phone runs speculation and main model is on large remote device?
 ```

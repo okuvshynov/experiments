@@ -1,14 +1,15 @@
 import requests
+import sys
 
 def bold(text):
     return "\033[1m" + text + "\033[0m"
 
-def chat(addr):
+def chat(url):
     headers = {'Content-Type': 'application/json'}
 
     history = []
 
-    url = f'{addr}/messages'
+    url = f'{url}/messages'
 
     while True:
         user_input = input(bold("You: "))
@@ -39,4 +40,7 @@ def chat(addr):
             break
 
 if __name__ == "__main__":
-    chat("http://localhost:5555")
+    url = "http://localhost:5555"
+    if len(sys.argv) > 1:
+        url = sys.argv[1]
+    chat(url)

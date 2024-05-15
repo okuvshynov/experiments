@@ -435,9 +435,12 @@ int llama_lead::generate(const llama_tokens & tokens_list, size_t n_reuse)
                 break;
             }
         }
+
+        /*
         std::cerr
-            << "I: evaluated " << input_seq.size()
+            << "D: evaluated " << input_seq.size()
             << " accepted " << next_tokens.size() << std::endl;
+        */
 
         // empty the non-matching portion of kv cache. 
         // n_cur is incremented at least once and will be > 0
