@@ -11,7 +11,8 @@ The benefits of doing it:
 1. We can run a decent speculative model without incurring large latency cost for synchronous speculative model evaluation. It should be possible to get one - smaller size of the same family, quantization and not have to retrain/tune model or its part;
 2. We effectively have more memory, and speculative model which would otherwise not fit into RAM alongside the main model can take space on second machine. 
 
-It is very experimental, with some improvements in progress.
+It is very experimental, with some improvements in progress. 
+Likely we can do better combining the two approaches - we generate speculation tokens asynchronously, but if we get only one to evaluate due to rejection, we can speculate in place as well.
 
 ## Dependencies
 
@@ -412,9 +413,6 @@ Illustrate the difference between concurrency and parallelism in python.<|eot_id
 ```
 
 Results in decoding speed of 8.496 t/s
-
-Likely we can do even better combining the two approaches - we generate speculation tokens asynchronously, but if we get only one to evaluate due to rejections, we can speculate in place as well.
-
 
 ## limitations
 * llama3 instruct hardcoded prompt format
