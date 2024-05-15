@@ -183,9 +183,47 @@ I: total generation time: 224.635
 
 On the other hand, if ```lead``` service would run a smaller model (like llama3-8B @ Q8) there would not be much benefit in distributed speculation.
 
+## Inverted distributed example
+
+We use the same M2 Macbook and M1 Mini, but ```lead``` now runs on Mac Mini:
+
+```
+./lead -ngl 99 -m ../../../llms/gguf/Meta-Llama-3-8B-Instruct-v2.Q8_0.gguf
+```
+
+chat and ```back``` run on the laptop:
+
+```
+./back -ngl 55 -m ../../../llms/gguf/Meta-Llama-3-8B-Instruct-v2.Q4_0.gguf --host 169.254.90.21
+```
+
+```
+python chat.py http://169.254.90.21:5555
+You: Implement a simple lock-free container in c++
+```
+
+Even though M2 has better GPU and more unified RAM, such setup was useful as resources on the laptop are needed for other applications as well.
+
+With async speculation:
+```
+I: encoded  104 tokens in    1.181 seconds, speed:   88.026 t/s
+...
+I: decoded  695 tokens in   52.814 seconds, speed:   13.159 t/s
+I: total generation time: 53.9993
+```
+
+Without async speculation:
+```
+I: encoded  104 tokens in    1.270 seconds, speed:   81.912 t/s
+...
+I: decoded  692 tokens in  103.642 seconds, speed:    6.677 t/s
+I: total generation time: 104.914
+```
+
+
 ## How it works
 
-It is simple linear speculation, except it is generated in parallel with main model and reconciled after each main model token generation.
+It is simple linear speculation, except it is generated in parallel with main model and reconciled after each lead token generation.
 
 We can think of three separate sequences:
 1. local sequence on ```lead``` -- this is ground truth, which will be equivalent to main model producing tokens one by one. Let's call this sequence L.
