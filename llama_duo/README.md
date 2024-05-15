@@ -1,11 +1,14 @@
 # llama duo - asyncronous speculative decoding for llama3. 
 
 llama duo is an attempt to make a simple speculative decoding work in parallel with the main model. It is mostly intended to work in situations when 2 machines are available anyway (e.g. Mac Mini and laptop) and we attempt to use the second device to speed up the text generation.
+Not every hardware/model combination would benefit from such setup. 
 
-Not every hardware/model combination would benefit from such setup, here are some examples where it worked reasonably well:
-1. Llama3-8B @ fp16 running on Apple M2 24GB and Llama3-8B @ Q4 running Apple M1 16GB mac mini.
-2. Llama3-70B @ Q8 running on M2 Ultra GPU and Llama3-8B @ Q4 running on same M2 Ultra CPUs.
-3. Llama3-8B @ Q8 running on Apple M1 16GB and Llama3-8B @ Q4 running on Apple M2.
+Example of the configuration which gets good speedup:
+Apple M1 (16GB RAM) runs Llama3-8B-Instruct @ Q8 and Apple M2 (24GB RAM) runs Llama3-8B-Instruct @ Q4.
+
+Example of configuration which doesn't get much value:
+Apple M1 (16GB RAM) + Apple M2 Ultra (192GB RAM). M2 Ultra is order of magnitude faster and second model is unable to keep up.
+
 
 The benefits of doing it:
 1. We can run a decent speculative model without incurring large latency cost for synchronous speculative model evaluation. It should be possible to get one - smaller size of the same family, quantization and not have to retrain/tune model or its part;
