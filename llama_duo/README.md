@@ -1,6 +1,6 @@
 # llama duo - asyncronous/distributed speculative decoding for llama3. 
 
-llama duo is an attempt to make simple linear speculative decoding work in parallel with the main model. It is mostly intended to work in situations when 2 machines are available (e.g. Mac Mini and laptop) and we attempt to use the second device to speed up the generation.
+llama duo is an attempt to make simple linear speculative decoding work in parallel with the main model. It is mostly intended to work in situations when two devices are available (e.g. Mac Mini and laptop) and we attempt to use the second device to speed up the generation.
 Not every hardware/model combination would benefit from such setup. 
 
 Example of the configuration which gets good speedup:
@@ -48,7 +48,7 @@ On M1 Mini with 16GB memory start ```back``` service and specify the ```lead``` 
 ./back -m ../../../llms/gguf/Meta-Llama-3-8B-Instruct.Q3_K_M.gguf --host 169.254.226.241 -ngl 99
 ```
 
-Both of these services will run on GPU. The model they run is essentially the same, except smaller and slower machine runs more aggressively quantized version.
+Both of these services will evaluate model on GPU (```-ngl``` flag). The model they run is essentially the same, except smaller and slower machine runs more aggressively quantized version.
 
 Now on the macbook start the chat and ask a question:
 
@@ -108,6 +108,7 @@ I: decoded  692 tokens in  103.642 seconds, speed:    6.677 t/s
 I: total generation time: 104.914
 ```
 
+You can not a different number of tokens in async speculation - that happened because we evaluated sequence and got eot in the middle of it.
 
 ## Local example
 
@@ -246,13 +247,12 @@ B = [the, quick, brown]
 S = [<b>the, quick, brown</b>]
 </pre>
 
-2. back produces 'fox'.
+2. ```back``` produces 'fox'.
 <pre>
 L = [the, quick, brown]
 B = [the, quick, brown, fox]
 S = [<b>the, quick, brown</b>]
 </pre>
-
 
 3. ```back``` calls ```lead``` and compares ```B``` with ```S```. 'fox' and appended to the ```S``` in 'not_rejected' state.
 <pre>
@@ -260,7 +260,6 @@ L = [the, quick, brown]
 B = [the, quick, brown, fox]
 S = [<b>the, quick, brown</b>, fox]  
 </pre>
-
 
 4. ```back``` produces 'jumps'.
 <pre>
@@ -374,11 +373,10 @@ S = [<b>the, quick, brown, fox, jumps, over</b>]
 </pre>
 
 The actual implementation is a little more complicated because:
-1. communication between lead and back involves passing 'delta' rather than entire sequence - otherwise we'd end up with large messages for long contexts.
+1. communication between ```lead``` and ```back``` involves passing delta rather than entire sequence - otherwise we'd end up with large messages for long contexts.
 2. ```back``` needs to support starting in the middle of processing of main model.
 
 It's probably best to check the code to see the details.
-
 
 ## Comparison with synchronous speculative decoding 
 
@@ -407,6 +405,7 @@ Results in decoding speed of 8.496 t/s, which is somewhere in between async spec
 ## limitations
 * llama3 instruct hardcoded prompt format.
 * only tested on Apple devices (M1, M2, M2 Ultra).
+* greedy sampling
 
 ## Effectiveness of speculative evaluation
 
@@ -425,6 +424,8 @@ And as another datapoint - fp16 Llama3-70B on M2 Ultra would have difference cha
 ```
 [ ] Both async and sync speculation - if we don't have good candidate, generate N new tokens in place.
 [ ] Tree-based speculation
+[ ] beam search, not greedy sampling only.
+[ ] make it work with some popular UI/API (what are those?)
 [ ] No hardcoded models
 [ ] Saving cache between sessions.
 [ ] Hardware to try it on:
