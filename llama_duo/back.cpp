@@ -25,7 +25,6 @@ struct config
     uint32_t    n_threads;
     uint32_t    n_gpu_layers;
     size_t      n_ahead;      // wait after n_ahead non-validated tokens.
-    std::string log_level;
 };
 
 config gen_config(int argc, char ** argv)
@@ -41,8 +40,7 @@ config gen_config(int argc, char ** argv)
         /* n_threads    = */ 16,
         /* n_gpu_layers = */ 0,
 
-        /* n_ahead      = */ 16,
-        /* log_level    = */ "I"
+        /* n_ahead      = */ 16
     };
     parser<config> p;
     // main server endpoint to connect to
@@ -56,8 +54,6 @@ config gen_config(int argc, char ** argv)
     p.add_option({"--threads", "-t"},                          &config::n_threads);
     p.add_option({"--n_gpu_layers", "--n-gpu-layers", "-ngl"}, &config::n_gpu_layers);
     p.add_option({"--n_ahead", "--n-ahead", "-na"},            &config::n_ahead);
-
-    p.add_option({"--log_level", "--log-level", "-ll"},        &config::log_level);
 
     if (0 != p.parse_options(argc, argv, res))
     {
