@@ -122,8 +122,8 @@ class llama_lead
     const config    conf_;
     query_context   query_ctx_;
     spec_context    spec_ctx_;
-    llama_model   * model_;
-    llama_context * llama_ctx_;
+    llama_model   * model_     = nullptr;
+    llama_context * llama_ctx_ = nullptr;
 
     httplib::Server http_server_;
 };
@@ -139,7 +139,7 @@ std::unique_ptr<llama_lead> llama_lead::create(config conf)
 
     if (self->model_ == nullptr)
     {
-        std::cerr << "F: Unable to load model from " << conf.model_path << std::endl;
+        log::fatal("Unable to load model from %s", conf.model_path.c_str());
         return nullptr;
     }
 
@@ -151,7 +151,7 @@ std::unique_ptr<llama_lead> llama_lead::create(config conf)
 
     if (self->llama_ctx_ == nullptr)
     {
-        std::cerr << "F: Unable to create llama context " << std::endl;
+        log::fatal("Unable to create llama context");
         return nullptr;
     }
 
@@ -262,7 +262,7 @@ void llama_lead::serve()
         }
         catch(const std::exception & e)
         {
-            std::cerr << "E: " << e.what() << '\n';
+            log::error("%s", e.what());
         }
     });
 
@@ -292,13 +292,13 @@ void llama_lead::serve()
             // prompt.push_back(198);
             if (conf_.n_ctx < prompt.size())
             {
-                std::cerr << "E: context not large enough, unable to process prompt" << std::endl;
+                log::error("context size %zu < prompt size %zu, unable to process prompt", conf_.n_ctx, prompt.size());
                 // TODO: return error to client
                 return;
             }
             if (conf_.n_ctx < n_predict + prompt.size())
             {
-                std::cerr << "W: context not large enough, might trim output." << std::endl;
+                log::warn("context not large enough, might trim output.");
                 n_predict = conf_.n_ctx - prompt.size();
             }
 
@@ -333,11 +333,11 @@ void llama_lead::serve()
 
             if (generate(prompt, i) != 0)
             {
-                std::cerr << "E: generation failed" << std::endl;
+                log::error("generation failed");
             }
 
             const auto t_end = ggml_time_us();
-            std::cerr << "I: total generation time: " << (t_end - t_start) / 1000000.0 << std::endl;
+            log::info("total generation time: %.3lf s", (t_end - t_start) / 1000000.0);;
 
             std::string output;
             for (auto tok: query_ctx_.output)
@@ -356,7 +356,7 @@ void llama_lead::serve()
         }
         catch (const std::exception & e)
         {
-            std::cerr << "E: " << e.what() << '\n';
+            log::error("%s", e.what());
         }
     });
     http_server_.listen(conf_.host, conf_.port);
@@ -364,7 +364,7 @@ void llama_lead::serve()
 
 int llama_lead::generate(const llama_tokens & tokens_list, size_t n_reuse)
 {
-    std::cerr << "I: generating, reusing " << n_reuse << " tokens." << std::endl;
+    log::info("reusing %zu tokens.", n_reuse);
     llama_batch & batch = query_ctx_.batch; 
 
     auto encode_started_us = ggml_time_us();
@@ -384,17 +384,15 @@ int llama_lead::generate(const llama_tokens & tokens_list, size_t n_reuse)
         }
         if (llama_decode(llama_ctx_, batch) != 0)
         {
-            std::cerr << "E: llama_decode() failed" << std::endl;
+            log::error("llama_decode() failed");
             return 1;
         }
         i += j;
     }
     double encode_dur_s = (ggml_time_us() - encode_started_us) / 1000000.0;
     size_t n_encoded    = tokens_list.size() - n_reuse;
-    fprintf
-    (
-        stderr,
-        "I: encoded %4zu tokens in %8.3f seconds, speed: %8.3f t/s\n",
+    log::info(
+        "encoded %4zu tokens in %8.3f seconds, speed: %8.3f t/s",
         n_encoded,
         encode_dur_s,
         n_encoded / encode_dur_s
@@ -414,7 +412,7 @@ int llama_lead::generate(const llama_tokens & tokens_list, size_t n_reuse)
         next_tokens = greedy_tokens(model_, llama_ctx_, logits_from, logits_to);
         if (next_tokens.size() != input_seq.size())
         {
-            std::cerr << "E: invalid next tokens" << std::endl;
+            log::error("invalid next tokens");
             return 1;
         }
 
@@ -435,12 +433,6 @@ int llama_lead::generate(const llama_tokens & tokens_list, size_t n_reuse)
                 break;
             }
         }
-
-        /*
-        std::cerr
-            << "D: evaluated " << input_seq.size()
-            << " accepted " << next_tokens.size() << std::endl;
-        */
 
         // empty the non-matching portion of kv cache. 
         // n_cur is incremented at least once and will be > 0
@@ -534,11 +526,11 @@ int llama_lead::generate(const llama_tokens & tokens_list, size_t n_reuse)
         {
             input_seq.resize(query_ctx_.n_len - n_cur);
         }
-        // in some cases this might be not the most efficient thing to do
+        // in some cases this might be not the most efficient thing to do.
         // for correctness just make the input size <= batch size
         if (input_seq.size() > bsz)
         {
-            std::cerr << "W: trimming speculation to fit in batch size" << std::endl;
+            log::warn("trimming speculation to fit in batch size");
             input_seq.resize(bsz);
         }
         for (size_t i = 0; i < input_seq.size(); i++)
@@ -547,7 +539,7 @@ int llama_lead::generate(const llama_tokens & tokens_list, size_t n_reuse)
         }
         if (llama_decode(llama_ctx_, batch))
         {
-            std::cerr << "E: llama_decode() failed" << std::endl;
+            log::error("llama_decode() failed");
             return 1;
         }
         logits_from = 0;
@@ -564,7 +556,7 @@ int llama_lead::generate(const llama_tokens & tokens_list, size_t n_reuse)
     }
     double decode_dur_s = (ggml_time_us() - t_start) / 1000000.0;
     size_t n_decoded    = n_cur - tokens_list.size();
-    fprintf(stderr, "I: decoded %4zu tokens in %8.3f seconds, speed: %8.3f t/s\n", n_decoded, decode_dur_s, n_decoded / decode_dur_s);
+    log::info("decoded %4zu tokens in %8.3f seconds, speed: %8.3f t/s", n_decoded, decode_dur_s, n_decoded / decode_dur_s);
 
     return 0;
 }

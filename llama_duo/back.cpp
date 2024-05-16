@@ -25,6 +25,7 @@ struct config
     uint32_t    n_threads;
     uint32_t    n_gpu_layers;
     size_t      n_ahead;      // wait after n_ahead non-validated tokens.
+    std::string log_level;
 };
 
 config gen_config(int argc, char ** argv)
@@ -41,6 +42,7 @@ config gen_config(int argc, char ** argv)
         /* n_gpu_layers = */ 0,
 
         /* n_ahead      = */ 16,
+        /* log_level    = */ "I"
     };
     parser<config> p;
     // main server endpoint to connect to
@@ -54,6 +56,8 @@ config gen_config(int argc, char ** argv)
     p.add_option({"--threads", "-t"},                          &config::n_threads);
     p.add_option({"--n_gpu_layers", "--n-gpu-layers", "-ngl"}, &config::n_gpu_layers);
     p.add_option({"--n_ahead", "--n-ahead", "-na"},            &config::n_ahead);
+
+    p.add_option({"--log_level", "--log-level", "-ll"},        &config::log_level);
 
     if (0 != p.parse_options(argc, argv, res))
     {
@@ -151,17 +155,19 @@ int loop(config conf)
         }
         catch(const std::exception& e)
         {
-            std::cerr << e.what() << '\n';
+            log::error("%s", e.what());
             std::this_thread::sleep_for(500ms);
             continue;
         }
 
         if (curr.size() == 0 || updated.size() == 0 || (n_approved > 0 && curr.size() > n_approved + conf.n_ahead))
         {
-            std::cerr 
-                << "I: waiting; curr.size() = " << curr.size()
-                << ", updated.size() = " << updated.size()
-                << ", n_approved = " << n_approved << std::endl;
+            log::info(
+                "waiting; curr.size() = %zu, updated.size() = %zu, n_approved = %zu",
+                curr.size(),
+                updated.size(),
+                n_approved
+            );
             std::this_thread::sleep_for(500ms);
             continue;
         }
@@ -191,7 +197,7 @@ int loop(config conf)
             }
             if (llama_decode(llama_ctx, batch) != 0)
             {
-                fprintf(stderr, "E: %s: llama_decode() failed\n", __func__);
+                log::error("%s: llama_decode() failed\n", __func__);
                 continue;
             }
             i += j;
@@ -201,7 +207,7 @@ int loop(config conf)
         auto next_tokens = greedy_tokens(model, llama_ctx, batch.n_tokens - 1, batch.n_tokens);
         if (next_tokens.size() != 1)
         {
-            std::cerr << "E: invalid next tokens size" << std::endl;
+            log::error("invalid next tokens size");
             continue;
         }
 
@@ -221,6 +227,7 @@ int main(int argc, char ** argv)
     int res = 0;
     llama_backend_init();
     auto conf = llama_duo::gen_config(argc, argv);
+
     res = loop(conf);
 
     llama_backend_free();
