@@ -10,7 +10,7 @@ Example of configuration which doesn't get much value:
 Apple M1 (16GB RAM) + Apple M2 Ultra (192GB RAM). M2 Ultra is order of magnitude faster and second model is unable to keep up.
 
 There's likely more room for improvement by:
-1. Doing tree-based speculation/multiple sequences;
+1. Doing tree-based speculation/multiple sequences; 
 2. Combination of sync/async speculation, where we might still do some local in-place speculation if all asyncronously generated tokens were rejected.
 
 ## Dependencies
@@ -50,7 +50,7 @@ On M1 Mini with 16GB memory start ```back``` service and specify the ```lead``` 
 
 Both of these services will run on GPU. The model they run is essentially the same, except smaller and slower machine runs more aggressively quantized version.
 
-Now on the macbook start the chat and ask the question:
+Now on the macbook start the chat and ask a question:
 
 ```
 python chat.py
@@ -90,7 +90,7 @@ python chat.py http://169.254.90.21:5555
 You: Implement a simple lock-free container in c++
 ```
 
-Even though M2 has better GPU and more unified RAM, such setup was useful as resources on the laptop are needed for other applications as well, like a few Chrome tabs.
+Even though M2 has better GPU and more unified RAM, such setup was useful as resources on the laptop are needed for other applications as well, like keeping a few Chrome tabs open.
 
 With async speculation:
 ```
@@ -153,7 +153,7 @@ I: decoded  784 tokens in   75.159 seconds, speed:   10.431 t/s
 I: total generation time: 78.2696
 ```
 
-### Simulating failures
+## Simulating failures
 
 Note that ```back``` service is optional - we can turn it off, run the main model as before:
 
@@ -407,10 +407,10 @@ Illustrate the difference between concurrency and parallelism in python.<|eot_id
 ./speculative -m ../llms/gguf/Meta-Llama-3-70B-Instruct-v2.Q8_0-00001-of-00003.gguf -md ../llms/gguf/Meta-Llama-3-8B-Instruct-v2.Q4_0.gguf -f /tmp/p.txt -e -ngl 99 -t 4 -n 1024 -c 4096 -s 8 --top_k 1 -ngld 99
 ```
 
-Results in decoding speed of 8.496 t/s
+Results in decoding speed of 8.496 t/s, which is somewhere in between async speculation and no speculation.
 
 ## limitations
-* llama3 instruct hardcoded prompt format
+* llama3 instruct hardcoded prompt format.
 * only tested on Apple devices (M1, M2, M2 Ultra).
 
 ## TODO
