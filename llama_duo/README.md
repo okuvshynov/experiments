@@ -49,7 +49,7 @@ On M1 Mini with 16GB memory start ```back``` service and specify the ```lead``` 
 
 Both of these services will run on GPUs. The model they run is essentially the same, except smaller and slower machine runs more aggressively quantized version.
 
-Now on the macbook start the chat and ask the same question:
+Now on the macbook start the chat and ask the question:
 
 ```
 python chat.py
@@ -62,7 +62,7 @@ I: decoded  737 tokens in   81.129 seconds, speed:    9.084 t/s
 I: total generation time: 100.386
 ```
 
-Running same model without speculation would be much slower:
+Running same model without speculation is much slower:
 
 ```
 ..
@@ -89,7 +89,7 @@ python chat.py http://169.254.90.21:5555
 You: Implement a simple lock-free container in c++
 ```
 
-Even though M2 has better GPU and more unified RAM, such setup was useful as resources on the laptop are needed for other applications as well.
+Even though M2 has better GPU and more unified RAM, such setup was useful as resources on the laptop are needed for other applications as well, like a few Chrome tabs.
 
 With async speculation:
 ```
@@ -410,7 +410,7 @@ Results in decoding speed of 8.496 t/s
 
 ## limitations
 * llama3 instruct hardcoded prompt format
-* only tested on Apple devices (M2 Ultra, M2, M1).
+* only tested on Apple devices (M1, M2, M2 Ultra).
 
 ## TODO
 
