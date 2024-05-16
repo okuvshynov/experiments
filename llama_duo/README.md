@@ -33,118 +33,6 @@ pip install requests
 
 After this step you should have two binaries built: ```lead``` and ```back```. 
 
-## Local example
-
-Here we run it on single M2 Ultra.
-
-Start lead with Llama3-70B@Q8 model with all layers on GPU and default settings for interface/port 0.0.0.0:5555:
-
-```
-./lead -m ../../../llms/gguf/Meta-Llama-3-70B-Instruct-v2.Q8_0-00001-of-00003.gguf --n-gpu-layers 99
-```
-
-Start back with Llama3-8B@Q4 model on 16 CPU threads. It looks for lead service on localhost:5555 by default.
-
-```
-./back -m ../../../llms/gguf/Meta-Llama-3-8B-Instruct-v2.Q4_0.gguf --n-gpu-layers 0 --threads 16
-```
-
-Start basic chat command-line interface (also defaults to localhost:5555):
-
-```
-python chat.py
-```
-
-In chat window ask the model something: 
-
-```
-You: Illustrate the difference between concurrency and parallelism in python.
-```
-
-What we should observe:
-
-1. ```lead``` service should start printing out the generated tokens, highlighing accepted tokens in green.
-
-<img width="623" alt="Screenshot 2024-05-14 at 10 10 05 AM" src="https://github.com/okuvshynov/experiments/assets/661042/40454bf7-78e2-46f1-b770-661a55e6e05a">
-
-2. ```back``` would print some debug info.
-
-3. After the generation is complete, the response would be returned to chat.
-
-
-```lead``` would print out some timing info:
-
-
-```
-I: encoded  105 tokens in    3.108 seconds, speed:   33.786 t/s
-...
-I: decoded  784 tokens in   75.159 seconds, speed:   10.431 t/s
-I: total generation time: 78.2696
-```
-
-Note that ```back``` service is optional - we can turn it off, run the main model as before:
-
-```
-./lead -m ../../../llms/gguf/Meta-Llama-3-70B-Instruct-v2.Q8_0-00001-of-00003.gguf --n-gpu-layers 99
-```
-
-```
-python chat.py
-```
-
-In chat window ask the same question: 
-
-```
-You: Illustrate the difference between concurrency and parallelism in python.
-```
-
-And observe the same output.
-
-```
-I: encoded  105 tokens in    2.699 seconds, speed:   38.908 t/s
-...
-I: decoded  784 tokens in   92.639 seconds, speed:    8.463 t/s
-I: total generation time: 95.3407
-```
-
-As we can see, it is slower.
-
-
-We can also start/stop/simulate non-availability/failure for ```back``` service. As in previous example, start main model and chat:
-
-```
-./lead -m ../../../llms/gguf/Meta-Llama-3-70B-Instruct-v2.Q8_0-00001-of-00003.gguf --n-gpu-layers 99
-```
-
-```
-python chat.py
-```
-
-In chat window ask the model the same question: 
-
-```
-You: Illustrate the difference between concurrency and parallelism in python.
-```
-
-At some moment during generation start the ```back``` service:
-
-```
-./back -m ../../../llms/gguf/Meta-Llama-3-8B-Instruct-v2.Q4_0.gguf --n-gpu-layers 0 --threads 16
-```
-
-```back``` service would catch up with ```lead``` by processing input prompt + the tokens generated to this point and start speculating.
-The performance would be somewhere in between the two runs above
-
-```
-I: encoded  105 tokens in    2.765 seconds, speed:   37.969 t/s
-...
-I: decoded  784 tokens in   82.254 seconds, speed:    9.568 t/s
-I: total generation time: 85.0213
-```
-
-We can also kill the back service sometime in the middle of query processing, start it again, etc.
-
-
 ## Distributed example
 
 On M2 Macbook with 24 GB memory start ```lead``` service with full fp16 precision 8B model:
@@ -219,6 +107,114 @@ I: decoded  692 tokens in  103.642 seconds, speed:    6.677 t/s
 I: total generation time: 104.914
 ```
 
+
+## Local example
+
+Here we run it on single M2 Ultra, using GPU for main model and CPU for second model. 
+
+Start lead with Llama3-70B@Q8 model with all layers on GPU and default settings for interface/port 0.0.0.0:5555:
+
+```
+./lead -m ../../../llms/gguf/Meta-Llama-3-70B-Instruct-v2.Q8_0-00001-of-00003.gguf --n-gpu-layers 99
+```
+
+Start back with Llama3-8B@Q4 model on 16 CPU threads. It looks for lead service on localhost:5555 by default.
+
+```
+./back -m ../../../llms/gguf/Meta-Llama-3-8B-Instruct-v2.Q4_0.gguf --n-gpu-layers 0 --threads 16
+```
+
+Start basic chat command-line interface (also defaults to localhost:5555):
+
+```
+python chat.py
+```
+
+In chat window ask the model something: 
+
+```
+You: Illustrate the difference between concurrency and parallelism in python.
+```
+
+What we should observe:
+
+1. ```lead``` service should start printing out the generated tokens, highlighing accepted tokens in green.
+2. ```back``` would print some debug info.
+3. After the generation is complete, the response would be returned to chat.
+
+
+```lead``` would print out some timing info:
+
+```
+I: encoded  105 tokens in    3.108 seconds, speed:   33.786 t/s
+...
+I: decoded  784 tokens in   75.159 seconds, speed:   10.431 t/s
+I: total generation time: 78.2696
+```
+
+### Simulating failures
+
+Note that ```back``` service is optional - we can turn it off, run the main model as before:
+
+```
+./lead -m ../../../llms/gguf/Meta-Llama-3-70B-Instruct-v2.Q8_0-00001-of-00003.gguf --n-gpu-layers 99
+```
+
+```
+python chat.py
+```
+
+In chat window ask the same question: 
+
+```
+You: Illustrate the difference between concurrency and parallelism in python.
+```
+
+And observe the same output.
+
+```
+I: encoded  105 tokens in    2.699 seconds, speed:   38.908 t/s
+...
+I: decoded  784 tokens in   92.639 seconds, speed:    8.463 t/s
+I: total generation time: 95.3407
+```
+
+As we can see, it is slower.
+
+
+We can also start/stop/simulate non-availability/failure for ```back``` service. As in previous example, start main model and chat:
+
+```
+./lead -m ../../../llms/gguf/Meta-Llama-3-70B-Instruct-v2.Q8_0-00001-of-00003.gguf --n-gpu-layers 99
+```
+
+```
+python chat.py
+```
+
+In chat window ask the model the same question: 
+
+```
+You: Illustrate the difference between concurrency and parallelism in python.
+```
+
+At some moment during generation start the ```back``` service:
+
+```
+./back -m ../../../llms/gguf/Meta-Llama-3-8B-Instruct-v2.Q4_0.gguf --n-gpu-layers 0 --threads 16
+```
+
+```back``` service would catch up with ```lead``` by processing input prompt + the tokens generated to this point and start speculating.
+The performance would be somewhere in between the two runs above
+
+```
+I: encoded  105 tokens in    2.765 seconds, speed:   37.969 t/s
+...
+I: decoded  784 tokens in   82.254 seconds, speed:    9.568 t/s
+I: total generation time: 85.0213
+```
+
+We can also kill the back service sometime in the middle of query processing, start it again, etc.
 
 ## How it works
 
