@@ -1,6 +1,6 @@
-# llama duo - asyncronous speculative decoding for llama3. 
+# llama duo - asyncronous/distributed speculative decoding for llama3. 
 
-llama duo is an attempt to make a simple speculative decoding work in parallel with the main model. It is mostly intended to work in situations when 2 machines are available anyway (e.g. Mac Mini and laptop) and we attempt to use the second device to speed up the text generation.
+llama duo is an attempt to make a simple speculative decoding work in parallel with the main model. It is mostly intended to work in situations when 2 machines are available (e.g. Mac Mini and laptop) and we attempt to use the second device to speed up the text generation.
 Not every hardware/model combination would benefit from such setup. 
 
 Example of the configuration which gets good speedup:
@@ -9,8 +9,9 @@ Apple M1 (16GB RAM) runs Llama3-8B-Instruct @ Q8 and Apple M2 (24GB RAM) runs Ll
 Example of configuration which doesn't get much value:
 Apple M1 (16GB RAM) + Apple M2 Ultra (192GB RAM). M2 Ultra is order of magnitude faster and second model is unable to keep up.
 
-It is very experimental, with some improvements in progress. 
-Likely we can do better combining the two approaches - we generate speculation tokens asynchronously, but if we get only one to evaluate due to rejection, we can speculate in place as well.
+There's likely more room for improvement by:
+1. Doing tree-based speculation/multiple sequences;
+2. Combination of sync/async speculation, where we might still do some local in-place speculation if all asyncronously generated tokens were rejected.
 
 ## Dependencies
 
@@ -18,7 +19,7 @@ Likely we can do better combining the two approaches - we generate speculation t
 2. [nlohmann/json](https://github.com/nlohmann/json)
 3. [cpp-httplib](https://github.com/yhirose/cpp-httplib)
 
-For now dependencies are being pulled using cmake FetchContent, so there's no need to install these libraries manually.
+dependencies are being pulled using cmake FetchContent, so there's no need to install these libraries manually.
 
 For the CLI chat.py, needs python and requests module.
 
@@ -47,7 +48,7 @@ On M1 Mini with 16GB memory start ```back``` service and specify the ```lead``` 
 ./back -m ../../../llms/gguf/Meta-Llama-3-8B-Instruct.Q3_K_M.gguf --host 169.254.226.241 -ngl 99
 ```
 
-Both of these services will run on GPUs. The model they run is essentially the same, except smaller and slower machine runs more aggressively quantized version.
+Both of these services will run on GPU. The model they run is essentially the same, except smaller and slower machine runs more aggressively quantized version.
 
 Now on the macbook start the chat and ask the question:
 
