@@ -4,6 +4,7 @@ import sys
 def bold(text):
     return "\033[1m" + text + "\033[0m"
 
+# rudimentary chat app for testing
 def chat(url):
     headers = {'Content-Type': 'application/json'}
 
