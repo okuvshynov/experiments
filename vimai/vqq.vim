@@ -2,7 +2,7 @@ let g:vqq_api_key    = get(g:, 'vqq_api_key'   , $ANTHROPIC_API_KEY)
 let g:vqq_max_tokens = get(g:, 'vqq_max_tokens', 1024)
 let g:vqq_model_name = get(g:, 'vqq_model_name', "claude-3-5-sonnet-20240620")
 
-function! s:ask_impl(question)
+function! s:ask_anthropic(question)
     let req = {}
     let req.model      = g:vqq_model_name
     let req.max_tokens = g:vqq_max_tokens
@@ -25,7 +25,7 @@ endfunction
 function! s:ask(argument)
     let user_prompt = strftime("%H:%M:%S You: ")
 
-    let response = s:ask_impl(a:argument)
+    let response = s:ask_anthropic(a:argument)
 
     call s:update_chat(a:argument, response, user_prompt)
 endfunction
@@ -39,17 +39,18 @@ function! s:ask_with_context(argument)
 
     " Basic prompt format
     let question = "Here's a code snippet: \n\n " . join(lines, '\n') . "\n\n" . a:argument
-    let response = s:ask_impl(question)
+    let response = s:ask_anthropic(question)
 
+    " Not passing the context to the chat window.
     call s:update_chat(a:argument, response, user_prompt)
 endfunction
 
 function! s:open_chat()
     " Check if the buffer already exists
-    let bufnum = bufnr('API_Responses')
+    let bufnum = bufnr('AI_Chat')
     if bufnum == -1
         " Create a new buffer in a vertical split
-        execute 'vsplit API_Responses'
+        execute 'vsplit AI_Chat'
         setlocal buftype=nofile
         setlocal bufhidden=hide
         setlocal noswapfile
