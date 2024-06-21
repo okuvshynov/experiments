@@ -1,10 +1,12 @@
 function! SendSelectedLines(argument)
+    let user_prompt = strftime("%H:%M:%S You: ")
     " Get the start and end line numbers of the visual selection
     let [line_start, column_start] = getpos("'<")[1:2]
     let [line_end, column_end] = getpos("'>")[1:2]
 
     " Get the selected lines
     let lines = getline(line_start, line_end)
+    echo lines
 
     " Create a dictionary with 'lines' and 'argument'
     let data = {}
@@ -17,36 +19,26 @@ function! SendSelectedLines(argument)
     let json_data = json_encode(data)
     let escaped_json = substitute(json_data, "'", "'\\\\''", "g")
 
+    let api_key = $ANTHROPIC_API_KEY
+
     " Construct the curl command (now pointing to localhost)
-    "let curl_cmd = "curl -s -X POST 'http://127.0.0.1:5000/api'"
     let curl_cmd = "curl -s -X POST 'https://api.anthropic.com/v1/messages'"
 
     let curl_cmd .= " -H 'Content-Type: application/json'"
-
-    let api_key = $ANTHROPIC_API_KEY
     let curl_cmd .= " -H 'x-api-key: " . api_key . "'"
-
     let curl_cmd .= " -H 'anthropic-version: 2023-06-01'"
 
     let curl_cmd .= " -d '" . escaped_json . "'"
 
     " Execute the curl command and capture the output
     let result = system(curl_cmd)
-    echo result
+    "echo result
 
     " Parse the JSON response
     let response = json_decode(result)
 
     call OpenResponseBuffer()
-    call AppendToResponseBuffer(a:argument, response)
-
-    " Check if the response contains the 'content' field
-    if has_key(response, 'content')
-        echo "Response content: " . response.content[0].text
-    else
-        echo "Error: 'content' field not found in response"
-        echo "Full response: " . result
-    endif
+    call AppendToResponseBuffer(a:argument, response, user_prompt)
 endfunction
 
 function! OpenResponseBuffer()
@@ -71,7 +63,8 @@ function! OpenResponseBuffer()
     endif
 endfunction
 
-function! AppendToResponseBuffer(argument, response)
+function! AppendToResponseBuffer(argument, response, user_prompt)
+    let ai_prompt = strftime("%H:%M:%S Bot: ")
     " Move to the end of the buffer
     normal! G
 
@@ -80,13 +73,12 @@ function! AppendToResponseBuffer(argument, response)
         call append(line('$'), repeat('-', 80))
     endif
 
-    " Append the response
-    call append(line('$'), 'Argument: ' . a:argument)
-    call append(line('$'), 'Timestamp: ' . strftime("%Y-%m-%dT%H:%M:%S%z"))
+    " Append the question
+    call append(line('$'), a:user_prompt . a:argument)
 
     if has_key(a:response, 'content')
-        call append(line('$'), 'Response content:')
-        call append(line('$'), split(a:response.content[0].text, "\n"))
+        let  reply = ai_prompt . a:response.content[0].text 
+        call append(line('$'), split(reply, "\n"))
     else
         call append(line('$'), 'Error: ''content'' field not found in response')
     endif
