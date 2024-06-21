@@ -33,24 +33,24 @@ endfunction
 function! s:ask_with_context(argument)
     let user_prompt = strftime("%H:%M:%S You: ")
     " Get the selected lines
-    let [line_start, column_start] = getpos("'<")[1:2]
-    let [line_end, column_end]     = getpos("'>")[1:2]
-    let lines = getline(line_start, line_end)
+    let [line_a, column_a] = getpos("'<")[1:2]
+    let [line_b, column_b] = getpos("'>")[1:2]
+    let lines = getline(line_a, line_b)
 
     " Basic prompt format
     let question = "Here's a code snippet: \n\n " . join(lines, '\n') . "\n\n" . a:argument
     let response = s:ask_anthropic(question)
 
-    " Not passing the context to the chat window.
+    " Not passing the context to the chat window, only the question
     call s:update_chat(a:argument, response, user_prompt)
 endfunction
 
 function! s:open_chat()
     " Check if the buffer already exists
-    let bufnum = bufnr('AI_Chat')
+    let bufnum = bufnr('VQQ_Chat')
     if bufnum == -1
         " Create a new buffer in a vertical split
-        execute 'vsplit AI_Chat'
+        execute 'vsplit VQQ_Chat'
         setlocal buftype=nofile
         setlocal bufhidden=hide
         setlocal noswapfile
@@ -81,7 +81,7 @@ function! s:update_chat(argument, response, user_prompt)
     call append(line('$'), a:user_prompt . a:argument)
 
     " Append the reply
-    " TODO: error handling
+    " TODO: error handling. this format is anthropic-specific
     if has_key(a:response, 'content')
         let  reply = ai_prompt . a:response.content[0].text 
         call append(line('$'), split(reply, "\n"))
