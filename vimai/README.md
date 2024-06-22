@@ -10,3 +10,4 @@ TODO:
 3. add questions within the code itself.
 4. message history
 5. local llama.cpp server (w. llama3 or equivalent)
+6. streaming - important for slower local eval
