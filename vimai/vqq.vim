@@ -2,6 +2,7 @@ let g:vqq_api_key    = get(g:, 'vqq_api_key'   , $ANTHROPIC_API_KEY)
 let g:vqq_max_tokens = get(g:, 'vqq_max_tokens', 1024)
 let g:vqq_model_name = get(g:, 'vqq_model_name', "claude-3-5-sonnet-20240620")
 let g:vqq_local_addr = get(g:, 'vqq_local_host', "http://studio.local:8080/chat/completions")
+let g:vqq_backend    = get(g:, 'vqq_backend'   , "anthropic")
 
 function! s:ask_local(question)
     let req = {}
@@ -40,10 +41,38 @@ function! s:ask_anthropic(question)
     return json_decode(json_res)
 endfunction
 
+function! s:parse_anthropic(response)
+    " TODO: error handling.
+    return a:response.content[0].text
+endfunction
+
+function! s:parse_local(response)
+    return a:response.choices[0].message.content
+endfunction
+
+let s:backend_impl = {
+  \ 'anthropic' : {
+  \   'ask'  : function('s:ask_anthropic'),
+  \   'parse': function('s:parse_anthropic'),
+  \ },
+  \ 'local' : {
+  \   'ask'  : function('s:ask_local'),
+  \   'parse': function('s:parse_local'),
+  \ },
+\ }
+
+function! s:ask_impl(question)
+    return s:backend_impl[g:vqq_backend]['ask'](a:question)
+endfunction
+
+function! s:parse_impl(reply)
+    return s:backend_impl[g:vqq_backend]['parse'](a:reply)
+endfunction
+
 function! s:ask(argument)
     let user_prompt = strftime("%H:%M:%S You: ")
 
-    let response = s:ask_local(a:argument)
+    let response = s:ask_impl(a:argument)
 
     call s:update_chat(a:argument, response, user_prompt)
 endfunction
@@ -57,7 +86,7 @@ function! s:ask_with_context(argument)
 
     " Basic prompt format
     let question = "Here's a code snippet: \n\n " . join(lines, '\n') . "\n\n" . a:argument
-    let response = s:ask_local(question)
+    let response = s:ask_impl(question)
 
     " Not passing the context to the chat window, only the question
     call s:update_chat(a:argument, response, user_prompt)
@@ -85,15 +114,6 @@ function! s:open_chat()
     endif
 endfunction
 
-function! s:parse_anthropic(response)
-    " TODO: error handling.
-    return a:response.content[0].text
-endfunction
-
-function! s:parse_local(response)
-    return a:response.choices[0].message.content
-endfunction
-
 function! s:update_chat(argument, response, user_prompt)
     call s:open_chat()
 
@@ -108,7 +128,7 @@ function! s:update_chat(argument, response, user_prompt)
     call append(line('$'), a:user_prompt . a:argument)
 
     " Append the reply
-    let  reply = ai_prompt . s:parse_local(a:response)
+    let  reply = ai_prompt . s:parse_impl(a:response)
     call append(line('$'), split(reply, "\n"))
 
     normal! G
