@@ -1,6 +1,24 @@
 let g:vqq_api_key    = get(g:, 'vqq_api_key'   , $ANTHROPIC_API_KEY)
 let g:vqq_max_tokens = get(g:, 'vqq_max_tokens', 1024)
 let g:vqq_model_name = get(g:, 'vqq_model_name', "claude-3-5-sonnet-20240620")
+let g:vqq_local_addr = get(g:, 'vqq_local_host', "http://studio.local:8080/chat/completions")
+
+function! s:ask_local(question)
+    let req = {}
+    let req.n_predict = g:vqq_max_tokens
+    let req.messages   = [{"role": "user", "content": a:question}]
+
+    let json_req = json_encode(req)
+    let json_req = substitute(json_req, "'", "'\\\\''", "g")
+
+    let curl_cmd  = "curl -s -X POST '" . g:vqq_local_addr . "'"
+    let curl_cmd .= " -H 'Content-Type: application/json'"
+    let curl_cmd .= " -d '" . json_req . "'"
+
+    let json_res = system(curl_cmd)
+
+    return json_decode(json_res)
+endfunction
 
 function! s:ask_anthropic(question)
     let req = {}
@@ -25,7 +43,7 @@ endfunction
 function! s:ask(argument)
     let user_prompt = strftime("%H:%M:%S You: ")
 
-    let response = s:ask_anthropic(a:argument)
+    let response = s:ask_local(a:argument)
 
     call s:update_chat(a:argument, response, user_prompt)
 endfunction
@@ -39,7 +57,7 @@ function! s:ask_with_context(argument)
 
     " Basic prompt format
     let question = "Here's a code snippet: \n\n " . join(lines, '\n') . "\n\n" . a:argument
-    let response = s:ask_anthropic(question)
+    let response = s:ask_local(question)
 
     " Not passing the context to the chat window, only the question
     call s:update_chat(a:argument, response, user_prompt)
@@ -67,6 +85,15 @@ function! s:open_chat()
     endif
 endfunction
 
+function! s:parse_anthropic(response)
+    " TODO: error handling.
+    return a:response.content[0].text
+endfunction
+
+function! s:parse_local(response)
+    return a:response.choices[0].message.content
+endfunction
+
 function! s:update_chat(argument, response, user_prompt)
     call s:open_chat()
 
@@ -81,13 +108,8 @@ function! s:update_chat(argument, response, user_prompt)
     call append(line('$'), a:user_prompt . a:argument)
 
     " Append the reply
-    " TODO: error handling. this format is anthropic-specific
-    if has_key(a:response, 'content')
-        let  reply = ai_prompt . a:response.content[0].text 
-        call append(line('$'), split(reply, "\n"))
-    else
-        call append(line('$'), 'Error: ''content'' field not found in response')
-    endif
+    let  reply = ai_prompt . s:parse_local(a:response)
+    call append(line('$'), split(reply, "\n"))
 
     normal! G
 endfunction
