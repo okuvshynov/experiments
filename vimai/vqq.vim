@@ -4,6 +4,26 @@ let g:vqq_model_name = get(g:, 'vqq_model_name', "claude-3-5-sonnet-20240620")
 let g:vqq_local_addr = get(g:, 'vqq_local_host', "http://studio.local:8080/chat/completions")
 let g:vqq_backend    = get(g:, 'vqq_backend'   , "anthropic")
 
+let s:job_id = 0
+let s:curr   = []
+
+" TODO - assumes one query at a time for now
+function! s:on_stdout(channel, msg)
+    call add(s:curr, a:msg)
+endfunction
+
+function! s:on_exit(job_id, exit_status)
+    let response = json_decode(join(s:curr, '\n'))
+    call s:open_chat()
+    let ai_prompt = strftime("%H:%M:%S Bot: ")
+    let reply     = ai_prompt . s:parse_impl(response)
+    normal! G
+    setlocal modifiable
+    call append(line('$'), split(reply, "\n"))
+    setlocal nomodifiable
+    normal! G
+endfunction
+
 function! s:ask_local(question)
     let req = {}
     let req.n_predict = g:vqq_max_tokens
@@ -16,9 +36,9 @@ function! s:ask_local(question)
     let curl_cmd .= " -H 'Content-Type: application/json'"
     let curl_cmd .= " -d '" . json_req . "'"
 
-    let json_res = system(curl_cmd)
+    let s:curr = []
+    let s:job_id = job_start(['/bin/sh', '-c', curl_cmd], {'out_cb': 's:on_stdout', 'exit_cb': 's:on_exit'})
 
-    return json_decode(json_res)
 endfunction
 
 function! s:ask_anthropic(question)
@@ -36,9 +56,8 @@ function! s:ask_anthropic(question)
     let curl_cmd .= " -H 'anthropic-version: 2023-06-01'"
     let curl_cmd .= " -d '" . json_req . "'"
 
-    let json_res = system(curl_cmd)
+    let s:job_id = job_start(['/bin/sh', '-c', curl_cmd], {'out_cb': 's:on_stdout', 'exit_cb': 's:on_exit'})
 
-    return json_decode(json_res)
 endfunction
 
 function! s:parse_anthropic(response)
@@ -70,15 +89,11 @@ function! s:parse_impl(reply)
 endfunction
 
 function! s:ask(argument)
-    let user_prompt = strftime("%H:%M:%S You: ")
-
-    let response = s:ask_impl(a:argument)
-
-    call s:update_chat(a:argument, response, user_prompt)
+    call s:add_question(a:argument)
+    call s:ask_impl(a:argument)
 endfunction
 
 function! s:ask_with_context(argument)
-    let user_prompt = strftime("%H:%M:%S You: ")
     " Get the selected lines
     let [line_a, column_a] = getpos("'<")[1:2]
     let [line_b, column_b] = getpos("'>")[1:2]
@@ -86,10 +101,10 @@ function! s:ask_with_context(argument)
 
     " Basic prompt format
     let question = "Here's a code snippet: \n\n " . join(lines, '\n') . "\n\n" . a:argument
-    let response = s:ask_impl(question)
+    call s:add_question(a:argument)
+    call s:ask_impl(question)
 
     " Not passing the context to the chat window, only the question
-    call s:update_chat(a:argument, response, user_prompt)
 endfunction
 
 function! s:open_chat()
@@ -101,6 +116,7 @@ function! s:open_chat()
         setlocal buftype=nofile
         setlocal bufhidden=hide
         setlocal noswapfile
+        setlocal nomodifiable
     else
         " Check if the buffer is already displayed in a window
         let winnum = bufwinnr(bufnum)
@@ -114,22 +130,19 @@ function! s:open_chat()
     endif
 endfunction
 
-function! s:update_chat(argument, response, user_prompt)
+function! s:add_question(question)
     call s:open_chat()
 
-    let ai_prompt = strftime("%H:%M:%S Bot: ")
+    let prompt = strftime("%H:%M:%S You: ")
     normal! G
 
+    setlocal modifiable
     if line('$') > 1
         call append(line('$'), repeat('-', 80))
     endif
 
-    " Append the question
-    call append(line('$'), a:user_prompt . a:argument)
-
-    " Append the reply
-    let  reply = ai_prompt . s:parse_impl(a:response)
-    call append(line('$'), split(reply, "\n"))
+    call append(line('$'), prompt . a:question)
+    setlocal nomodifiable
 
     normal! G
 endfunction
