@@ -12,32 +12,50 @@ function! s:on_stdout(channel, msg)
     call add(s:curr, a:msg)
 endfunction
 
+function! s:on_next_token(channel, msg)
+    if a:msg !~# '^data: '
+        return
+    endif
+    let json_string = substitute(a:msg, '^data: ', '', '')
+    let response = json_decode(json_string)
+    if has_key(response.choices[0].delta, 'content')
+        let next_token = response.choices[0].delta.content
+        let bufnum = bufnr('VQQ_Chat')
+        let curr_line = getbufoneline(bufnum, '$')
+
+        call setbufline(bufnum, '$', split(curr_line . next_token . "\n", '\n'))
+    endif
+endfunction
+
+" do nothing
+function! s:on_exit_local(job_id, exit_status)
+endfunction
+
 function! s:on_exit(job_id, exit_status)
     let response = json_decode(join(s:curr, '\n'))
     call s:open_chat()
     let ai_prompt = strftime("%H:%M:%S Bot: ")
     let reply     = ai_prompt . s:parse_impl(response)
     normal! G
-    setlocal modifiable
     call append(line('$'), split(reply, "\n"))
-    setlocal nomodifiable
     normal! G
 endfunction
 
 function! s:ask_local(question)
     let req = {}
     let req.n_predict = g:vqq_max_tokens
-    let req.messages   = [{"role": "user", "content": a:question}]
+    let req.messages  = [{"role": "user", "content": a:question}]
+    let req.stream    = v:true
 
     let json_req = json_encode(req)
     let json_req = substitute(json_req, "'", "'\\\\''", "g")
 
-    let curl_cmd  = "curl -s -X POST '" . g:vqq_local_addr . "'"
+    let curl_cmd  = "curl --no-buffer -s -X POST '" . g:vqq_local_addr . "'"
     let curl_cmd .= " -H 'Content-Type: application/json'"
     let curl_cmd .= " -d '" . json_req . "'"
 
     let s:curr = []
-    let s:job_id = job_start(['/bin/sh', '-c', curl_cmd], {'out_cb': 's:on_stdout', 'exit_cb': 's:on_exit'})
+    let s:job_id = job_start(['/bin/sh', '-c', curl_cmd], {'out_cb': 's:on_next_token', 'exit_cb': 's:on_exit_local'})
 
 endfunction
 
@@ -66,7 +84,7 @@ function! s:parse_anthropic(response)
 endfunction
 
 function! s:parse_local(response)
-    return a:response.choices[0].message.content
+    return ""
 endfunction
 
 let s:backend_impl = {
@@ -114,7 +132,6 @@ function! s:open_chat()
         setlocal buftype=nofile
         setlocal bufhidden=hide
         setlocal noswapfile
-        setlocal nomodifiable
     else
         " Check if the buffer is already displayed in a window
         let winnum = bufwinnr(bufnum)
@@ -134,13 +151,13 @@ function! s:add_question(question)
     let prompt = strftime("%H:%M:%S You: ")
     normal! G
 
-    setlocal modifiable
     if line('$') > 1
         call append(line('$'), repeat('-', 80))
     endif
 
     call append(line('$'), prompt . a:question)
-    setlocal nomodifiable
+    let prompt = strftime("%H:%M:%S Bot: ")
+    call append(line('$'), prompt)
 
     normal! G
 endfunction
