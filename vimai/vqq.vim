@@ -95,16 +95,14 @@ endfunction
 
 function! s:ask_with_context(argument)
     " Get the selected lines
-    let [line_a, column_a] = getpos("'<")[1:2]
-    let [line_b, column_b] = getpos("'>")[1:2]
+    let line_a = getpos("'<")[1]
+    let line_b = getpos("'>")[1]
     let lines = getline(line_a, line_b)
 
     " Basic prompt format
     let question = "Here's a code snippet: \n\n " . join(lines, '\n') . "\n\n" . a:argument
     call s:add_question(a:argument)
     call s:ask_impl(question)
-
-    " Not passing the context to the chat window, only the question
 endfunction
 
 function! s:open_chat()
