@@ -45,7 +45,6 @@ function! s:ask_anthropic(question)
 
     let s:curr = []
     let s:job_id = job_start(['/bin/sh', '-c', curl_cmd], {'out_cb': 's:on_out', 'exit_cb': 's:on_exit'})
-
 endfunction
 
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
@@ -60,7 +59,6 @@ function! s:on_out_token(channel, msg)
     if has_key(response.choices[0].delta, 'content')
         let next_token = response.choices[0].delta.content
         let curr_line = getbufoneline(bufnum, '$')
-
         call setbufline(bufnum, '$', split(curr_line . next_token . "\n", '\n'))
     endif
 endfunction
@@ -83,7 +81,6 @@ function! s:ask_local(question)
     let bufnum = bufnr('VQQ_Chat')
     let prompt = strftime("%H:%M:%S LocalLLM: ")
     call appendbufline(bufnum, line('$'), prompt)
-
 endfunction
 
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""
@@ -112,7 +109,7 @@ function! s:ask_with_context(backend, question)
     " Get the selected lines
     let line_a = getpos("'<")[1]
     let line_b = getpos("'>")[1]
-    let lines = getline(line_a, line_b)
+    let lines  = getline(line_a, line_b)
 
     " Basic prompt format
     let prompt = "Here's a code snippet: \n\n " . join(lines, '\n') . "\n\n" . a:question
@@ -148,12 +145,11 @@ endfunction
 function! s:print_question(question)
     call s:open_chat()
 
-    let you_prompt = strftime("%H:%M:%S You: ")
-
     if line('$') > 1
         call append(line('$'), repeat('-', 80))
     endif
 
+    let you_prompt = strftime("%H:%M:%S You: ")
     call append(line('$'), you_prompt . a:question)
 
     normal! G
