@@ -13,8 +13,26 @@ let s:job_id = 0
 let s:curr   = []
 
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+" Set up basic color scheme
+function! SetupMyPluginSyntax()
+    syntax clear
+
+    syntax match localPrompt   "^\d\d:\d\d:\d\d\s*Local:"  nextgroup=restOfLine
+    syntax match sonnetPrompt  "^\d\d:\d\d:\d\d\s*Sonnet:" nextgroup=restOfLine
+
+    syntax match userTagPrompt "^\d\d:\d\d:\d\d\s*You:\s"  nextgroup=taggedBot
+    syntax match taggedBot     "\(@Local\|@Sonnet\)"       nextgroup=restOfLine
+
+    syntax match restOfLine ".*$" contained
+
+    highlight localPrompt   cterm=bold gui=bold
+    highlight sonnetPrompt  cterm=bold gui=bold
+    highlight userTagPrompt cterm=bold gui=bold
+    highlight taggedBot     ctermfg=DarkBlue guifg=DarkBlue
+endfunction
+
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 " Anthropic callbacks - no streaming
-" TODO - assumes one query at a time for now
 function! s:on_out(channel, msg)
     call add(s:curr, a:msg)
 endfunction
@@ -79,7 +97,7 @@ function! s:ask_local(question)
     let s:job_id = job_start(['/bin/sh', '-c', curl_cmd], {'out_cb': 's:on_out_token'})
 
     let bufnum = bufnr('VQQ_Chat')
-    let prompt = strftime("%H:%M:%S LocalLLM: ")
+    let prompt = strftime("%H:%M:%S  Local: ")
     call appendbufline(bufnum, line('$'), prompt)
 endfunction
 
@@ -88,9 +106,11 @@ endfunction
 let s:backend_impl = {
   \ 'anthropic' : {
   \   'ask'  : function('s:ask_anthropic'),
+  \   'name' : 'Sonnet',
   \ },
   \ 'local' : {
   \   'ask'  : function('s:ask_local'),
+  \   'name' : 'Local',
   \ },
 \ }
 
@@ -101,7 +121,7 @@ endfunction
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 " top-level functions called by commands defined below
 function! s:ask(backend, question)
-    call s:print_question(a:question)
+    call s:print_question(a:backend, a:question)
     call s:ask_impl(a:backend, a:question)
 endfunction
 
@@ -113,7 +133,7 @@ function! s:ask_with_context(backend, question)
 
     " Basic prompt format
     let prompt = "Here's a code snippet: \n\n " . join(lines, '\n') . "\n\n" . a:question
-    call s:print_question(a:question)
+    call s:print_question(a:backend, a:question)
     call s:ask_impl(a:backend, prompt)
 endfunction
 
@@ -130,26 +150,30 @@ function! s:open_chat()
         setlocal bufhidden=hide
         setlocal noswapfile
     else
-        " Check if the buffer is already displayed in a window
         let winnum = bufwinnr(bufnum)
         if winnum == -1
-            " If not displayed, open it in a vertical split
             execute 'vsplit | buffer' bufnum
         else
-            " If already displayed, switch to that window
             execute winnum . 'wincmd w'
         endif
     endif
 endfunction
 
-function! s:print_question(question)
+augroup VQQSyntax
+  autocmd!
+  autocmd BufRead,BufNewFile *VQQ_Chat* call SetupMyPluginSyntax()
+augroup END
+
+function! s:print_question(backend, question)
     call s:open_chat()
+
+    let backend_title = s:backend_impl[a:backend]['name']
 
     if line('$') > 1
         call append(line('$'), repeat('-', 80))
     endif
 
-    let you_prompt = strftime("%H:%M:%S You: ")
+    let you_prompt = strftime("%H:%M:%S    You: @" . backend_title. " ")
     call append(line('$'), you_prompt . a:question)
 
     normal! G
