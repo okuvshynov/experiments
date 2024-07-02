@@ -6,3 +6,4 @@ calc/**/*.pt
 **/__pycache__/**
 split_model/data/**
 .vscode/**
+**/*.swp
