@@ -8,83 +8,11 @@
 #include <string>
 #include <vector>
 
-
 // llama.cpp
 #include <common.h>
 #include <llama.h>
 
-/*
- * First, we need to generate in/out pairs.
- * 1. Prepare template (as we are going to use instruct)
- * 2. Prepare prompts (e.g. 10-100-1000 prompts?)
- * 3. Merge them into in[id].txt
- * 4. For each in[id].txt write corresponding out[id].tokens and out[id].txt. Tokens would be a list of ints
- *
- * 5. Then, run smaller model on same inputs. While doing that, measure the beam width effect on predicting main model output.
- *
- * How to do that exactly? Easy way is to run it N times with beam width = W1, W2, ... WN.
- * Better: let's put upper bound on beam width, say, 128. Once correct sequence falls out of top 128 we have to restart. If it is within
- * top 128, we can get away with one model evaluation and then we can analyze everything?
- */
-
-std::string replace(const std::string& templ, const std::string& question) {
-    std::string res = templ;
-    size_t i = 0;
-    const std::string placeholder = "{question}";
-    while ((i = res.find(placeholder, i)) != std::string::npos)
-    {
-        res.replace(i, placeholder.length(), question);
-        i += question.length();
-    }
-    return res;
-}
-
-std::string q_filename(size_t index)
-{
-    return "data/q" + std::to_string(index) + ".txt"; 
-}
-
-std::string a_filename(size_t index)
-{
-    return "data/a" + std::to_string(index) + ".txt"; 
-}
-
-std::string p_filename(size_t /* index */)
-{
-    return "data/prompt.txt"; 
-}
-
-int r_file(const std::string& name, std::string * out_content)
-{
-    std::ifstream file(name);
-    if (!file)
-    {
-        fprintf(stderr, "Unable to open file: %s\n", name.c_str());
-        return 1;
-    }
-    * out_content = std::string((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-    return 0;
-}
-
-int w_file(const std::string& name, const std::vector<llama_token>& tokens)
-{
-    std::ofstream file(name);
-    if (!file)
-    {
-        fprintf(stderr, "Unable to open file: %s\n", name.c_str());
-        return 1;
-    }
-    for (llama_token id : tokens)
-    {
-        file << id << std::endl;
-        if (!file)
-        {
-            fprintf(stderr, "Error writing to file: %s\n", name.c_str());
-            return 1;
-        }
-    }
-    return 0;
-}
+#include "shared.h"
 
 int run(llama_model * model, llama_context * ctx, llama_sampling_context * ctx_sampling, size_t idx, size_t n_predict)
 {
@@ -191,7 +119,6 @@ int main(int argc, char ** argv)
         }
 
         llama_sampling_free(ctx_sampling);
-        //break;
     }
 
     llama_free(ctx);

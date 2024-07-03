@@ -14,7 +14,11 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(llama.cpp)
 
-add_executable(beam_width beam_width.cpp)
+add_executable(gen_main gen_main.cpp)
+add_executable(ranks ranks.cpp)
 
-target_link_libraries(beam_width  PRIVATE common) # from llama.cpp
-target_compile_options(beam_width PRIVATE -Wall -Wextra -Wpedantic)
+target_link_libraries(gen_main  PRIVATE common) # from llama.cpp
+target_compile_options(gen_main PRIVATE -Wall -Wextra -Wpedantic)
+
+target_link_libraries(ranks  PRIVATE common) # from llama.cpp
+target_compile_options(ranks PRIVATE -Wall -Wextra -Wpedantic)
