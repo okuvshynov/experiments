@@ -4,4 +4,3 @@ You are a helpful, respectful and honest assistant<|eot_id|><|start_header_id|>u
 
 {question}<|eot_id|><|start_header_id|>assistant<|end_header_id|>
 
-
