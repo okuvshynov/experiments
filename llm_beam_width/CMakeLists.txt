@@ -16,9 +16,13 @@ FetchContent_MakeAvailable(llama.cpp)
 
 add_executable(gen_main gen_main.cpp)
 add_executable(ranks ranks.cpp)
+add_executable(beam beam.cpp)
 
 target_link_libraries(gen_main  PRIVATE common) # from llama.cpp
 target_compile_options(gen_main PRIVATE -Wall -Wextra -Wpedantic)
 
 target_link_libraries(ranks  PRIVATE common) # from llama.cpp
 target_compile_options(ranks PRIVATE -Wall -Wextra -Wpedantic)
+
+target_link_libraries(beam  PRIVATE common) # from llama.cpp
+target_compile_options(beam PRIVATE -Wall -Wextra -Wpedantic)
