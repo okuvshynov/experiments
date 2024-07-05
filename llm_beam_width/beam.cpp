@@ -17,29 +17,18 @@
 
 #include "shared.h"
 
+using llama_tokens = std::vector<llama_token>;
 
-/*
- *
- * What do we actually need to study here?
- * 1. How well can we predict if we have beam of width W
- * 2. How expensive is it to evaluate beam of width W and length L with main model?
- */
-
-struct beam_element
+struct seq_context
 {
-    // tokens which are specific to this sequence
-    std::vector<llama_token> local_tokens;
-
-    // current probability
-    double p;
-
-    // next logits
-    float * logits;
+    llama_tokens local_tokens;
+    double       p = 1.0;
+    float      * logits;
 };
 
 struct candidate
 {
-    size_t beam_index;
+    size_t seq_index;
     llama_token token;
     double p;
 
@@ -62,8 +51,9 @@ llama_token greedy(float * logits, llama_token n_vocab)
     return res;
 }
 
+// beam might be more narrow originally - we expand it to beam_width here
 void beam_advance(
-        std::vector<beam_element>& beam,
+        std::vector<seq_context>& beam,
         llama_context * ctx,
         size_t beam_width,
         llama_token n_vocab)
@@ -87,6 +77,7 @@ void beam_advance(
             {
                 bi,
                 token_id,
+                // TODO: this needs to be changed according to actual cost function
                 beam[bi].p * p
             };
 
@@ -94,29 +85,30 @@ void beam_advance(
         }
     }
 
+    // create empty placeholders for missing sequences
     while (beam.size() < beam_width)
     {
         vacant.insert(beam.size());
-        beam_element be;
-        be.p = 1.0;
-        beam.push_back(be);
+        beam.push_back(seq_context{});
     }
 
+    // not very efficient for finding top K
     std::sort(candidates.begin(), candidates.end());
     candidates.erase(candidates.begin(), candidates.end() - beam_width);
+
     for (const auto& cc : candidates)
     {
-        vacant.erase(cc.beam_index);
+        vacant.erase(cc.seq_index);
     }
 
     for (const auto& cc : candidates)
     {
         //std::cout << "Candidate " << llama_token_to_piece(ctx, cc.token) << " " << cc.p << " " << cc.token << std::endl;
-        auto & curr = beam[cc.beam_index];
-        if (used.count(cc.beam_index) == 0)
+        auto & curr = beam[cc.seq_index];
+        if (used.count(cc.seq_index) == 0)
         {
             // we just continue with this sequence
-            used.insert(cc.beam_index);
+            used.insert(cc.seq_index);
 
             curr.p = cc.p;
             curr.local_tokens.push_back(cc.token);
@@ -138,7 +130,7 @@ void beam_advance(
         beam[index_to].p = cc.p;
 
         // copy entire cache?
-        llama_kv_cache_seq_cp(ctx, cc.beam_index, index_to, 0, -1);
+        llama_kv_cache_seq_cp(ctx, cc.seq_index, index_to, 0, -1);
     }
 
     // bump probabilities here, so they are not too small?
@@ -160,12 +152,12 @@ int run(llama_model * model, llama_context * ctx, size_t idx)
     in_tokens = ::llama_tokenize(ctx, prompt, true);
     const auto n_vocab = llama_n_vocab(model);
 
-    const size_t beam_width = 4;
+    const size_t beam_width = 2;
 
     llama_batch batch = llama_batch_init(512, 0, beam_width);
 
-    std::vector<beam_element> beam;
-    beam_element be;
+    std::vector<seq_context> beam;
+    seq_context be;
     be.p = 1.0;
     beam.push_back(be);
 
@@ -192,23 +184,26 @@ int run(llama_model * model, llama_context * ctx, size_t idx)
     {
         beam_advance(beam, ctx, beam_width, n_vocab);
 
-        std::cout << n_cur  - in_tokens.size() << " true = " << llama_token_to_piece(ctx, true_id) << std::endl;
-        for (int bi = 0; bi < beam_width; bi++)
+        bool has_match = false;
+
+        for (size_t bi = 0; bi < beam_width; bi++)
         {
-            std::cout << " >> " << bi << " | ";
-            for (auto tok : beam[bi].local_tokens)
-            {
-                std::cout << llama_token_to_piece(ctx, tok);
-            }
-            std::cout << std::endl;
+            //std::cout << " >> " << bi << " | ";
+            //for (auto tok : beam[bi].local_tokens)
+            //{
+            //    std::cout << llama_token_to_piece(ctx, tok);
+            //}
+            //std::cout << std::endl;
+            has_match = has_match || std::equal(beam[bi].local_tokens.begin(), beam[bi].local_tokens.end(), main_tokens.begin());
         }
+
+        std::cout << n_cur  - in_tokens.size() << " true = " << llama_token_to_piece(ctx, true_id) << " has_match = " << has_match << std::endl;
 
         llama_batch_clear(batch);
         for (int bi = 0; bi < beam_width; bi++)
         {
             llama_batch_add(batch, beam[bi].local_tokens.back(), n_cur, { bi }, true);
         }
-        llama_batch_add(batch, true_id, n_cur, { 1 }, true);
 
         n_cur += 1;
 
@@ -217,7 +212,7 @@ int run(llama_model * model, llama_context * ctx, size_t idx)
             fprintf(stderr, "%s : failed to eval, return code %d\n", __func__, 1);
             return 1;
         }
-        // fill in logits
+        // fill in logits for next iteration
         for (int bi = 0; bi < beam_width; bi++)
         {
             beam[bi].logits = llama_get_logits_ith(ctx, bi);
