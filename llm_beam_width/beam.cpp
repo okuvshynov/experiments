@@ -38,19 +38,6 @@ struct candidate
     }
 };
 
-llama_token greedy(float * logits, llama_token n_vocab)
-{
-    llama_token res = 0;
-    for (llama_token tok = 1; tok < n_vocab; tok++)
-    {
-        if (logits[tok] > logits[res])
-        {
-            res = tok;
-        }
-    }
-    return res;
-}
-
 // beam might be more narrow originally - we expand it to beam_width here
 void beam_advance(
         std::vector<seq_context>& beam,

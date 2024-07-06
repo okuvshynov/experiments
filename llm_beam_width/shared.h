@@ -5,6 +5,10 @@
 #include <fstream>
 #include <cstdio>
 
+// llama.cpp
+#include <common.h>
+#include <llama.h>
+
 std::string replace(const std::string& templ, const std::string& question) {
     std::string res = templ;
     size_t i = 0;
@@ -79,5 +83,18 @@ int w_file(const std::string& name, const std::vector<llama_token>& tokens)
         }
     }
     return 0;
+}
+
+llama_token greedy(float * logits, llama_token n_vocab)
+{
+    llama_token res = 0;
+    for (llama_token tok = 1; tok < n_vocab; tok++)
+    {
+        if (logits[tok] > logits[res])
+        {
+            res = tok;
+        }
+    }
+    return res;
 }
 
