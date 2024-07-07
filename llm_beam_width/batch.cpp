@@ -14,8 +14,8 @@
 
 #include "shared.h"
 
-const int32_t batch_size = 8;
-const int32_t seq_size   = 8;
+const int32_t batch_size = 10;
+const int32_t seq_size   = 10;
 
 int run(llama_model * model, llama_context * ctx, size_t idx, size_t n_predict)
 {
