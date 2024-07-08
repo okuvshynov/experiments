@@ -1,3 +1,5 @@
+M2 Ultra Llama3-70B-Q8
+
 bsz,ssz,eps
 1,1,8.7
 1,2,2.5
@@ -7,3 +9,13 @@ bsz,ssz,eps
 10,6,1.36
 4,16,1.41
 
+30 CPU Intel Xeon (likely logical cores)
+
+bsz,ssz,eps
+1,1,1.759
+1,2,1.723
+1,8,1.329
+4,8,0.265
+2,4,0.969
+2,6,0.75-0.92
+2,8,0.5
