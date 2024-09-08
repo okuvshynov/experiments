@@ -1,16 +1,13 @@
-import plistlib
-import subprocess
-import threading
-import secrets
-import string
 import http.server
 import json
+import plistlib
+import subprocess
 import threading
 
 from collections import defaultdict
 
 
-class Measurements:
+class Metrics:
     def __init__(self, width):
         self.data = defaultdict(list)
         self.lock = threading.Lock()
@@ -92,7 +89,7 @@ class MacOSReader:
 
         return res
 
-    def start(self, measurements):
+    def start(self, metrics):
         # Start powermetrics process without -n qualifier
         process = subprocess.Popen(
             [
@@ -125,9 +122,10 @@ class MacOSReader:
             buffer = buffer[plist_end_pos + len(b'</plist>'):]
 
             parsed_data['rss'], parsed_data['wired'] = self.get_vm_stat()
-            measurements.append(parsed_data)
+            metrics.append(parsed_data)
 
-class MeasurementsRequestHandler(http.server.BaseHTTPRequestHandler):
+
+class MetricsRequestHandler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path != '/metrics':
             self.send_response(404)
@@ -135,20 +133,22 @@ class MeasurementsRequestHandler(http.server.BaseHTTPRequestHandler):
             self.wfile.write(b'Not Found')
             return
 
-        measurements = self.server.measurements
-        data = measurements.get()
+        metrics = self.server.metrics
+        data = metrics.get()
         self.send_response(200)
         self.send_header('Content-type', 'application/json')
         self.end_headers()
         self.wfile.write(json.dumps(data).encode())
 
+
 if __name__ == '__main__':
-    measurements = Measurements(64)
+    metrics = Metrics(64)
     reader = MacOSReader({'interval_ms': 500})
-    thread = threading.Thread(target=reader.start, args=(measurements, ))
+    thread = threading.Thread(target=reader.start, args=(metrics, ))
     thread.daemon = True
     thread.start()
 
-    server = http.server.ThreadingHTTPServer(('0.0.0.0', 8087), MeasurementsRequestHandler)
-    server.measurements = measurements
+    endpoint = ('0.0.0.0', 8087)
+    server = http.server.ThreadingHTTPServer(endpoint, MetricsRequestHandler)
+    server.metrics = metrics
     server.serve_forever()
