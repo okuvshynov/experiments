@@ -3,13 +3,14 @@ import random
 import subprocess
 
 sys_compute = "You will perform multiplication and respond with number with decimal digits only, no separators."
-sys_verify = "You will verify multiplication result and respond with 'True' or 'False'"
+sys_verify = "You will check multiplication result for correctness and respond with 'True' or 'False'."
 
 def callmodel(req):
     out = subprocess.check_output(["curl", "-s", "-X", "POST", "http://localhost:8080/v1/chat/completions", "-H", "'Content-Type: application/json'", "-d", json.dumps(req)])
     res = json.loads(out)
-    return res['choices'][0]['message']['content']
-
+    txt = res['choices'][0]['message']['content']
+    print(txt)
+    return txt
 
 def gen_next(n_samples):
     correct_compute = 0
