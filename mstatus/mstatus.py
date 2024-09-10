@@ -11,16 +11,14 @@ class Metrics:
     def __init__(self, width):
         self.data = defaultdict(list)
         self.lock = threading.Lock()
-        self.condition = threading.Condition(self.lock)
         self.width = width
 
     def append(self, slice):
-        with self.condition:
+        with self.lock:
             for k, v in slice.items():
                 self.data[k].append(v)
                 if len(self.data[k]) > self.width:
                     self.data[k].pop(0)
-            self.condition.notify_all()
 
     def get(self):
         with self.lock:
@@ -28,8 +26,8 @@ class Metrics:
 
 
 class MacOSReader:
-    def __init__(self, options):
-        self.interval_ms = options.get('interval_ms', 1000)
+    def __init__(self, interval_ms=1000):
+        self.interval_ms = interval_ms
         out = subprocess.check_output(['pagesize'])
         self.page_size = int(out.decode('utf-8').strip())
         out = subprocess.check_output(['sysctl', 'hw.memsize'])
@@ -90,7 +88,6 @@ class MacOSReader:
         return res
 
     def start(self, metrics):
-        # Start powermetrics process without -n qualifier
         process = subprocess.Popen(
             [
                 'sudo', 'powermetrics',
@@ -127,23 +124,36 @@ class MacOSReader:
 
 class MetricsRequestHandler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
-        if self.path != '/metrics':
-            self.send_response(404)
+        if self.path == '/metrics':
+            metrics = self.server.metrics
+            data = metrics.get()
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
             self.end_headers()
-            self.wfile.write(b'Not Found')
+            res = {
+                'metrics': data,
+            }
+            self.wfile.write(json.dumps(res).encode())
             return
 
-        metrics = self.server.metrics
-        data = metrics.get()
-        self.send_response(200)
-        self.send_header('Content-type', 'application/json')
-        self.end_headers()
-        self.wfile.write(json.dumps(data).encode())
+        if self.path == '/plain':
+            metrics = self.server.metrics
+            data = metrics.get()
+            self.send_response(200)
+            self.send_header('Content-type', 'text/plain')
+            self.end_headers()
+            for key, value in data.items():
+                values = " ".join(str(v) for v in value)
+                self.wfile.write(f"{key} {values}\n".encode())
+            return
 
+        self.send_response(404)
+        self.end_headers()
+        self.wfile.write(b'Not Found')
 
 if __name__ == '__main__':
     metrics = Metrics(64)
-    reader = MacOSReader({'interval_ms': 500})
+    reader = MacOSReader(interval_ms=500)
     thread = threading.Thread(target=reader.start, args=(metrics, ))
     thread.daemon = True
     thread.start()
