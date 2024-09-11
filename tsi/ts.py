@@ -28,8 +28,6 @@ def run_query(source_code, function_name):
 
     # Compile and run the query
     captures = query.captures(root_node)
-    captures = query.captures(tree.root_node)
-    print(function_name)
 
     for capture_name, nodes in captures.items():
         if capture_name != "function_name":
