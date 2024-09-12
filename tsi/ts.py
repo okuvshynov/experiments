@@ -1,6 +1,4 @@
 import sys
-from tree_sitter import Language, Parser
-
 import tree_sitter_python as tspython
 from tree_sitter import Language, Parser
 
@@ -12,13 +10,24 @@ def read_file(file_path):
     with open(file_path, 'r') as file:
         return file.read()
 
-query = PY_LANGUAGE.query(
+function_query = PY_LANGUAGE.query(
     """
 (function_definition
   name: (identifier) @function_name
   body: (block) @function_body)
 """
 )
+
+method_query = PY_LANGUAGE.query(
+    """
+ (class_definition
+   body: (block
+     (function_definition
+       name: (identifier) @function_name
+       body: (block) @function_body)))
+"""
+)
+
 
 def run_query(source_code, function_name):
     # Parse the source code
@@ -27,20 +36,21 @@ def run_query(source_code, function_name):
     root_node = tree.root_node
 
     # Compile and run the query
-    captures = query.captures(root_node)
+    for query in [function_query, method_query]:
+        captures = query.captures(root_node)
 
-    for capture_name, nodes in captures.items():
-        if capture_name != "function_name":
-            continue
+        for capture_name, nodes in captures.items():
+            if capture_name != "function_name":
+                continue
 
-        for node in nodes:
-            if code[node.start_byte:node.end_byte].decode("utf8") == function_name:
-                function_node = node.parent  # The parent node is the full function definition
+            for node in nodes:
+                if code[node.start_byte:node.end_byte].decode("utf8") == function_name:
+                    function_node = node.parent  # The parent node is the full function definition
 
-                # Print out the entire function definition
-                function_text = code[function_node.start_byte:function_node.end_byte].decode("utf8")
-                print(function_text)
-                return
+                    # Print out the entire function definition
+                    function_text = code[function_node.start_byte:function_node.end_byte].decode("utf8")
+                    print(function_text)
+                    return
 
 def main():
     if len(sys.argv) != 3:
@@ -48,10 +58,10 @@ def main():
         return
 
     file_path = sys.argv[1]
-    query_string = sys.argv[2]
+    symbol = sys.argv[2]
 
     source_code = read_file(file_path)
-    run_query(source_code, query_string)
+    run_query(source_code, symbol)
 
 if __name__ == "__main__":
     main()
