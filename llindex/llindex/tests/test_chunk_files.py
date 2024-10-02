@@ -1,6 +1,6 @@
 import unittest
 
-from llindex.dir_process import chunk_files
+from llindex.crawler import chunk_files
 from typing import List, Dict, Any
 
 

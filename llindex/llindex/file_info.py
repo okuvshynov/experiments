@@ -20,7 +20,6 @@ def get_file_info(path: str) -> Dict[str, Any]:
         except UnicodeDecodeError:
             logging.warn(f'non-utf file, skipping {path}')
             return None
-        print(path)
         file_hash = hashlib.md5()
         file_hash.update(content.encode("utf-8"))
         approx_token_count += token_counter_claude(content)

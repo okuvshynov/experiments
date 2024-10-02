@@ -1,10 +1,15 @@
 import json
+import re
 import os
 import sys
 import requests
 import logging
 import time
 from typing import List, Dict, Any
+import xml.etree.ElementTree as ET
+
+from pathlib import Path
+from xml.dom import minidom
 
 from llindex.token_counters import token_counter_claude
 
@@ -77,6 +82,14 @@ Make sure you processed all files and kept original index for each file.
 
 """
 
+def parse_results(content):
+    pattern = re.compile(r'<file>\s*<index>.*?</index>\s*<path>(.*?)</path>\s*<summary>(.*?)</summary>\s*</file>', re.DOTALL)
+    matches = pattern.findall(content)
+    
+    result = {path.strip(): summary.strip() for path, summary in matches}
+    
+    return result
+
 def format_file(filepath, relative_path, index):
     file_element = ET.Element("file")
     
@@ -98,45 +111,8 @@ def format_file(filepath, relative_path, index):
     return xml_string
 
 def format_message(root: str, files: List[Dict[str, Any]]) -> str:
-    file_results = [format_file(os.path.join(root, f['path'])) for f in files]
-    return index_prompt + ''.join(file_entries)
-
-def send_groq_api_request(message):
-    # Load API key from environment variable
-    groq_api_key = os.environ.get('GROQ_API_KEY')
-
-    if groq_api_key is None:
-        print("GROQ_API_KEY environment variable not set")
-        sys.exit(1)
-
-    req = {
-        "max_tokens": 4096,
-        "model": "llama-3.1-70b-versatile",
-        "messages": [
-            {"role": "user", "content": message}
-        ]
-    }
-    payload = json.dumps(req)
-
-    payload_size = token_counter_claude(payload)
-
-    # Set API endpoint and headers
-    url = 'https://api.groq.com/openai/v1/chat/completions'
-    headers = {
-        'Content-Type': 'application/json',
-        'Authorization': f'Bearer {groq_api_key}'
-    }
-
-    # Send POST request
-    response = requests.post(url, headers=headers, json=payload)
-
-    # Check if the request was successful
-    if response.status_code != 200:
-        print(f"Error: {response.text}")
-        sys.exit(1)
-
-    # Print the response
-    print(response.text)
+    file_results = [format_file(f['path'], os.path.relpath(f['path'], root), i) for i, f in enumerate(files)]
+    return index_prompt + ''.join(file_results)
 
 class GroqClient:
     def __init__(self, tokens_rate=20000, period=60):
@@ -189,15 +165,17 @@ class GroqClient:
         wait_for = self.wait_time()
 
         if wait_for > 0:
-            logging.info('groq client-side rate-limiting. Waiting for {wait_for} seconds')
+            logging.info(f'groq client-side rate-limiting. Waiting for {wait_for} seconds')
             time.sleep(wait_for)
 
         # Send POST request
-        response = requests.post(self.url, headers=headers, json=payload)
+        response = requests.post(self.url, headers=self.headers, data=payload)
 
         # Check if the request was successful
         if response.status_code != 200:
             logging.error(f"{response.text}")
             return None
 
-        return response.text
+        res = response.json()
+        content = res['choices'][0]['message']['content']
+        return parse_results(content)
