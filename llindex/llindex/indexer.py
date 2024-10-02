@@ -1,16 +1,14 @@
 import os
 import sys
 import logging
-from datetime import datetime
 import json
 
-from llindex.crawler import process_directory, chunk_files
-
+from datetime import datetime
+from filelock import FileLock
 from typing import List, Dict, Any
 
 from llindex.llm_client import format_message, GroqClient
-
-from filelock import FileLock
+from llindex.crawler import process_directory, chunk_files
 
 class Indexer:
     def __init__(self, client):

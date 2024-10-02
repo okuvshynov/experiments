@@ -1,6 +1,4 @@
 import os
-import logging
-from datetime import datetime
 
 from llindex.file_info import get_file_info
 from typing import List, Dict, Any
@@ -51,17 +49,3 @@ def chunk_files(files: List[Dict[str, Any]], token_limit: int) -> List[List[Dict
         chunks.append(current_chunk)
 
     return chunks
-
-def main():
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s %(levelname)s: %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S',
-        handlers=[
-            logging.StreamHandler()
-        ]
-    )
-    process_directory_with_limit(".", 512, {})
-
-if __name__ == '__main__':
-    main()

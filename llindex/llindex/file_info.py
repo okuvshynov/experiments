@@ -1,7 +1,7 @@
 import os
 import hashlib
 import logging
-from typing import List, Dict, Any
+from typing import Dict, Any
 
 from llindex.token_counters import token_counter_claude
 

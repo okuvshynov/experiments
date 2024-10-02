@@ -1,4 +1,3 @@
-import sys
 import tiktoken
 
 def token_counter_claude(text):
