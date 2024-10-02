@@ -16,7 +16,7 @@ def process_directory(directory: str, root: str, previous_results: Dict[str, Dic
             full_path = os.path.join(root_path, file)
             relative_path = os.path.relpath(full_path, root)
             if should_process(relative_path):
-                file_info = get_file_info(full_path)
+                file_info = get_file_info(full_path, root)
                 if file_info is None:
                     continue
                 if relative_path in previous_results and previous_results[relative_path]["checksum"] == file_info["checksum"]:

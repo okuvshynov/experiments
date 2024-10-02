@@ -88,7 +88,7 @@ def parse_results(content):
     
     return result
 
-def format_file(filepath, relative_path, index):
+def format_file(relative_path, root, index):
     file_element = ET.Element("file")
     
     index_element = ET.SubElement(file_element, "index")
@@ -100,7 +100,7 @@ def format_file(filepath, relative_path, index):
     content_element = ET.SubElement(file_element, "content")
     
     try:
-        with open(filepath, 'r', encoding='utf-8') as file:
+        with open(os.path.join(root, relative_path), 'r', encoding='utf-8') as file:
             content_element.text = file.read()
     except Exception as e:
         content_element.text = f"Error reading file: {str(e)}"
@@ -109,7 +109,7 @@ def format_file(filepath, relative_path, index):
     return xml_string
 
 def format_message(root: str, files: List[Dict[str, Any]]) -> str:
-    file_results = [format_file(f['path'], os.path.relpath(f['path'], root), i) for i, f in enumerate(files)]
+    file_results = [format_file(f['path'], root, i) for i, f in enumerate(files)]
     return index_prompt + ''.join(file_results)
 
 class GroqClient:

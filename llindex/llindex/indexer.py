@@ -1,7 +1,7 @@
+import json
+import logging
 import os
 import sys
-import logging
-import json
 
 from datetime import datetime
 from filelock import FileLock
@@ -23,7 +23,7 @@ class Indexer:
 
         res = []
         for file in files:
-            relative_path = os.path.relpath(file['path'], directory)
+            relative_path = file['path']
             if relative_path not in result:
                 logging.error(f'missing file {relative_path} in the reply.')
             else:
@@ -43,7 +43,7 @@ class Indexer:
             timestamp = datetime.now().isoformat()
             for file, result in zip(chunk, processing_results):
                 file_result = {
-                    "name": file["path"],
+                    "path": file["path"],
                     "size": file["size"],
                     "checksum": file["checksum"],
                     "processing_result": result,
@@ -76,6 +76,7 @@ def onepass(indexer, directory, index_file):
         current = load_json_from_file(index_file)
     new = indexer.run(directory, 8000, current)
     with lock:
+        logging.info(new)
         save_to_json_file(new, index_file)
 
 def main():
