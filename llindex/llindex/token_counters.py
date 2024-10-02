@@ -1,5 +1,3 @@
-# we need this to estimate size, not to actually run tokenization
-
 import sys
 import tiktoken
 

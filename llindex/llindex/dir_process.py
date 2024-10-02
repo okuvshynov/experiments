@@ -2,7 +2,7 @@ import os
 import logging
 from datetime import datetime
 
-from file_info import get_file_info
+from llindex.file_info import get_file_info
 from typing import List, Dict, Any
 
 def should_process(filename):
@@ -79,11 +79,10 @@ def process_directory_with_limit(directory: str, size_limit: int, previous_resul
     for file in files:
         if "processing_result" in file:
             results.append(file)
-    print(results)
     
     return results
 
-if __name__ == '__main__':
+def main():
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s %(levelname)s: %(message)s',
@@ -93,3 +92,6 @@ if __name__ == '__main__':
         ]
     )
     process_directory_with_limit(".", 512, {})
+
+if __name__ == '__main__':
+    main()

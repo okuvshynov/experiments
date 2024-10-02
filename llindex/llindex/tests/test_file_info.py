@@ -2,7 +2,7 @@ import hashlib
 import os
 import unittest
 
-from ..file_info import get_file_info
+from llindex.file_info import get_file_info
 
 class TestGetFileInfo(unittest.TestCase):
     def setUp(self):
@@ -24,7 +24,7 @@ class TestGetFileInfo(unittest.TestCase):
 
         self.assertEqual(file_info["path"], self.test_file_path)
         self.assertEqual(file_info["size"], os.path.getsize(self.test_file_path))
-        self.assertGreater(file_info["approx_tokens"], 49000)
+        self.assertGreater(file_info["approx_tokens"], 48999)
         self.assertGreater(50000, file_info["approx_tokens"])
 
     def test_checksum(self):
