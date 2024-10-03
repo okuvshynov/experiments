@@ -8,13 +8,13 @@ from filelock import FileLock
 from typing import List, Dict, Any
 
 from llindex.llm_client import format_message, GroqClient
-from llindex.crawler import process_directory, chunk_files
+from llindex.crawler import Crawler, FileEntry, Index, FileEntryList
 
 class Indexer:
     def __init__(self, client):
         self.client = client
 
-    def process(self, directory: str, files: List[Dict[str, Any]]) -> List[str]:
+    def process(self, directory: str, files: FileEntryList) -> List[str]:
         logging.info(f'processing {len(files)} files')
         message = format_message(directory, files)
         result = self.client.query(message)
@@ -32,10 +32,10 @@ class Indexer:
         return res
 
 
-    def run(self, directory: str, size_limit: int, previous_index: Dict[str, Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def run(self, directory: str, size_limit: int, previous_index: Index) -> FileEntryList:
         """Process directory with size limit and return results for files that should be processed."""
-        files = process_directory(directory, directory, previous_index)
-        chunks = chunk_files(files, size_limit)
+        crawler = Crawler(directory, previous_index)
+        chunks, reused = crawler.chunk_into(size_limit)
         
         results = {}
         for chunk in chunks:
@@ -53,7 +53,7 @@ class Indexer:
                 results[file["path"]] = file_result
         
         # Add previously processed files that weren't reprocessed
-        for file in files:
+        for file in reused:
             if "processing_result" in file:
                 results[file["path"]] = file
         
@@ -91,7 +91,7 @@ def main():
     directory = sys.argv[1]
     groq = GroqClient()
     indexer = Indexer(groq)
-    onepass(indexer, directory, "/tmp/llindex.0")
+    onepass(indexer, directory, "/tmp/llindex.vimqq.1")
 
 if __name__ == '__main__':
     main()
