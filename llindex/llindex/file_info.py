@@ -30,6 +30,3 @@ def get_file_info(full_path: str, root: str) -> Dict[str, Any]:
         "checksum": file_hash.hexdigest(),
         "approx_tokens": approx_token_count
     }
-
-if __name__ == '__main__':
-    print(get_file_info(__file__))

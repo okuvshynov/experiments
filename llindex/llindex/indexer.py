@@ -7,7 +7,8 @@ from datetime import datetime
 from filelock import FileLock
 from typing import List, Dict, Any
 
-from llindex.llm_client import format_message, GroqClient
+from llindex.llm_client import llm_summarize_files
+from llindex.groq import GroqClient
 from llindex.crawler import Crawler, FileEntry, Index, FileEntryList
 
 class Indexer:
@@ -16,8 +17,7 @@ class Indexer:
 
     def process(self, directory: str, files: FileEntryList) -> List[str]:
         logging.info(f'processing {len(files)} files')
-        message = format_message(directory, files)
-        result = self.client.query(message)
+        result = llm_summarize_files(directory, files, self.client)
 
         logging.info(result)
 
@@ -25,7 +25,7 @@ class Indexer:
         for file in files:
             relative_path = file['path']
             if relative_path not in result:
-                logging.error(f'missing file {relative_path} in the reply.')
+                logging.warning(f'missing file {relative_path} in the reply.')
             else:
                 res.append(result[relative_path])
 

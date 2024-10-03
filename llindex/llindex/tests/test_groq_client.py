@@ -1,6 +1,6 @@
 import unittest
 import time
-from llindex.llm_client import GroqClient
+from llindex.groq import GroqClient
 
 class TestGroqClient(unittest.TestCase):
 
