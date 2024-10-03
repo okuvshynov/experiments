@@ -7,9 +7,10 @@ from datetime import datetime
 from filelock import FileLock
 from typing import List, Dict, Any
 
-from llindex.llm_client import llm_summarize_files
-from llindex.groq import GroqClient
+from llindex.llm_client import llm_summarize_files, client_factory
 from llindex.crawler import Crawler, FileEntry, Index, FileEntryList
+from llindex.config import open_yaml
+from llindex.token_counters import token_counter_claude
 
 class Indexer:
     def __init__(self, client):
@@ -18,8 +19,7 @@ class Indexer:
     def process(self, directory: str, files: FileEntryList) -> List[str]:
         logging.info(f'processing {len(files)} files')
         result = llm_summarize_files(directory, files, self.client)
-
-        logging.info(result)
+        logging.info(f'received {len(result)} summaries')
 
         res = []
         for file in files:
@@ -36,6 +36,8 @@ class Indexer:
         """Process directory with size limit and return results for files that should be processed."""
         crawler = Crawler(directory, previous_index)
         chunks, reused = crawler.chunk_into(size_limit)
+
+        logging.info(f'{directory} {previous_index}')
         
         results = {}
         for chunk in chunks:
@@ -57,6 +59,8 @@ class Indexer:
             if "processing_result" in file:
                 results[file["path"]] = file
         
+        n_tokens = token_counter_claude(json.dumps(results))
+        logging.info(f'computed index size of approximately {n_tokens} tokens')
         return results
 
 def load_json_from_file(filename):
@@ -88,10 +92,16 @@ def main():
             logging.StreamHandler()
         ]
     )
-    directory = sys.argv[1]
-    groq = GroqClient()
-    indexer = Indexer(groq)
-    onepass(indexer, directory, "/tmp/llindex.vimqq.1")
+    if len(sys.argv) > 1:
+        config_path = sys.argv[1]
+    else:
+        config_path = os.path.join(os.path.dirname(__file__), 'indexer.yaml')
+    config = open_yaml(config_path)
+    client = client_factory(config['llm_client'])
+    indexer = Indexer(client)
+    directory = os.path.expanduser(config['dir'])
+    index_file = os.path.expanduser(config['index_file'])
+    onepass(indexer, directory, index_file)
 
 if __name__ == '__main__':
     main()

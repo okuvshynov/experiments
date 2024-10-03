@@ -11,6 +11,7 @@ from xml.dom import minidom
 
 from llindex.token_counters import token_counter_claude
 from llindex.crawler import FileEntry, Index, FileEntryList
+from llindex.groq import GroqClient
 
 index_prompt="""
 You will be given content for multiple files from code repository. It will be formatted as a list of entries like this:
@@ -118,5 +119,9 @@ def llm_summarize_files(root: str, files: FileEntryList, client):
     reply = client.query(message)
     if reply is not None:
         return parse_results(reply)
-    return None
+    return {}
 
+def client_factory(config):
+    class_name = config.pop('type')
+    cls = globals()[class_name]
+    return cls(**config)

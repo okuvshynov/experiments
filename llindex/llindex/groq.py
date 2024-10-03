@@ -7,7 +7,7 @@ import json
 from llindex.token_counters import token_counter_claude
 
 class GroqClient:
-    def __init__(self, tokens_rate=20000, period=60):
+    def __init__(self, tokens_rate=20000, period=60, max_tokens=4096, model='llama-3.1-70b-versatile'):
         # Load API key from environment variable
         self.api_key: str = os.environ.get('GROQ_API_KEY')
 
@@ -18,6 +18,8 @@ class GroqClient:
         self.history: List[Tuple[float, int]] = []
         self.tokens_rate: int = tokens_rate
         self.period: int = period
+        self.max_tokens: int = max_tokens
+        self.model: str = model
         self.url = 'https://api.groq.com/openai/v1/chat/completions'
         self.headers = {
             'Content-Type': 'application/json',
@@ -37,8 +39,8 @@ class GroqClient:
 
     def query(self, message):
         req = {
-            "max_tokens": 4096,
-            "model": "llama-3.1-70b-versatile",
+            "max_tokens": self.max_tokens,
+            "model": self.model,
             "messages": [
                 {"role": "user", "content": message}
             ]

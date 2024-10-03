@@ -1,3 +1,4 @@
+import logging
 import os
 
 from llindex.file_info import get_file_info
@@ -20,6 +21,7 @@ class Crawler:
     def process_directory(self, directory: str) -> FileEntryList:
         """Process directory recursively and return file information for files that should be processed."""
         result = []
+        logging.info(f'process_directory {directory}')
         for root_path, _, files in os.walk(directory):
             for file in files:
                 full_path = os.path.join(root_path, file)
