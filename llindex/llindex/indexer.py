@@ -1,4 +1,5 @@
 import json
+import time
 import logging
 import os
 import sys
@@ -20,6 +21,7 @@ class Indexer:
         self.directory = os.path.expanduser(config['dir'])
         self.index_file = os.path.expanduser(config['index_file'])
         self.crawler = Crawler(self.directory, config['crawler'])
+        self.freq = config.get('freq', 60)
 
     def process(self, directory: str, files: FileEntryList) -> List[str]:
         logging.info(f'processing {len(files)} files')
@@ -36,14 +38,11 @@ class Indexer:
 
         return res
 
-
     def run(self, previous_index) -> FileEntryList:
         """Process directory with size limit and return results for files that should be processed."""
         to_process, to_reuse = self.crawler.run(previous_index)
         chunks = chunk_tasks(to_process, self.chunk_size)
 
-        logging.info(f'{self.directory} {previous_index}')
-        
         results = {}
         for chunk in chunks:
             processing_results = self.process(self.directory, chunk)
@@ -74,8 +73,16 @@ class Indexer:
             current = load_json_from_file(self.index_file)
         new = self.run(current)
         with lock:
-            logging.info(new)
             save_to_json_file(new, self.index_file)
+
+    def loop(self):
+        # naive loop, sleep for N seconds and then process again.
+        # if nothing was changed, we won't query model. 
+        # still, better to use something watchdog
+        while True:
+            logging.info('starting next iteration')
+            self.onepass()
+            time.sleep(self.freq)
 
 def load_json_from_file(filename):
     if os.path.exists(filename):
@@ -104,7 +111,7 @@ def main():
         config_path = os.path.join(os.path.dirname(__file__), 'indexer.yaml')
     config = open_yaml(config_path)
     indexer = Indexer(config)
-    indexer.onepass()
+    indexer.loop()
 
 if __name__ == '__main__':
     main()

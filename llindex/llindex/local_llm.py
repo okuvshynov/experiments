@@ -14,17 +14,6 @@ class LocalClient:
             'Content-Type': 'application/json',
         }
 
-    def wait_time(self):
-        total_size = sum(size for _, size in self.history)
-        if total_size < self.tokens_rate:
-            return 0
-        current_time = time.time()
-        running_total = total_size
-        for time_stamp, size in self.history:
-            running_total -= size
-            if running_total <= self.tokens_rate:
-                return max(0, time_stamp + self.period - current_time)
-
     def query(self, message):
         req = {
             "n_predict": self.max_tokens,
@@ -43,7 +32,6 @@ class LocalClient:
             return None
 
         res = response.json()
-        logging.info(res)
         content = res['choices'][0]['message']['content']
         return content
 
