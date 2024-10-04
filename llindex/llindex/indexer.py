@@ -6,10 +6,10 @@ import sys
 
 from datetime import datetime
 from filelock import FileLock
-from typing import List, Dict, Any
+from typing import List
 
 from llindex.llm_client import llm_summarize_files, client_factory
-from llindex.crawler import Crawler, FileEntry, Index, FileEntryList
+from llindex.crawler import Crawler, FileEntryList
 from llindex.config import open_yaml
 from llindex.token_counters import token_counter_claude
 from llindex.chunks import chunk_tasks

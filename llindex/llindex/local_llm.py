@@ -1,10 +1,6 @@
 import logging
-import os
 import requests
-import time
 import json
-
-from llindex.token_counters import token_counter_claude
 
 class LocalClient:
     def __init__(self, max_tokens=4096, endpoint='http://localhost/v1/chat/completions'):

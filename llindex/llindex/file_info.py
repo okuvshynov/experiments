@@ -18,7 +18,7 @@ def get_file_info(full_path: str, root: str) -> Dict[str, Any]:
         try:
             content = file.read()
         except UnicodeDecodeError:
-            logging.warn(f'non-utf file, skipping {full_path}')
+            logging.warning(f'non-utf file, skipping {full_path}')
             return None
         file_hash = hashlib.md5()
         file_hash.update(content.encode("utf-8"))

@@ -3,7 +3,7 @@ import logging
 import subprocess
 import fnmatch
 
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any
 from llindex.file_info import get_file_info
 
 FileEntry = Dict[str, Any]

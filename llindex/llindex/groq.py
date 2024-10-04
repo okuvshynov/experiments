@@ -4,6 +4,8 @@ import requests
 import time
 import json
 
+from typing import List, Tuple
+
 from llindex.token_counters import token_counter_claude
 
 class GroqClient:

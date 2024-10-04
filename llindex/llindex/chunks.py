@@ -1,6 +1,6 @@
-from llindex.crawler import FileEntryList, FileEntry, Index
+from llindex.crawler import FileEntryList
 
-from typing import List, Dict, Any
+from typing import List
 
 def chunk_tasks(files: FileEntryList, token_limit: int) -> List[FileEntryList]:
     chunks = []
