@@ -28,6 +28,7 @@ class LocalClient:
             return None
 
         res = response.json()
+        logging.info(f'Local LLM usage: {res["usage"]}')
         content = res['choices'][0]['message']['content']
         return content
 

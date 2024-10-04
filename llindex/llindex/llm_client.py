@@ -42,8 +42,9 @@ index is just a number from 1 to N where N is the number of input files.
 Your job is to provide a description of each provided file.
 Description for each file should be detailed, contain both high level description and every important detail. Include relationships between files if you have identified them.
 
-For every file in the input, write output in the following format:
+Write output in the following format:
 
+<files>
 <file>
 <index>1</index>
 <path>path/filename</path>
@@ -60,21 +61,16 @@ Summary here...
 </file>
 ...
 <file>
-<index>2</index>
+<index>N</index>
 <path>path/filename</path>
 <summary>
 Summary here...
 </summary>
 </file>
-<file>
-<index>2</index>
-<path>path/filename</path>
-<summary>
-Summary here...
-</summary>
-</file>
+</files>
 
 Make sure you processed all files and kept original index for each file.
+Output only the XML above, avoid adding extra text.
 
 ===========================================================
 
@@ -114,7 +110,10 @@ def format_message(root: str, files: List[Dict[str, Any]]) -> str:
 
 def llm_summarize_files(root: str, files: FileEntryList, client):
     message = format_message(root, files)
+    start = time.time()
     reply = client.query(message)
+    duration = time.time() - start
+    logging.info(f'LLM client query took {duration:.3f} seconds.')
     if reply is not None:
         return parse_results(reply)
     return {}
