@@ -13,8 +13,9 @@ from llindex.config import open_yaml
 from llindex.token_counters import token_counter_claude
 
 class Indexer:
-    def __init__(self, client):
+    def __init__(self, client, chunk_size: int):
         self.client = client
+        self.chunk_size = chunk_size
 
     def process(self, directory: str, files: FileEntryList) -> List[str]:
         logging.info(f'processing {len(files)} files')
@@ -32,10 +33,10 @@ class Indexer:
         return res
 
 
-    def run(self, directory: str, size_limit: int, previous_index: Index) -> FileEntryList:
+    def run(self, directory: str, previous_index: Index) -> FileEntryList:
         """Process directory with size limit and return results for files that should be processed."""
         crawler = Crawler(directory, previous_index)
-        chunks, reused = crawler.chunk_into(size_limit)
+        chunks, reused = crawler.chunk_into(self.chunk_size)
 
         logging.info(f'{directory} {previous_index}')
         
@@ -78,7 +79,7 @@ def onepass(indexer, directory, index_file):
     lock = FileLock(f"{index_file}.lock", timeout=10)
     with lock:
         current = load_json_from_file(index_file)
-    new = indexer.run(directory, 8000, current)
+    new = indexer.run(directory, current)
     with lock:
         logging.info(new)
         save_to_json_file(new, index_file)
@@ -98,7 +99,7 @@ def main():
         config_path = os.path.join(os.path.dirname(__file__), 'indexer.yaml')
     config = open_yaml(config_path)
     client = client_factory(config['llm_client'])
-    indexer = Indexer(client)
+    indexer = Indexer(client, config['chunk_size'])
     directory = os.path.expanduser(config['dir'])
     index_file = os.path.expanduser(config['index_file'])
     onepass(indexer, directory, index_file)

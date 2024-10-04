@@ -12,6 +12,7 @@ from xml.dom import minidom
 from llindex.token_counters import token_counter_claude
 from llindex.crawler import FileEntry, Index, FileEntryList
 from llindex.groq import GroqClient
+from llindex.local_llm import LocalClient
 
 index_prompt="""
 You will be given content for multiple files from code repository. It will be formatted as a list of entries like this:
