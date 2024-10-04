@@ -1,68 +1,51 @@
-import logging
 import os
+import logging
+import fnmatch
 
-from llindex.file_info import get_file_info
 from typing import List, Dict, Any, Tuple
+from llindex.file_info import get_file_info
 
 FileEntry = Dict[str, Any]
 Index = Dict[str, FileEntry]
 FileEntryList = List[FileEntry]
 
+
 class Crawler:
-    def __init__(self, root, prev: Index):
+    def __init__(self, root, conf: Dict[str, any]):
         self.root = root
-        self.prev = prev
+        if 'includes' in conf:
+            includes = conf['includes'].split(',')
+            self.includes = [p.strip() for p in includes]
+        else:
+            self.includes = ["*"]
+        if 'excludes' in conf:
+            excludes = conf['excludes'].split(',')
+            self.excludes = [p.strip() for p in excludes]
+        else:
+            self.excludes = []
 
-    def should_process(self, filename):
-        if filename.endswith(".vim"):
-            return True
-        return False
+    def should_process(self, path):
+        included = any(fnmatch.fnmatch(path, p) for p in self.includes)
+        excluded = any(fnmatch.fnmatch(path, p) for p in self.excludes)
+        return included and not excluded
 
-    def process_directory(self, directory: str) -> FileEntryList:
-        """Process directory recursively and return file information for files that should be processed."""
+    def run(self, prev_index):
         result = []
-        logging.info(f'process_directory {directory}')
-        for root_path, _, files in os.walk(directory):
+        reused = []
+        for root_path, _, files in os.walk(self.root):
             for file in files:
                 full_path = os.path.join(root_path, file)
                 relative_path = os.path.relpath(full_path, self.root)
                 if self.should_process(relative_path):
+                    logging.info(f'processing {relative_path}')
                     file_info = get_file_info(full_path, self.root)
                     if file_info is None:
                         continue
-                    if relative_path in self.prev and self.prev[relative_path]["checksum"] == file_info["checksum"]:
+                    if relative_path in prev_index and prev_index[relative_path]["checksum"] == file_info["checksum"]:
                         # Reuse previous result if checksum hasn't changed
-                        result.append(self.prev[relative_path])
+                        reused.append(prev_index[relative_path])
                     else:
                         result.append(file_info)
-        return result
-
-    def chunk_files(self, files: FileEntryList, token_limit: int) -> Tuple[List[FileEntryList], FileEntryList]:
-        """Split files into chunks respecting the size limit."""
-        chunks = []
-        current_chunk = []
-        current_size = 0
-        reused = []
-
-        for file in files:
-            if "processing_result" in file:
-                # Skip files that have already been processed
-                reused.append(file)
-                continue
-            if current_size + file["approx_tokens"] > token_limit:
-                if current_chunk:
-                    chunks.append(current_chunk)
-                current_chunk = [file]
-                current_size = file["approx_tokens"]
-            else:
-                current_chunk.append(file)
-                current_size += file["approx_tokens"]
-
-        if current_chunk:
-            chunks.append(current_chunk)
-
-        return chunks, reused
-
-    def chunk_into(self, size: int):
-        files = self.process_directory(self.root)
-        return self.chunk_files(files, size)
+                else:
+                    logging.info(f'skipping {relative_path}')
+        return result, reused
