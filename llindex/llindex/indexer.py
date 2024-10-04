@@ -41,6 +41,8 @@ class Indexer:
     def run(self, previous_index) -> FileEntryList:
         """Process directory with size limit and return results for files that should be processed."""
         to_process, to_reuse = self.crawler.run(previous_index)
+        logging.info(f'Indexing: {len(to_process)} files')
+        logging.info(f'Reusing: {len(to_reuse)} files')
         chunks = chunk_tasks(to_process, self.chunk_size)
 
         results = {}
