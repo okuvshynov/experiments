@@ -5,7 +5,6 @@ import os
 import sys
 
 from datetime import datetime
-from filelock import FileLock
 from typing import List
 
 from llindex.llm_client import llm_summarize_files, client_factory
