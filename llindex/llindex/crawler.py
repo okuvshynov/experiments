@@ -69,7 +69,7 @@ class Crawler:
                 file_info = get_file_info(full_path, self.root)
                 if file_info is None:
                     continue
-                if relative_path in prev_index and prev_index[relative_path]["checksum"] == file_info["checksum"]:
+                if relative_path in prev_index and prev_index[relative_path]["checksum"] == file_info["checksum"] and "processing_result" in prev_index[relative_path]:
                     # Reuse previous result if checksum hasn't changed
                     reused.append(prev_index[relative_path])
                 else:

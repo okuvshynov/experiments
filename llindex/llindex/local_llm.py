@@ -20,7 +20,11 @@ class LocalClient:
         payload = json.dumps(req)
 
         # Send POST request
-        response = requests.post(self.endpoint, headers=self.headers, data=payload)
+        try:
+            response = requests.post(self.endpoint, headers=self.headers, data=payload)
+        except requests.exceptions.ConnectionError:
+            logging.error(f'Connection error')
+            return None
 
         # Check if the request was successful
         if response.status_code != 200:
