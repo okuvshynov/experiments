@@ -38,14 +38,21 @@ class Indexer:
 
         return res
 
-    def run(self, previous_index) -> FileEntryList:
+    def run(self) -> FileEntryList:
         """Process directory with size limit and return results for files that should be processed."""
+        previous_index = load_json_from_file(self.index_file)
         to_process, to_reuse = self.crawler.run(previous_index)
+        results = {}
+        for file in to_reuse:
+            results[file["path"]] = file
+        for file in to_process:
+            results[file["path"]] = file
+
+        save_to_json_file(results, self.index_file)
+
         logging.info(f'Indexing: {len(to_process)} files')
         logging.info(f'Reusing: {len(to_reuse)} files')
         chunks = chunk_tasks(to_process, self.chunk_size)
-
-        results = {}
         for chunk in chunks:
             processing_results = self.process(self.directory, chunk)
             timestamp = datetime.now().isoformat()
@@ -59,23 +66,11 @@ class Indexer:
                     "approx_tokens": file["approx_tokens"] 
                 }
                 results[file["path"]] = file_result
-        
-        # Add previously processed files that weren't reprocessed
-        for file in to_reuse:
-            if "processing_result" in file:
-                results[file["path"]] = file
+            save_to_json_file(results, self.index_file)
         
         n_tokens = token_counter_claude(json.dumps(results))
         logging.info(f'computed index size of approximately {n_tokens} tokens')
         return results
-
-    def onepass(self):
-        lock = FileLock(f"{self.index_file}.lock", timeout=10)
-        with lock:
-            current = load_json_from_file(self.index_file)
-        new = self.run(current)
-        with lock:
-            save_to_json_file(new, self.index_file)
 
     def loop(self):
         # naive loop, sleep for N seconds and then process again.
@@ -83,7 +78,7 @@ class Indexer:
         # still, better to use something watchdog
         while True:
             logging.info('starting next iteration')
-            self.onepass()
+            self.run()
             time.sleep(self.freq)
 
 def load_json_from_file(filename):
