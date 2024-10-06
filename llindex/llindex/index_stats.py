@@ -26,8 +26,12 @@ def main():
     with open(index_file, 'r') as f:
         data = json.load(f)
 
-    tokens = token_counter_claude(json.dumps(data))
-    print(f'index of size {len(data)} entries, with approximately {tokens} tokens')
+    index_tokens = token_counter_claude(json.dumps(data))
+    print(f'Index stats:')
+    print(f'  Files total: {len(data)}')
+    completed = {k: v for k, v in data.items() if 'processing_result' in v}
+    print(f'  Files completed: {len(completed)}')
+    print(f'  index size in tokens (approx): {index_tokens}')
     processed_tokens = 0
     total_tokens = 0
     for k, v in data.items():
@@ -36,21 +40,12 @@ def main():
             processed_tokens += tokens
         total_tokens += tokens
 
-    print(f'Total approximate tokens in all files: {total_tokens}')
-    print(f'Total approximate tokens in processed files: {processed_tokens}')
 
-    completed = {k: v for k, v in data.items() if 'processing_result' in v}
-    print(f'completed {len(completed)} entries')
-    if len(sys.argv) > 2:
-        l = int(sys.argv[2])
-        for k, v in completed.items():
-            print('---------')
-            print(f'Completed file {k}')
-            print(f'Summary: {v["processing_result"][:l]}')
-
+    print(f'  Full file size in tokens: {total_tokens}')
+    print(f'  Processed file size in tokens: {processed_tokens}')
     # dir stats:
     dir_stats = aggregate_by_directory(data)
-    print('fully completed directories')
+    print('Dir stats:')
     fully_completed_directories = 0
     total_directories = 0
     partially_completed_directories = 0
@@ -60,10 +55,17 @@ def main():
         elif v[1] > 0:
             partially_completed_directories += 1
         total_directories += 1
-    print('Dir stats:')
-    print(f'Fully completed directories: {fully_completed_directories}')
-    print(f'Partially completed directories: {partially_completed_directories}')
-    print(f'total dirs: {total_directories}')
+    print(f'  Fully completed directories: {fully_completed_directories}')
+    print(f'  Partially completed directories: {partially_completed_directories}')
+    print(f'  Total dirs: {total_directories}')
+
+    if len(sys.argv) > 2:
+        l = int(sys.argv[2])
+        for k, v in completed.items():
+            print('---------')
+            print(f'Completed file {k}')
+            print(f'Summary: {v["processing_result"][:l]}')
+
 
 if __name__ == '__main__':
     main()

@@ -1,6 +1,7 @@
 import logging
 import requests
 import json
+import time
 
 class LocalClient:
     def __init__(self, max_tokens=4096, endpoint='http://localhost/v1/chat/completions'):
@@ -20,12 +21,14 @@ class LocalClient:
         }
         payload = json.dumps(req)
 
+        start = time.time()
         # Send POST request
         try:
             response = requests.post(self.endpoint, headers=self.headers, data=payload)
         except requests.exceptions.ConnectionError:
             logging.error(f'Connection error')
             return None
+        duration = time.time() - start
 
         # Check if the request was successful
         if response.status_code != 200:
