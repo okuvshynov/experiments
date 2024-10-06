@@ -103,17 +103,19 @@ def format_file(relative_path, root, index):
         with open(os.path.join(root, relative_path), 'r', encoding='utf-8') as file:
             content_element.text = file.read()
     except Exception as e:
-        content_element.text = f"Error reading file: {str(e)}"
+        logging.error(f'unable to read file: {relative_path}')
+        return None
     
     try:
         xml_string = minidom.parseString(ET.tostring(file_element)).toprettyxml(indent="  ")
     except:
-        logging.error(f'unable to read file: relative_path')
+        logging.error(f'unable to read file: {relative_path}')
+        return None
 
     return xml_string
 
 def format_message(root: str, files: List[Dict[str, Any]]) -> str:
-    file_results = [format_file(f['path'], root, i) for i, f in enumerate(files)]
+    file_results = list(filter(lambda x: x is not None, (format_file(f['path'], root, i) for i, f in enumerate(files))))
     return index_prompt + ''.join(file_results)
 
 def llm_summarize_files(root: str, files: FileEntryList, client):
