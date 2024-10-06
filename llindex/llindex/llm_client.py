@@ -3,10 +3,7 @@ import os
 import re
 import time
 
-import xml.etree.ElementTree as ET
-
 from typing import List, Dict, Any
-from xml.dom import minidom
 
 from llindex.crawler import FileEntryList
 
@@ -89,30 +86,19 @@ def parse_results(content):
     return result
 
 def format_file(relative_path, root, index):
-    file_element = ET.Element("file")
-    
-    index_element = ET.SubElement(file_element, "index")
-    index_element.text = str(index)
-    
-    name_element = ET.SubElement(file_element, "path")
-    name_element.text = str(relative_path)
-    
-    content_element = ET.SubElement(file_element, "content")
+    res  = f"<file>"
+    res += f"<index>{index}</index>"
+    res += f"<path>{relative_path}</path>"
     
     try:
         with open(os.path.join(root, relative_path), 'r', encoding='utf-8') as file:
-            content_element.text = file.read()
+            res += f"<content>{file.read()}</content>"
     except Exception as e:
         logging.error(f'unable to read file: {relative_path}')
         return None
+    res += "</file>"
     
-    try:
-        xml_string = minidom.parseString(ET.tostring(file_element)).toprettyxml(indent="  ")
-    except:
-        logging.error(f'unable to read file: {relative_path}')
-        return None
-
-    return xml_string
+    return res
 
 def format_message(root: str, files: List[Dict[str, Any]]) -> str:
     file_results = list(filter(lambda x: x is not None, (format_file(f['path'], root, i) for i, f in enumerate(files))))

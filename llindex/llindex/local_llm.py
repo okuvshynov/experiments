@@ -35,6 +35,6 @@ class LocalClient:
         res = response.json()
         logging.info(f'Local LLM usage: {res["usage"]}')
         content = res['choices'][0]['message']['content']
-        #logging.info(content)
+        logging.info(content)
         return content
 
