@@ -13,6 +13,7 @@ from llindex.crawler import FileEntryList
 # We need these as we look them up dynamically
 from llindex.groq import GroqClient
 from llindex.local_llm import LocalClient
+from llindex.mistral import MistralClient
 
 index_prompt="""
 You will be given content for multiple files from code repository. It will be formatted as a list of entries like this:
@@ -104,7 +105,11 @@ def format_file(relative_path, root, index):
     except Exception as e:
         content_element.text = f"Error reading file: {str(e)}"
     
-    xml_string = minidom.parseString(ET.tostring(file_element)).toprettyxml(indent="  ")
+    try:
+        xml_string = minidom.parseString(ET.tostring(file_element)).toprettyxml(indent="  ")
+    except:
+        logging.error(f'unable to read file: relative_path')
+
     return xml_string
 
 def format_message(root: str, files: List[Dict[str, Any]]) -> str:
