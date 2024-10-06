@@ -73,6 +73,7 @@ class GroqClient:
             return None
 
         res = response.json()
+        # TODO: check that it's a success
         content = res['choices'][0]['message']['content']
         return content
 
