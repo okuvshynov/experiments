@@ -11,6 +11,7 @@ class LocalClient:
         }
 
     def query(self, message):
+        logging.info(f'sending: {message}')
         req = {
             "n_predict": self.max_tokens,
             "messages": [
@@ -34,5 +35,6 @@ class LocalClient:
         res = response.json()
         logging.info(f'Local LLM usage: {res["usage"]}')
         content = res['choices'][0]['message']['content']
+        logging.info(content)
         return content
 
