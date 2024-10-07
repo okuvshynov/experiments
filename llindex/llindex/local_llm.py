@@ -3,6 +3,8 @@ import requests
 import json
 import time
 
+from llindex.chunk_ctx import ChunkContext
+
 class LocalClient:
     def __init__(self, max_tokens=4096, endpoint='http://localhost/v1/chat/completions'):
         self.max_tokens: int = max_tokens
@@ -11,33 +13,34 @@ class LocalClient:
             'Content-Type': 'application/json',
         }
 
-    def query(self, message):
+    def query(self, context: ChunkContext):
         #logging.info(f'sending: {message}')
         req = {
             "n_predict": self.max_tokens,
             "messages": [
-                {"role": "user", "content": message}
+                {"role": "user", "content": context.message}
             ]
         }
         payload = json.dumps(req)
 
-        start = time.time()
-        # Send POST request
         try:
             response = requests.post(self.endpoint, headers=self.headers, data=payload)
         except requests.exceptions.ConnectionError:
+            context.metadata['error'] = 'Connection Error'
             logging.error(f'Connection error')
             return None
-        duration = time.time() - start
 
         # Check if the request was successful
         if response.status_code != 200:
+            context.metadata['error'] = response.text
             logging.error(f"{response.text}")
             return None
 
         res = response.json()
-        logging.info(f'Local LLM usage: {res["usage"]}')
+        context.metadata['usage'] = res['usage']
         content = res['choices'][0]['message']['content']
         logging.info(content)
         return content
 
+    def model_id(self):
+        return f'local'

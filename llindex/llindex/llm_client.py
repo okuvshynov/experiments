@@ -6,6 +6,7 @@ import time
 from typing import List, Dict, Any
 
 from llindex.crawler import FileEntryList
+from llindex.chunk_ctx import ChunkContext
 
 # We need these as we look them up dynamically
 from llindex.groq import GroqClient
@@ -104,12 +105,13 @@ def format_message(root: str, files: List[Dict[str, Any]]) -> str:
     file_results = list(filter(lambda x: x is not None, (format_file(f['path'], root, i) for i, f in enumerate(files))))
     return index_prompt + ''.join(file_results)
 
-def llm_summarize_files(root: str, files: FileEntryList, client):
-    message = format_message(root, files)
+def llm_summarize_files(chunk_context: ChunkContext):
+    chunk_context.message = format_message(chunk_context.directory, chunk_context.files)
     start = time.time()
-    reply = client.query(message)
+    reply = chunk_context.client.query(chunk_context)
     duration = time.time() - start
     logging.info(f'LLM client query took {duration:.3f} seconds.')
+    chunk_context.metadata['llm_duration'] = duration
     if reply is not None:
         return parse_results(reply)
     return {}

@@ -7,6 +7,7 @@ import json
 from typing import List, Tuple
 
 from llindex.token_counters import token_counter_claude
+from llindex.chunk_ctx import ChunkContext
 
 class GroqClient:
     def __init__(self, tokens_rate=20000, period=60, max_tokens=4096, model='llama-3.1-70b-versatile'):
@@ -39,19 +40,21 @@ class GroqClient:
             if running_total <= self.tokens_rate:
                 return max(0, time_stamp + self.period - current_time)
 
-    def query(self, message):
+    def query(self, context: ChunkContext):
         req = {
             "max_tokens": self.max_tokens,
             "model": self.model,
             "messages": [
-                {"role": "user", "content": message}
+                {"role": "user", "content": context.message}
             ]
         }
         payload = json.dumps(req)
 
         payload_size = token_counter_claude(payload)
         if payload_size > self.tokens_rate:
-            logging.error(f'unable to send message of {payload_size} tokens. Limit is {self.tokens_rate}')
+            err = f'unable to send message of {payload_size} tokens. Limit is {self.tokens_rate}'
+            logging.error(err)
+            context.metadata['error'] = err
             return None
 
         current_time = time.time()
@@ -61,6 +64,7 @@ class GroqClient:
         wait_for = self.wait_time()
 
         if wait_for > 0:
+            context.metadata['groq_wait'] = wait_for
             logging.info(f'groq client-side rate-limiting. Waiting for {wait_for} seconds')
             time.sleep(wait_for)
 
@@ -70,10 +74,15 @@ class GroqClient:
         # Check if the request was successful
         if response.status_code != 200:
             logging.error(f"{response.text}")
+            context.metadata['error'] = response.text
             return None
 
+        # TODO: log usage here as well
         res = response.json()
         # TODO: check that it's a success
         content = res['choices'][0]['message']['content']
         return content
+
+    def model_id(self):
+        return f'groq:{self.model}'
 

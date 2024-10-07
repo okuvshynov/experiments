@@ -7,6 +7,7 @@ import json
 from typing import List, Tuple
 
 from llindex.token_counters import token_counter_claude
+from llindex.chunk_ctx import ChunkContext
 
 class MistralClient:
     def __init__(self, tokens_rate=200000, period=60, max_tokens=4096, model='mistral-large-latest'):
@@ -40,12 +41,12 @@ class MistralClient:
             if running_total <= self.tokens_rate:
                 return max(0, time_stamp + self.period - current_time)
 
-    def query(self, message):
+    def query(self, context: ChunkContext):
         req = {
             "max_tokens": self.max_tokens,
             "model": self.model,
             "messages": [
-                {"role": "user", "content": message}
+                {"role": "user", "content": context.message}
             ]
         }
         payload = json.dumps(req)
@@ -77,3 +78,5 @@ class MistralClient:
         content = res['choices'][0]['message']['content']
         return content
 
+    def model_id(self):
+        return f'mistral:{self.model}'
