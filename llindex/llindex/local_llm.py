@@ -12,6 +12,8 @@ class LocalClient:
         self.headers = {
             'Content-Type': 'application/json',
         }
+        # TODO: fix tokenizer url completion
+        self.tokenize_endpoint = endpoint[:-len('v1/chat/completions')] + 'tokenize'
 
     def query(self, context: ChunkContext):
         #logging.info(f'sending: {message}')
@@ -22,6 +24,8 @@ class LocalClient:
             ]
         }
         payload = json.dumps(req)
+        tokens = self.token_count(context.message)
+        logging.info(f'Calling local server with {tokens} tokens')
 
         try:
             response = requests.post(self.endpoint, headers=self.headers, data=payload)
@@ -37,6 +41,7 @@ class LocalClient:
             return None
 
         res = response.json()
+        logging.info(res)
         context.metadata['usage'] = res['usage']
         content = res['choices'][0]['message']['content']
         logging.info(content)
@@ -44,3 +49,16 @@ class LocalClient:
 
     def model_id(self):
         return f'local'
+
+    def token_count(self, text):
+        req = {
+            "content": text
+        }
+        payload = json.dumps(req)
+        try:
+            response = requests.post(self.tokenize_endpoint, headers=self.headers, data=payload)
+        except requests.exceptions.ConnectionError:
+            logging.error(f'Connection error')
+            return 0
+        res = response.json()
+        return len(res['tokens'])
