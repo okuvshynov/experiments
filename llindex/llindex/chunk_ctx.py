@@ -7,6 +7,7 @@ from typing import List, Dict, Any, Set
 class ChunkContext:
     directory: str
     client: Any = None
+    token_counter: Any = None
     message: str = None
     files: List[FileEntryList] = field(default_factory=list)
     metadata: Dict[str, any] = field(default_factory=dict)

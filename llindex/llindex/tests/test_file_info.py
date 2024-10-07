@@ -23,12 +23,9 @@ class TestGetFileInfo(unittest.TestCase):
         self.assertIn("path", file_info)
         self.assertIn("size", file_info)
         self.assertIn("checksum", file_info)
-        self.assertIn("approx_tokens", file_info)
 
         self.assertEqual(file_info["path"], os.path.relpath(self.test_file_path, self.dir_name))
         self.assertEqual(file_info["size"], os.path.getsize(self.test_file_path))
-        self.assertGreater(file_info["approx_tokens"], 48999)
-        self.assertGreater(50000, file_info["approx_tokens"])
 
     def test_checksum(self):
         file_info = get_file_info(self.test_file_path, '.')

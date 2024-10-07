@@ -26,23 +26,20 @@ def main():
     with open(index_file, 'r') as f:
         data = json.load(f)
 
-    index_tokens = token_counter_claude(json.dumps(data))
+    index_tokens = sum(token_counter_claude(v['processing_result']) for v in data.values() if 'processing_result' in v)
     print(f'Index stats:')
-    print(f'  Files total: {len(data)}')
-    completed = {k: v for k, v in data.items() if 'processing_result' in v}
+    print(f'  Files: {len(data)}')
+    print(f'  Tokens: {index_tokens}')
+
+    print(f'File stats:')
+    files = {k: v['approx_tokens'] for k, v in data.items()}
+    print(f'  Tokens in files: {sum(files.values())}')
+    completed = {k: v['approx_tokens'] for k, v in data.items() if 'processing_result' in v}
     print(f'  Files completed: {len(completed)}')
-    print(f'  index size in tokens (approx): {index_tokens}')
-    processed_tokens = 0
-    total_tokens = 0
-    for k, v in data.items():
-        tokens = v['approx_tokens']
-        if 'processing_result' in v:
-            processed_tokens += tokens
-        total_tokens += tokens
-
-
-    print(f'  Full file size in tokens: {total_tokens}')
-    print(f'  Processed file size in tokens: {processed_tokens}')
+    print(f'  Tokens in files completed: {sum(completed.values())}')
+    skipped = {k: v['approx_tokens'] for k, v in data.items() if 'skipped' in v and v['skipped']}
+    print(f'  Files skipped: {len(skipped)}')
+    print(f'  Tokens in files skipped: {sum(skipped.values())}')
     # dir stats:
     dir_stats = aggregate_by_directory(data)
     print('Dir stats:')

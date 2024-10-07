@@ -6,26 +6,29 @@ import time
 from llindex.chunk_ctx import ChunkContext
 
 class LocalClient:
-    def __init__(self, max_tokens=4096, endpoint='http://localhost/v1/chat/completions'):
-        self.max_tokens: int = max_tokens
+    def __init__(self, n_predict=4096, endpoint='http://localhost/v1/chat/completions', max_req_size=32678):
+        self.n_predict: int = n_predict
+        self.max_req_size: int = max_req_size
         self.endpoint = endpoint
         self.headers = {
             'Content-Type': 'application/json',
         }
-        # TODO: fix tokenizer url completion
-        self.tokenize_endpoint = endpoint[:-len('v1/chat/completions')] + 'tokenize'
 
     def query(self, context: ChunkContext):
         #logging.info(f'sending: {message}')
         req = {
-            "n_predict": self.max_tokens,
+            "n_predict": self.n_predict,
             "messages": [
                 {"role": "user", "content": context.message}
             ]
         }
         payload = json.dumps(req)
-        tokens = self.token_count(context.message)
+        tokens = context.token_counter(context.message)
         logging.info(f'Calling local server with {tokens} tokens')
+
+        if tokens > self.max_req_size:
+            logging.warning(f'skipping processing, request too large: {tokens}>max_req_size={self.max_req_size}')
+            return None
 
         try:
             response = requests.post(self.endpoint, headers=self.headers, data=payload)
@@ -50,15 +53,3 @@ class LocalClient:
     def model_id(self):
         return f'local'
 
-    def token_count(self, text):
-        req = {
-            "content": text
-        }
-        payload = json.dumps(req)
-        try:
-            response = requests.post(self.tokenize_endpoint, headers=self.headers, data=payload)
-        except requests.exceptions.ConnectionError:
-            logging.error(f'Connection error')
-            return 0
-        res = response.json()
-        return len(res['tokens'])

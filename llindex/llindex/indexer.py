@@ -10,36 +10,50 @@ from typing import List
 from llindex.llm_client import llm_summarize_files, client_factory
 from llindex.crawler import Crawler, FileEntryList
 from llindex.config import open_yaml
-from llindex.token_counters import token_counter_claude
+from llindex.token_counters import token_counter_factory
 from llindex.chunks import chunk_tasks
 from llindex.chunk_ctx import ChunkContext
 
 class Indexer:
     def __init__(self, config):
         self.client = client_factory(config['llm_client'])
+        self.token_counter = token_counter_factory(config['token_counter'])
         self.chunk_size = config['chunk_size']
         self.directory = os.path.expanduser(config['dir'])
         self.index_file = os.path.expanduser(config['index_file'])
         self.crawler = Crawler(self.directory, config['crawler'])
         self.freq = config.get('freq', 60)
 
-    def process(self, chunk_context: ChunkContext) -> List[str]:
+    def process(self, chunk_context: ChunkContext, current_index) -> List[str]:
         logging.info(f'processing {len(chunk_context.files)} files')
         chunk_context.metadata['model'] = self.client.model_id()
         chunk_context.client = self.client
+        chunk_context.token_counter = self.token_counter
         result = llm_summarize_files(chunk_context)
         logging.info(f'received {len(result)} summaries')
 
-        res = []
+        timestamp = datetime.now().isoformat()
         for file in chunk_context.files:
+            file_result = {
+                "path": file["path"],
+                "size": file["size"],
+                "checksum": file["checksum"],
+                "processing_timestamp": timestamp,
+                "approx_tokens": file["approx_tokens"] 
+            }
             relative_path = file['path']
             if relative_path not in result:
+                file_result["skipped"] = True
                 chunk_context.missing_files.append(relative_path)
                 logging.warning(f'missing file {relative_path} in the reply.')
             else:
-                res.append(result[relative_path])
+                file_result["processing_result"] = result[relative_path]
+            current_index[relative_path] = file_result
 
-        return res
+    def count_tokens(self, files):
+        for k, v in files.items():
+            with open(os.path.join(self.directory, k), 'r') as f:
+                v['approx_tokens'] = self.token_counter(f.read())
 
     def run(self) -> FileEntryList:
         """Process directory with size limit and return results for files that should be processed."""
@@ -51,6 +65,8 @@ class Indexer:
         for file in to_process:
             results[file["path"]] = file
 
+        self.count_tokens(results)
+        
         save_to_json_file(results, self.index_file)
 
         logging.info(f'Indexing: {len(to_process)} files')
@@ -58,20 +74,7 @@ class Indexer:
         chunks = chunk_tasks(to_process, self.chunk_size)
         for chunk in chunks:
             chunk_context = ChunkContext(directory=self.directory, files=chunk)
-            processing_results = self.process(chunk_context)
-            timestamp = datetime.now().isoformat()
-            # TODO: also save metadata here. For example, which model was used,
-            # how long was the processing, etc.
-            for file, result in zip(chunk, processing_results):
-                file_result = {
-                    "path": file["path"],
-                    "size": file["size"],
-                    "checksum": file["checksum"],
-                    "processing_result": result,
-                    "processing_timestamp": timestamp,
-                    "approx_tokens": file["approx_tokens"] 
-                }
-                results[file["path"]] = file_result
+            self.process(chunk_context, results)
             save_to_json_file(results, self.index_file)
             logging.info(f'processed files: {chunk_context.files}')
             logging.info(f'files missing: {chunk_context.missing_files}')

@@ -6,7 +6,6 @@ import json
 
 from typing import List, Tuple
 
-from llindex.token_counters import token_counter_claude
 from llindex.chunk_ctx import ChunkContext
 
 class GroqClient:
@@ -50,7 +49,7 @@ class GroqClient:
         }
         payload = json.dumps(req)
 
-        payload_size = token_counter_claude(payload)
+        payload_size = context.token_counter(payload)
         if payload_size > self.tokens_rate:
             err = f'unable to send message of {payload_size} tokens. Limit is {self.tokens_rate}'
             logging.error(err)
