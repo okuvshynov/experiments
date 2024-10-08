@@ -80,8 +80,6 @@ class Indexer:
             logging.info(f'files missing: {chunk_context.missing_files}')
             logging.info(f'metrics: {chunk_context.metadata}')
         
-        n_tokens = token_counter_claude(json.dumps(results))
-        logging.info(f'computed index size of approximately {n_tokens} tokens')
         return results
 
     def loop(self):
