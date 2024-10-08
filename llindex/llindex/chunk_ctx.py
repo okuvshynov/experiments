@@ -13,3 +13,10 @@ class ChunkContext:
     metadata: Dict[str, any] = field(default_factory=dict)
     missing_files: FileEntryList = field(default_factory=list)
 
+@dataclass
+class DirContext:
+    directory: str
+    client: Any = None
+    token_counter: Any = None
+    message: str = None
+    metadata: Dict[str, any] = field(default_factory=dict)
