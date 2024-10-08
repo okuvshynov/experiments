@@ -26,6 +26,8 @@ def main():
     with open(index_file, 'r') as f:
         data = json.load(f)
 
+    data, dir_data = data['files'], data['dirs']
+
     index_tokens = sum(token_counter_claude(v['processing_result']) for v in data.values() if 'processing_result' in v)
     print(f'Index stats:')
     print(f'  Files: {len(data)}')
@@ -55,6 +57,7 @@ def main():
     print(f'  Fully completed directories: {fully_completed_directories}')
     print(f'  Partially completed directories: {partially_completed_directories}')
     print(f'  Total dirs: {total_directories}')
+    print(f'  Dirs completed: {len(dir_data)}')
 
     if len(sys.argv) > 2:
         l = int(sys.argv[2])

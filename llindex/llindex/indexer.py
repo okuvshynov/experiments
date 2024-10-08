@@ -95,6 +95,7 @@ class Indexer:
         context.client = self.client
         context.token_counter = self.token_counter
         dir_index[directory] = llm_summarize_dir(directory, summaries, context)
+        save_to_json_file(file_index, dir_index, self.index_file)
 
     def count_tokens(self, files):
         for k, v in files.items():
@@ -103,8 +104,8 @@ class Indexer:
 
     def run(self) -> FileEntryList:
         """Process directory with size limit and return results for files that should be processed."""
-        previous_index = load_json_from_file(self.index_file)
-        to_process, to_reuse = self.crawler.run(previous_index)
+        file_index, dir_index = load_json_from_file(self.index_file)
+        to_process, to_reuse = self.crawler.run(file_index)
         results = {}
         for file in to_reuse:
             results[file["path"]] = file
@@ -113,7 +114,7 @@ class Indexer:
 
         self.count_tokens(results)
         
-        save_to_json_file(results, self.index_file)
+        save_to_json_file(results, dir_index, self.index_file)
 
         logging.info(f'Indexing: {len(to_process)} files')
         logging.info(f'Reusing: {len(to_reuse)} files')
@@ -121,7 +122,7 @@ class Indexer:
         for chunk in chunks:
             chunk_context = ChunkContext(directory=self.directory, files=chunk)
             self.process_files(chunk_context, results)
-            save_to_json_file(results, self.index_file)
+            save_to_json_file(results, dir_index, self.index_file)
             logging.info(f'processed files: {chunk_context.files}')
             logging.info(f'files missing: {chunk_context.missing_files}')
             logging.info(f'metrics: {chunk_context.metadata}')
@@ -137,7 +138,6 @@ class Indexer:
                     continue
                 self.process_directory(directory, dir_tree, results, dir_index)
 
-        return results
 
     def loop(self):
         # naive loop, sleep for N seconds and then process again.
@@ -148,17 +148,18 @@ class Indexer:
             self.run()
             time.sleep(self.freq)
 
+# returns a tuple for file index and dir index
 def load_json_from_file(filename):
     if os.path.exists(filename):
         with open(filename, 'r') as f:
-            return json.load(f)
+            res = json.load(f)
+            return res['files'], res['dirs']
     else:
         return {}
 
-def save_to_json_file(data, filename):
+def save_to_json_file(files, dirs, filename):
     with open(filename, 'w') as f:
-        json.dump(data, f)
-
+        json.dump({'files': files, 'dirs': dirs}, f)
 
 def main():
     logging.basicConfig(
