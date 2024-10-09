@@ -5,6 +5,7 @@ import os
 import sys
 from pathlib import Path
 from collections import defaultdict
+import hashlib
 
 from datetime import datetime
 from typing import List
@@ -77,25 +78,37 @@ class Indexer:
                 file_result["processing_result"] = result[relative_path]
             current_index[relative_path] = file_result
 
-    def process_directory(self, directory, dir_struct, file_index, dir_index):
+    def process_directory(self, directory, dir_struct, file_index, dir_index, old_dir_index):
         child_files, child_dirs = dir_struct[directory]
 
         summaries = []
 
         for child_dir in child_dirs:
             if child_dir not in dir_index:
-                self.process_directory(child_dir, dir_struct, file_index, dir_index)
+                self.process_directory(child_dir, dir_struct, file_index, dir_index, old_dir_index)
             summaries.append(f'<dir>{child_dir}<summary>{dir_index[child_dir]}</summary></dir>')
 
         for child_file in child_files:
             if 'processing_result' in file_index[child_file]:
                 summaries.append(f'<file>{child_file}<summary>{file_index[child_file]["processing_result"]}</summary></file>')
-        context = DirContext(directory)
-        context.metadata['model'] = self.client.model_id()
-        context.client = self.client
-        context.token_counter = self.token_counter
-        dir_index[directory] = llm_summarize_dir(directory, summaries, context)
-        save_to_json_file(file_index, dir_index, self.index_file)
+        dir_input_hash = hashlib.md5()
+        dir_input_hash.update((''.join(summaries)).encode("utf-8"))
+        checksum = dir_input_hash.hexdigest()
+        if directory in old_dir_index and old_dir_index[directory]['checksum'] == checksum:
+            dir_index[directory] = old_dir_index[directory]
+        else:
+            context = DirContext(directory)
+            context.metadata['model'] = self.client.model_id()
+            context.client = self.client
+            context.token_counter = self.token_counter
+            summary = llm_summarize_dir(directory, summaries, context)
+            if directory in summary:
+                dir_index[directory] = {
+                    "processing_result": summary[directory],
+                    "checksum" : checksum,
+                }
+            old_dir_index[directory] = dir_index[directory]
+        save_to_json_file(file_index, old_dir_index, self.index_file)
 
     def count_tokens(self, files):
         for k, v in files.items():
@@ -104,7 +117,7 @@ class Indexer:
 
     def run(self) -> FileEntryList:
         """Process directory with size limit and return results for files that should be processed."""
-        file_index, dir_index = load_json_from_file(self.index_file)
+        file_index, old_dir_index = load_json_from_file(self.index_file)
         to_process, to_reuse = self.crawler.run(file_index)
         results = {}
         for file in to_reuse:
@@ -114,7 +127,7 @@ class Indexer:
 
         self.count_tokens(results)
         
-        save_to_json_file(results, dir_index, self.index_file)
+        save_to_json_file(results, old_dir_index, self.index_file)
 
         logging.info(f'Indexing: {len(to_process)} files')
         logging.info(f'Reusing: {len(to_reuse)} files')
@@ -122,7 +135,7 @@ class Indexer:
         for chunk in chunks:
             chunk_context = ChunkContext(directory=self.directory, files=chunk)
             self.process_files(chunk_context, results)
-            save_to_json_file(results, dir_index, self.index_file)
+            save_to_json_file(results, old_dir_index, self.index_file)
             logging.info(f'processed files: {chunk_context.files}')
             logging.info(f'files missing: {chunk_context.missing_files}')
             logging.info(f'metrics: {chunk_context.metadata}')
@@ -130,14 +143,18 @@ class Indexer:
         ## now aggregate directories
         dir_tree = self.create_directory_structure(results)
         to_process = dir_tree.keys()
+
+        # need to check which directories did not change
         dir_index = {}
 
         while len(dir_index) < len(to_process):
             for directory in to_process:
                 if directory in dir_index:
                     continue
-                self.process_directory(directory, dir_tree, results, dir_index)
-
+                self.process_directory(directory, dir_tree, results, dir_index, old_dir_index)
+        
+        # now we need to save new dir index (as old index might contain deleted nodes).
+        save_to_json_file(results, dir_index, self.index_file)
 
     def loop(self):
         # naive loop, sleep for N seconds and then process again.

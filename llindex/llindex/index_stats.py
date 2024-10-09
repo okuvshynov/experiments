@@ -29,22 +29,13 @@ def main():
     data, dir_data = data['files'], data['dirs']
 
     index_tokens = sum(token_counter_claude(v['processing_result']) for v in data.values() if 'processing_result' in v)
-    print(f'Index stats:')
-    print(f'  Files: {len(data)}')
-    print(f'  Tokens: {index_tokens}')
 
-    print(f'File stats:')
+
     files = {k: v['approx_tokens'] for k, v in data.items()}
-    print(f'  Tokens in files: {sum(files.values())}')
     completed = {k: v['approx_tokens'] for k, v in data.items() if 'processing_result' in v}
-    print(f'  Files completed: {len(completed)}')
-    print(f'  Tokens in files completed: {sum(completed.values())}')
     skipped = {k: v['approx_tokens'] for k, v in data.items() if 'skipped' in v and v['skipped']}
-    print(f'  Files skipped: {len(skipped)}')
-    print(f'  Tokens in files skipped: {sum(skipped.values())}')
-    # dir stats:
+
     dir_stats = aggregate_by_directory(data)
-    print('Dir stats:')
     fully_completed_directories = 0
     total_directories = 0
     partially_completed_directories = 0
@@ -54,10 +45,23 @@ def main():
         elif v[1] > 0:
             partially_completed_directories += 1
         total_directories += 1
-    print(f'  Fully completed directories: {fully_completed_directories}')
-    print(f'  Partially completed directories: {partially_completed_directories}')
-    print(f'  Total dirs: {total_directories}')
-    print(f'  Dirs completed: {len(dir_data)}')
+
+    print(f'Index stats:')
+    print(f'  Files: {len(data)}')
+    print(f'  Directories: {total_directories}')
+    print(f'  Tokens: {index_tokens}')
+
+    print(f'File stats:')
+    print(f'  Tokens in files: {sum(files.values())}')
+    print(f'  Files completed: {len(completed)}')
+    print(f'  Tokens in files completed: {sum(completed.values())}')
+    print(f'  Files skipped: {len(skipped)}')
+    print(f'  Tokens in files skipped: {sum(skipped.values())}')
+    # dir stats:
+    print('Dir stats:')
+    print(f'  Directories with all files summarized: {fully_completed_directories}')
+    print(f'  Directories with skipped files: {partially_completed_directories}')
+    print(f'  Directories with summaries: {len(dir_data)}')
 
     if len(sys.argv) > 2:
         l = int(sys.argv[2])
