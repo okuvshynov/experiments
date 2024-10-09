@@ -107,6 +107,12 @@ class Indexer:
                     "processing_result": summary[directory],
                     "checksum" : checksum,
                 }
+            else:
+                dir_index[directory] = {
+                    "processing_result" : "n/a",
+                    "checksum": checksum,
+                    "skipped" : True
+                }
             old_dir_index[directory] = dir_index[directory]
         save_to_json_file(file_index, old_dir_index, self.index_file)
 
