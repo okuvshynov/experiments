@@ -86,11 +86,11 @@ class Indexer:
         for child_dir in child_dirs:
             if child_dir not in dir_index:
                 self.process_directory(child_dir, dir_struct, file_index, dir_index, old_dir_index)
-            summaries.append(f'<dir>{child_dir}<summary>{dir_index[child_dir]}</summary></dir>')
+            summaries.append(f'<dir><path>{child_dir}</path><summary>{dir_index[child_dir]["processing_result"]}</summary></dir>')
 
         for child_file in child_files:
             if 'processing_result' in file_index[child_file]:
-                summaries.append(f'<file>{child_file}<summary>{file_index[child_file]["processing_result"]}</summary></file>')
+                summaries.append(f'<file><path>{child_file}</path><summary>{file_index[child_file]["processing_result"]}</summary></file>')
         dir_input_hash = hashlib.md5()
         dir_input_hash.update((''.join(summaries)).encode("utf-8"))
         checksum = dir_input_hash.hexdigest()
