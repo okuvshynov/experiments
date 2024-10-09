@@ -178,7 +178,7 @@ def load_json_from_file(filename):
             res = json.load(f)
             return res['files'], res['dirs']
     else:
-        return {}
+        return {}, {}
 
 def save_to_json_file(files, dirs, filename):
     with open(filename, 'w') as f:
