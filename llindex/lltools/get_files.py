@@ -8,8 +8,8 @@ class GetFilesTool:
 
     def definition(self):
         return {
-            "name": "get_file",
-            "description": "Gets content of one or more files returned as a single string.",
+            "name": "get_files",
+            "description": "Gets content of one or more files.",
             "input_schema": {
               "type": "object",
               "properties": {
