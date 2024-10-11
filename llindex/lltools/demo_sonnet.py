@@ -48,6 +48,7 @@ def interact(user_message):
             "messages": messages,
             "tool_choice": tool_choice
         })
+        logging.info('sending request')
         conn.request("POST", "/v1/messages", payload, headers)
         res = conn.getresponse()
         data = res.read()
@@ -63,14 +64,16 @@ def interact(user_message):
                     tool_use_name = content_piece['name']
                     tool_use_args = content_piece['input']
                     if tool_use_name != 'get_files':
-                        logging.info(f'unknown tool: {tool_use_name}')
+                        logging.warning(f'unknown tool: {tool_use_name}')
                         continue
                     tool_result = tool.run(tool_use_args)
                     message["content"].append({"type": "tool_result", "tool_use_id" : tool_use_id, "content": tool_result})
             messages.append(message)
         else:
             # got final reply
+            logging.info('received final reply')
             return data['content']
+    logging.warning('no reply after 5 interactions')
     return None
 
 def main():
@@ -83,31 +86,36 @@ def main():
         ]
     )
     if len(sys.argv) < 2:
-        print("Error: Please provide the codebase path as a command line argument.")
+        logging.error("Error: Please provide the codebase path as a command line argument.")
         sys.exit(1)
 
     codebase_path = sys.argv[1]
 
     if not os.path.isdir(codebase_path):
-        print(f"Error: The directory '{codebase_path}' does not exist.")
+        logging.error(f"Error: The directory '{codebase_path}' does not exist.")
         sys.exit(1)
 
     index_file = os.path.join(codebase_path, ".llidx")
 
     if not os.path.isfile(index_file):
-        print(f"Error: The index file '{index_file}' does not exist.")
+        logging.error(f"Error: The index file '{index_file}' does not exist.")
         sys.exit(1)
 
     with open(index_file, 'r') as f:
         index = json.load(f)
 
+    logging.info('loaded index')
     index_formatted = format_default(index)
-    #print(index_formatted)
 
     message = sys.argv[2]
     task = f'<task>{message}</task>'
     user_message = sonnet_prompt + index_formatted + '\n\n' + task
-    print(interact(user_message))
+    reply = interact(user_message)
+    if len(reply) == 1 and 'text' in reply[0]:
+        print(reply[0]['text'])
+    else:
+        logging.error(f'Reply: {reply}')
+
 
 if __name__ == '__main__':
     main()
