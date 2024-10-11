@@ -7,3 +7,4 @@ calc/**/*.pt
 split_model/data/**
 .vscode/**
 **/*.swp
+tags
