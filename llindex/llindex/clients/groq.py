@@ -6,15 +6,15 @@ import json
 
 from typing import List, Tuple
 
-from llindex.chunk_ctx import ChunkContext
+from llindex.context import ChunkContext
 
-class MistralClient:
-    def __init__(self, tokens_rate=200000, period=60, max_tokens=4096, model='mistral-large-latest'):
+class GroqClient:
+    def __init__(self, tokens_rate=20000, period=60, max_tokens=4096, model='llama-3.1-70b-versatile'):
         # Load API key from environment variable
-        self.api_key: str = os.environ.get('MISTRAL_API_KEY')
+        self.api_key: str = os.environ.get('GROQ_API_KEY')
 
         if self.api_key is None:
-            logging.error("MISTRAL_API_KEY environment variable not set")
+            logging.error("GROQ_API_KEY environment variable not set")
 
         # we need that for client-side rate limiting
         self.history: List[Tuple[float, int]] = []
@@ -22,10 +22,9 @@ class MistralClient:
         self.period: int = period
         self.max_tokens: int = max_tokens
         self.model: str = model
-        self.url = 'https://api.mistral.ai/v1/chat/completions'
+        self.url = 'https://api.groq.com/openai/v1/chat/completions'
         self.headers = {
             'Content-Type': 'application/json',
-            'Accept': 'application/json',
             'Authorization': f'Bearer {self.api_key}'
         }
 
@@ -52,7 +51,9 @@ class MistralClient:
 
         payload_size = context.token_counter(payload)
         if payload_size > self.tokens_rate:
-            logging.error(f'unable to send message of {payload_size} tokens. Limit is {self.tokens_rate}')
+            err = f'unable to send message of {payload_size} tokens. Limit is {self.tokens_rate}'
+            logging.error(err)
+            context.metadata['error'] = err
             return None
 
         current_time = time.time()
@@ -62,7 +63,8 @@ class MistralClient:
         wait_for = self.wait_time()
 
         if wait_for > 0:
-            logging.info(f'mistral client-side rate-limiting. Waiting for {wait_for} seconds')
+            context.metadata['groq_wait'] = wait_for
+            logging.info(f'groq client-side rate-limiting. Waiting for {wait_for} seconds')
             time.sleep(wait_for)
 
         # Send POST request
@@ -71,11 +73,15 @@ class MistralClient:
         # Check if the request was successful
         if response.status_code != 200:
             logging.error(f"{response.text}")
+            context.metadata['error'] = response.text
             return None
 
+        # TODO: log usage here as well
         res = response.json()
+        # TODO: check that it's a success
         content = res['choices'][0]['message']['content']
         return content
 
     def model_id(self):
-        return f'mistral:{self.model}'
+        return f'groq:{self.model}'
+

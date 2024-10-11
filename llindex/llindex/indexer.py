@@ -15,7 +15,7 @@ from llindex.crawler import Crawler, FileEntryList
 from llindex.config import open_yaml
 from llindex.token_counters import token_counter_factory
 from llindex.chunks import chunk_tasks
-from llindex.chunk_ctx import ChunkContext, DirContext
+from llindex.context import ChunkContext, DirContext
 
 class Indexer:
     def __init__(self, config):

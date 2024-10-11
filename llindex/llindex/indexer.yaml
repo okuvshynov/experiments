@@ -1,7 +1,0 @@
-dir: "."
-index_file: ".llindex"
-llm_client:
-  type: GroqClient
-  tokens_rate: 20000
-  period: 60
-

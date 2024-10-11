@@ -3,6 +3,8 @@ from dataclasses import dataclass, field
 from llindex.crawler import FileEntryList
 from typing import List, Dict, Any, Set
 
+# context represents a single LLM indexing operation
+
 @dataclass
 class ChunkContext:
     directory: str
