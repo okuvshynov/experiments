@@ -1,21 +1,22 @@
+import hashlib
 import json
-import time
 import logging
 import os
 import sys
-from pathlib import Path
-from collections import defaultdict
-import hashlib
+import time
 
+from collections import defaultdict
 from datetime import datetime
+from pathlib import Path
 from typing import List
 
 from llindex.llm_client import llm_summarize_files, client_factory, llm_summarize_dir
-from llindex.crawler import Crawler, FileEntryList
+from llindex.crawler import Crawler
+from llindex.types import FileEntryList
 from llindex.config import open_yaml
 from llindex.token_counters import token_counter_factory
-from llindex.chunks import chunk_tasks
 from llindex.context import ChunkContext, DirContext
+from llindex.utils import load_index, save_index, chunk_tasks
 
 class Indexer:
     def __init__(self, config):
@@ -114,7 +115,7 @@ class Indexer:
                     "skipped" : True
                 }
             old_dir_index[directory] = dir_index[directory]
-        save_to_json_file(file_index, old_dir_index, self.index_file)
+        save_index(file_index, old_dir_index, self.index_file)
 
     def count_tokens(self, files):
         for k, v in files.items():
@@ -122,8 +123,7 @@ class Indexer:
                 v['approx_tokens'] = self.token_counter(f.read())
 
     def run(self) -> FileEntryList:
-        """Process directory with size limit and return results for files that should be processed."""
-        file_index, old_dir_index = load_json_from_file(self.index_file)
+        file_index, old_dir_index = load_index(self.index_file)
         to_process, to_reuse = self.crawler.run(file_index)
         results = {}
         for file in to_reuse:
@@ -133,7 +133,7 @@ class Indexer:
 
         self.count_tokens(results)
         
-        save_to_json_file(results, old_dir_index, self.index_file)
+        save_index(results, old_dir_index, self.index_file)
 
         logging.info(f'Indexing: {len(to_process)} files')
         logging.info(f'Reusing: {len(to_reuse)} files')
@@ -141,7 +141,7 @@ class Indexer:
         for chunk in chunks:
             chunk_context = ChunkContext(directory=self.directory, files=chunk)
             self.process_files(chunk_context, results)
-            save_to_json_file(results, old_dir_index, self.index_file)
+            save_index(results, old_dir_index, self.index_file)
             logging.info(f'processed files: {chunk_context.files}')
             logging.info(f'files missing: {chunk_context.missing_files}')
             logging.info(f'metrics: {chunk_context.metadata}')
@@ -150,7 +150,6 @@ class Indexer:
         dir_tree = self.create_directory_structure(results)
         to_process = dir_tree.keys()
 
-        # need to check which directories did not change
         dir_index = {}
 
         while len(dir_index) < len(to_process):
@@ -160,7 +159,7 @@ class Indexer:
                 self.process_directory(directory, dir_tree, results, dir_index, old_dir_index)
         
         # now we need to save new dir index (as old index might contain deleted nodes).
-        save_to_json_file(results, dir_index, self.index_file)
+        save_index(results, dir_index, self.index_file)
 
     def loop(self):
         # naive loop, sleep for N seconds and then process again.
@@ -169,20 +168,8 @@ class Indexer:
         while True:
             logging.info('starting next iteration')
             self.run()
+            logging.info(f'Waiting {self.freq} seconds before checking for updates.')
             time.sleep(self.freq)
-
-# returns a tuple for file index and dir index
-def load_json_from_file(filename):
-    if os.path.exists(filename):
-        with open(filename, 'r') as f:
-            res = json.load(f)
-            return res['files'], res['dirs']
-    else:
-        return {}, {}
-
-def save_to_json_file(files, dirs, filename):
-    with open(filename, 'w') as f:
-        json.dump({'files': files, 'dirs': dirs}, f)
 
 def main():
     logging.basicConfig(

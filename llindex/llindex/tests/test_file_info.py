@@ -3,7 +3,7 @@ import os
 import unittest
 import tempfile
 
-from llindex.file_info import get_file_info
+from llindex.utils import get_file_info
 
 class TestGetFileInfo(unittest.TestCase):
     def setUp(self):

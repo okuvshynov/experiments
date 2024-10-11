@@ -5,7 +5,7 @@ import time
 
 from typing import List, Dict, Any
 
-from llindex.crawler import FileEntryList
+from llindex.types import FileEntryList
 from llindex.context import ChunkContext, DirContext
 
 # We need these as we look them up dynamically

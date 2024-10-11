@@ -1,6 +1,6 @@
 import unittest
 
-from llindex.chunks import chunk_tasks
+from llindex.utils import chunk_tasks
 from typing import List, Dict, Any
 
 
