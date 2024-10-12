@@ -36,6 +36,13 @@ You will have access to several tools:
 Use the summaries provided to identify the files you need. Feel free to use tools more than once if you discovered that you need more information. Avoid calling the tool with the same arguments, reuse previous tool responses.
 """
 
+def merge_usage(*usages):
+    result = {}
+    for usage in usages:
+        for k, v in usage.items():
+            result[k] = result.get(k, 0) + v
+    return result
+
 def interact(user_message):
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     conn = http.client.HTTPSConnection("api.anthropic.com")
@@ -45,6 +52,8 @@ def interact(user_message):
         'content-type': 'application/json'
     }
     toolset = Toolset(sys.argv[1])
+
+    usage = {}
 
     messages = [{"role": "user", "content": user_message}]
     for i in range(10):
@@ -61,6 +70,8 @@ def interact(user_message):
         res = conn.getresponse()
         data = res.read()
         data = json.loads(data.decode("utf-8"))
+        usage = merge_usage(usage, data['usage'])
+        logging.info(f'Aggregate usage: {usage}')
 
         if 'content' not in data:
             logging.error(f'not content in {data}')
