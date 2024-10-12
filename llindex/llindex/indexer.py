@@ -102,7 +102,7 @@ class Indexer:
             context.metadata['model'] = self.client.model_id()
             context.client = self.client
             context.token_counter = self.token_counter
-            summary = llm_summarize_dir(directory, summaries, context)
+            summary = llm_summarize_dir(summaries, context)
             if directory in summary:
                 dir_index[directory] = {
                     "processing_result": summary[directory],

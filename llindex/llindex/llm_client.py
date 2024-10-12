@@ -5,12 +5,16 @@ import time
 
 from typing import List, Dict, Any
 
-from llindex.types import FileEntryList
 from llindex.context import ChunkContext, DirContext
 
 # We need these as we look them up dynamically
 from llindex.clients.groq import GroqClient
 from llindex.clients.local import LocalClient
+
+client_map = {
+    'LocalClient' : LocalClient,
+    'GroqClient' : GroqClient
+}
 
 script_dir = os.path.dirname(__file__)
 
@@ -68,10 +72,12 @@ def llm_summarize_files(chunk_context: ChunkContext):
 
 def client_factory(config):
     class_name = config.pop('type')
-    cls = globals()[class_name]
+    cls = client_map.get(class_name)
+    if cls is None:
+        raise ValueError(f'Unknown client type: {class_name}')
     return cls(**config)
 
-def llm_summarize_dir(dir_path: str, child_summaries: List[str], context: DirContext):
+def llm_summarize_dir(child_summaries: List[str], context: DirContext):
     context.message = dir_index_prompt + '\n'.join(child_summaries)
     start = time.time()
     reply = context.client.query(context)
