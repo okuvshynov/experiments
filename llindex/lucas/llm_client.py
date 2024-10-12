@@ -10,10 +10,12 @@ from lucas.context import ChunkContext, DirContext
 # We need these as we look them up dynamically
 from lucas.clients.groq import GroqClient
 from lucas.clients.local import LocalClient
+from lucas.clients.cerebras import CerebrasClient
 
 client_map = {
     'LocalClient' : LocalClient,
-    'GroqClient' : GroqClient
+    'GroqClient' : GroqClient,
+    'CerebrasClient' : CerebrasClient,
 }
 
 script_dir = os.path.dirname(__file__)
