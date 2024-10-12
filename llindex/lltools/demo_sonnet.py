@@ -5,8 +5,7 @@ import os
 import sys
 
 from llindex.index_format import format_default
-from lltools.get_files import GetFilesTool
-from lltools.git_grep import GitGrepTool
+from lltools.tools import Toolset
 
 sonnet_prompt="""
 You are given a summary of a code repository in the following xml-like format:
@@ -31,6 +30,8 @@ You will be given your task in <task></task> tags.
 You will have access to several tools:
 - get_files: tool to get content of the files you need to accomplish that task.
 - git_grep: tool to find the references/uses of a symbol in a codebase.
+- git_log: tool to find a symbol in commit history, not in the current state only. Useful to find when some functionality was introduced and why.
+- git_show: tool to show the content of the commit by its id. Useful to show the content of some commits returned by git_log
 
 Use the summaries provided to identify the files you need. Feel free to use tools more than once if you discovered that you need more information. Avoid calling the tool with the same arguments, reuse previous tool responses.
 """
@@ -43,10 +44,7 @@ def interact(user_message):
         'anthropic-version': '2023-06-01',
         'content-type': 'application/json'
     }
-    get_files_tool = GetFilesTool(sys.argv[1])
-    git_grep_tool = GitGrepTool(sys.argv[1])
-
-    tools = [get_files_tool.definition(), git_grep_tool.definition()]
+    toolset = Toolset(sys.argv[1])
 
     messages = [{"role": "user", "content": user_message}]
     for i in range(10):
@@ -54,7 +52,7 @@ def interact(user_message):
         payload = json.dumps({
             "model": "claude-3-5-sonnet-20240620",
             "max_tokens": 8192,
-            "tools": tools,
+            "tools": toolset.definitions(),
             "messages": messages,
             "tool_choice": tool_choice
         })
@@ -74,16 +72,9 @@ def interact(user_message):
             message = {"role": "user", "content": []}
             for content_piece in data['content']:
                 if content_piece['type'] == 'tool_use':
-                    tool_use_id = content_piece['id']
-                    tool_use_name = content_piece['name']
-                    tool_use_args = content_piece['input']
-                    logging.info(f'requested tool: {tool_use_name}({tool_use_args})')
-                    if tool_use_name == 'get_files':
-                        tool_result = get_files_tool.run(tool_use_args)
-                        message["content"].append({"type": "tool_result", "tool_use_id" : tool_use_id, "content": tool_result})
-                    elif tool_use_name == 'git_grep':
-                        tool_result = git_grep_tool.run(tool_use_args)
-                        message["content"].append({"type": "tool_result", "tool_use_id" : tool_use_id, "content": tool_result})
+                    result = toolset.run(content_piece)
+                    if result is not None:
+                        message["content"].append(result)
                     else:
                         logging.warning(f'unknown tool: {tool_use_name}')
                         continue
