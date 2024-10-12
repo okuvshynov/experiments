@@ -5,11 +5,11 @@ import time
 
 from typing import List, Dict, Any
 
-from llindex.context import ChunkContext, DirContext
+from lucas.context import ChunkContext, DirContext
 
 # We need these as we look them up dynamically
-from llindex.clients.groq import GroqClient
-from llindex.clients.local import LocalClient
+from lucas.clients.groq import GroqClient
+from lucas.clients.local import LocalClient
 
 client_map = {
     'LocalClient' : LocalClient,

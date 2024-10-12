@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 
-from llindex.types import FileEntryList
+from lucas.types import FileEntryList
 from typing import List, Dict, Any, Set
 
 # context represents a single LLM indexing operation

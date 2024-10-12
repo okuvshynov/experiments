@@ -4,8 +4,8 @@ import subprocess
 import fnmatch
 
 from typing import List, Dict, Any
-from llindex.utils import get_file_info
-from llindex.types import FileEntry, Index, FileEntryList
+from lucas.utils import get_file_info
+from lucas.types import FileEntry, Index, FileEntryList
 
 def gen_walk(directory):
     for root_path, _, files in os.walk(directory):

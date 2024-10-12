@@ -4,7 +4,7 @@ import hashlib
 import logging
 from typing import Dict, Any, List
 
-from llindex.types import FileEntryList
+from lucas.types import FileEntryList
 
 def chunk_tasks(files: FileEntryList, token_limit: int) -> List[FileEntryList]:
     chunks = []

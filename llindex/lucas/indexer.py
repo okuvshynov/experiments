@@ -10,13 +10,13 @@ from datetime import datetime
 from pathlib import Path
 from typing import List
 
-from llindex.llm_client import llm_summarize_files, client_factory, llm_summarize_dir
-from llindex.crawler import Crawler
-from llindex.types import FileEntryList
-from llindex.config import open_yaml
-from llindex.token_counters import token_counter_factory
-from llindex.context import ChunkContext, DirContext
-from llindex.utils import load_index, save_index, chunk_tasks
+from lucas.llm_client import llm_summarize_files, client_factory, llm_summarize_dir
+from lucas.crawler import Crawler
+from lucas.types import FileEntryList
+from lucas.config import open_yaml
+from lucas.token_counters import token_counter_factory
+from lucas.context import ChunkContext, DirContext
+from lucas.utils import load_index, save_index, chunk_tasks
 
 class Indexer:
     def __init__(self, config):

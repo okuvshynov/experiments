@@ -3,7 +3,7 @@ import requests
 import json
 import time
 
-from llindex.context import ChunkContext
+from lucas.context import ChunkContext
 
 class LocalClient:
     def __init__(self, n_predict=4096, endpoint='http://localhost/v1/chat/completions', max_req_size=32678):

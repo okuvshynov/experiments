@@ -1,9 +1,9 @@
 import logging
 
-from lltools.get_files import GetFilesTool
-from lltools.git_grep import GitGrepTool
-from lltools.git_log import GitLogTool
-from lltools.git_show import GitShowTool
+from lucas.tools.get_files import GetFilesTool
+from lucas.tools.git_grep import GitGrepTool
+from lucas.tools.git_log import GitLogTool
+from lucas.tools.git_show import GitShowTool
 
 class Toolset:
     def __init__(self, working_dir):

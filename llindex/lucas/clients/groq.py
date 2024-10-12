@@ -6,7 +6,7 @@ import json
 
 from typing import List, Tuple
 
-from llindex.context import ChunkContext
+from lucas.context import ChunkContext
 
 class GroqClient:
     def __init__(self, tokens_rate=20000, period=60, max_tokens=4096, model='llama-3.1-70b-versatile'):

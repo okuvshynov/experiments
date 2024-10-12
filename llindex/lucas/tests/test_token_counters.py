@@ -1,5 +1,5 @@
 import unittest
-from llindex.token_counters import tiktoken_counter
+from lucas.token_counters import tiktoken_counter
 
 class TestTokenCounterClaude(unittest.TestCase):
     def test_empty_string(self):

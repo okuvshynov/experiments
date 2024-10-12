@@ -1,13 +1,14 @@
-import http.client
 import json
 import logging
 import os
+import requests
 import sys
+import time
 
-from llindex.index_format import format_default
-from lltools.tools import Toolset
+from lucas.index_format import format_default
+from lucas.tools.toolset import Toolset
 
-sonnet_prompt="""
+mistral_prompt="""
 You are given a summary of a code repository in the following xml-like format:
 <dir>
     <path>...</path>
@@ -44,56 +45,57 @@ def merge_usage(*usages):
     return result
 
 def interact(user_message):
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    conn = http.client.HTTPSConnection("api.anthropic.com")
+    api_key = os.environ.get("MISTRAL_API_KEY")
+    url = 'https://api.mistral.ai/v1/chat/completions'
     headers = {
-        'x-api-key': api_key,
-        'anthropic-version': '2023-06-01',
-        'content-type': 'application/json'
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Authorization': f'Bearer {api_key}'
     }
+
     toolset = Toolset(sys.argv[1])
 
-    usage = {}
+    usage = {} 
 
     messages = [{"role": "user", "content": user_message}]
     for i in range(10):
-        tool_choice = {"type": "auto"} if i > 0 else {"type": "any"}
+        tool_choice = "auto" if i > 0 else "any"
         payload = json.dumps({
-            "model": "claude-3-5-sonnet-20240620",
+            "model": "mistral-large-latest",
             "max_tokens": 8192,
-            "tools": toolset.definitions(),
+            "tools": toolset.definitions_v0(),
             "messages": messages,
             "tool_choice": tool_choice
         })
         logging.info('sending request')
-        conn.request("POST", "/v1/messages", payload, headers)
-        res = conn.getresponse()
-        data = res.read()
-        data = json.loads(data.decode("utf-8"))
+        response = requests.post(url, headers=headers, data=payload)
+        data = response.json()
+
         usage = merge_usage(usage, data['usage'])
         logging.info(f'Aggregate usage: {usage}')
+        reply = data['choices'][0]
 
-        if 'content' not in data:
-            logging.error(f'not content in {data}')
-            break
+        messages.append(reply['message'])
 
-        messages.append({"role": "assistant", "content": data['content']})
+        if reply["finish_reason"] == "tool_calls":
+            for tool_call in reply['message']['tool_calls']:
+                args = json.loads(tool_call['function']['arguments'])
+                tool_args = {
+                    'name': tool_call['function']['name'],
+                    'id': tool_call['id'],
+                    'input': args
+                }
+                result = toolset.run(tool_args)
+                if result is not None:
+                    messages.append({"role":"tool", "name":tool_args['name'], "content":result['content'], "tool_call_id": tool_args['id']})
 
-        if data["stop_reason"] == "tool_use":
-            message = {"role": "user", "content": []}
-            for content_piece in data['content']:
-                if content_piece['type'] == 'tool_use':
-                    result = toolset.run(content_piece)
-                    if result is not None:
-                        message["content"].append(result)
-                    else:
-                        logging.warning(f'unknown tool: {tool_use_name}')
-                        continue
-            messages.append(message)
+                else:
+                    logging.warning(f'unknown tool: {tool_args}')
+                    continue
         else:
             # got final reply
             logging.info('received final reply')
-            return data['content']
+            return reply
     logging.warning('no reply after 5 interactions')
     return None
 
@@ -130,12 +132,9 @@ def main():
 
     message = sys.argv[2]
     task = f'<task>{message}</task>'
-    user_message = sonnet_prompt + index_formatted + '\n\n' + task
+    user_message = mistral_prompt + index_formatted + '\n\n' + task
     reply = interact(user_message)
-    if len(reply) == 1 and 'text' in reply[0]:
-        print(reply[0]['text'])
-    else:
-        logging.error(f'Reply: {reply}')
+    print(reply['message']['content'])
 
 
 if __name__ == '__main__':
