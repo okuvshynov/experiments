@@ -7,18 +7,12 @@ import time
 
 from lucas.index_format import format_default
 from lucas.tools.toolset import Toolset
+from lucas.utils import merge_by_key
 
 script_dir = os.path.dirname(__file__)
 
 with open(os.path.join(script_dir, 'prompts', 'query_with_tools.txt')) as f:
     mistral_prompt = f.read()
-
-def merge_usage(*usages):
-    result = {}
-    for usage in usages:
-        for k, v in usage.items():
-            result[k] = result.get(k, 0) + v
-    return result
 
 def interact(user_message):
     api_key = os.environ.get("MISTRAL_API_KEY")
@@ -47,7 +41,7 @@ def interact(user_message):
         response = requests.post(url, headers=headers, data=payload)
         data = response.json()
 
-        usage = merge_usage(usage, data['usage'])
+        usage = merge_by_key(usage, data['usage'])
         logging.info(f'Aggregate usage: {usage}')
         reply = data['choices'][0]
 

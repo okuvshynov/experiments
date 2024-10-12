@@ -56,3 +56,10 @@ def save_index(files, dirs, filename):
         json.dump({'files': files, 'dirs': dirs}, f)
 
 
+def merge_by_key(*dicts):
+    result = {}
+    for d in dicts:
+        for k, v in d.items():
+            result[k] = result.get(k, 0) + v
+    return result
+
