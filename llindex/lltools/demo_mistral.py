@@ -30,9 +30,19 @@ You will be given your task in <task></task> tags.
 
 You will have access to several tools:
 - get_files: tool to get content of the files you need to accomplish that task.
+- git_grep: tool to find the references/uses of a symbol in a codebase.
+- git_log: tool to find a symbol in commit history, not in the current state only. Useful to find when some functionality was introduced and why.
+- git_show: tool to show the content of the commit by its id. Useful to show the content of some commits returned by git_log
 
 Use the summaries provided to identify the files you need. Feel free to use tools more than once if you discovered that you need more information. Avoid calling the tool with the same arguments, reuse previous tool responses.
 """
+
+def merge_usage(*usages):
+    result = {}
+    for usage in usages:
+        for k, v in usage.items():
+            result[k] = result.get(k, 0) + v
+    return result
 
 def interact(user_message):
     api_key = os.environ.get("MISTRAL_API_KEY")
@@ -44,6 +54,8 @@ def interact(user_message):
     }
 
     toolset = Toolset(sys.argv[1])
+
+    usage = {} 
 
     messages = [{"role": "user", "content": user_message}]
     for i in range(10):
@@ -59,6 +71,8 @@ def interact(user_message):
         response = requests.post(url, headers=headers, data=payload)
         data = response.json()
 
+        usage = merge_usage(usage, data['usage'])
+        logging.info(f'Aggregate usage: {usage}')
         reply = data['choices'][0]
 
         messages.append(reply['message'])

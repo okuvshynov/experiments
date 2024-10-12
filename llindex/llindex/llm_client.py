@@ -82,5 +82,3 @@ def llm_summarize_dir(dir_path: str, child_summaries: List[str], context: DirCon
     if reply is not None:
         return parse_dir_results(reply)
     return {}
-
-    
