@@ -1,10 +1,12 @@
-import logging
-from lltools.get_files import GetFilesTool
 import http.client
-from llindex.index_format import format_default
-import sys
-import os
 import json
+import logging
+import os
+import sys
+
+from llindex.index_format import format_default
+from lltools.get_files import GetFilesTool
+from lltools.git_grep import GitGrepTool
 
 sonnet_prompt="""
 You are given a summary of a code repository in the following xml-like format:
@@ -26,7 +28,11 @@ Each directory will have a summary, all files will be listed.
 
 You will be given your task in <task></task> tags.
 
-You will have access to a tool to get content of the files you need to accomplish that task. Use the summaries provided to identify the files you need. Feel free to use the tool more than once if you discovered that you need more information.
+You will have access to several tools:
+- get_files: tool to get content of the files you need to accomplish that task.
+- git_grep: tool to find the references/uses of a symbol in a codebase.
+
+Use the summaries provided to identify the files you need. Feel free to use tools more than once if you discovered that you need more information. Avoid calling the tool with the same arguments, reuse previous tool responses.
 """
 
 def interact(user_message):
@@ -37,14 +43,18 @@ def interact(user_message):
         'anthropic-version': '2023-06-01',
         'content-type': 'application/json'
     }
-    tool = GetFilesTool(sys.argv[1])
+    get_files_tool = GetFilesTool(sys.argv[1])
+    git_grep_tool = GitGrepTool(sys.argv[1])
+
+    tools = [get_files_tool.definition(), git_grep_tool.definition()]
+
     messages = [{"role": "user", "content": user_message}]
-    for i in range(5):
+    for i in range(10):
         tool_choice = {"type": "auto"} if i > 0 else {"type": "any"}
         payload = json.dumps({
             "model": "claude-3-5-sonnet-20240620",
             "max_tokens": 8192,
-            "tools": [tool.definition()],
+            "tools": tools,
             "messages": messages,
             "tool_choice": tool_choice
         })
@@ -53,21 +63,30 @@ def interact(user_message):
         res = conn.getresponse()
         data = res.read()
         data = json.loads(data.decode("utf-8"))
+
+        if 'content' not in data:
+            logging.error(f'not content in {data}')
+            break
+
         messages.append({"role": "assistant", "content": data['content']})
 
         if data["stop_reason"] == "tool_use":
             message = {"role": "user", "content": []}
             for content_piece in data['content']:
                 if content_piece['type'] == 'tool_use':
-                    logging.info(f'requested tool: {content_piece["input"]}')
                     tool_use_id = content_piece['id']
                     tool_use_name = content_piece['name']
                     tool_use_args = content_piece['input']
-                    if tool_use_name != 'get_files':
+                    logging.info(f'requested tool: {tool_use_name}({tool_use_args})')
+                    if tool_use_name == 'get_files':
+                        tool_result = get_files_tool.run(tool_use_args)
+                        message["content"].append({"type": "tool_result", "tool_use_id" : tool_use_id, "content": tool_result})
+                    elif tool_use_name == 'git_grep':
+                        tool_result = git_grep_tool.run(tool_use_args)
+                        message["content"].append({"type": "tool_result", "tool_use_id" : tool_use_id, "content": tool_result})
+                    else:
                         logging.warning(f'unknown tool: {tool_use_name}')
                         continue
-                    tool_result = tool.run(tool_use_args)
-                    message["content"].append({"type": "tool_result", "tool_use_id" : tool_use_id, "content": tool_result})
             messages.append(message)
         else:
             # got final reply
