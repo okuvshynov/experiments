@@ -7,34 +7,10 @@ import sys
 from lucas.index_format import format_default
 from lucas.tools.toolset import Toolset
 
-sonnet_prompt="""
-You are given a summary of a code repository in the following xml-like format:
-<dir>
-    <path>...</path>
-    <summary>Description of this directory</summary>
-    <dirs>
-        <dir>...</dir>
-        <dir>...</dir>
-    </dirs>
-    <files>
-        <file>file/path/here</file>
-        <file>file/path/here</file>
-        ...
-    </files>
-</dir>
+script_dir = os.path.dirname(__file__)
 
-Each directory will have a summary, all files will be listed.
-
-You will be given your task in <task></task> tags.
-
-You will have access to several tools:
-- get_files: tool to get content of the files you need to accomplish that task.
-- git_grep: tool to find the references/uses of a symbol in a codebase.
-- git_log: tool to find a symbol in commit history, not in the current state only. Useful to find when some functionality was introduced and why.
-- git_show: tool to show the content of the commit by its id. Useful to show the content of some commits returned by git_log
-
-Use the summaries provided to identify the files you need. Feel free to use tools more than once if you discovered that you need more information. Avoid calling the tool with the same arguments, reuse previous tool responses.
-"""
+with open(os.path.join(script_dir, 'prompts', 'query_with_tools.txt')) as f:
+    sonnet_prompt = f.read()
 
 def merge_usage(*usages):
     result = {}
