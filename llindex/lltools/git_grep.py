@@ -7,6 +7,24 @@ class GitGrepTool:
     def __init__(self, root):
         self.root = os.path.expanduser(root)
 
+    def definition_v0(self):
+        return {
+            "type": "function",
+            "function": {
+                "name": "git_grep",
+                "description": "Executes git grep with the provided argument and returns file:line data. Use this tool to look up usage and definitions of symbols.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "needle": {
+                          "type": "string",
+                          "description": "A string to grep for."
+                        }
+                    },
+                    "required": ["needle"],
+                },
+            },
+        }
     def definition(self):
         return {
             "name": "git_grep",

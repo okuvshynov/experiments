@@ -17,6 +17,9 @@ class Toolset:
     def definitions(self):
         return [tool.definition() for tool in self.tools]
 
+    def definitions_v0(self):
+        return [tool.definition_v0() for tool in self.tools]
+
     def run(self, tool_use):
         tool_use_id = tool_use['id']
         tool_use_name = tool_use['name']

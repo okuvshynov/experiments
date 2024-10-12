@@ -6,6 +6,28 @@ class GetFilesTool:
     def __init__(self, root):
         self.root = os.path.expanduser(root)
 
+    def definition_v0(self):
+        return {
+            "type": "function",
+            "function": {
+                "name": "get_files",
+                "description": "Gets content of one or more files.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "filepaths": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "description": "A list of file paths to get the content."
+                        }
+                    },
+                    "required": ["filepaths"],
+                },
+            },
+        }
+
     def definition(self):
         return {
             "name": "get_files",

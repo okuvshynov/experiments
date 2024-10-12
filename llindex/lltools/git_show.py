@@ -7,6 +7,24 @@ class GitShowTool:
     def __init__(self, root):
         self.root = os.path.expanduser(root)
 
+    def definition_v0(self):
+        return {
+            "type": "function",
+            "function": {
+                "name": "git_show",
+                "description": "Executes git show <commit_id> with the provided commit_id argument and returns the commit content. Use this tool to understand the reasoning and context for changes made.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "commit_id": {
+                          "type": "string",
+                          "description": "commit_id to show content for."
+                        }
+                    },
+                    "required": ["commit_id"],
+                },
+            },
+        }
     def definition(self):
         return {
             "name": "git_show",
