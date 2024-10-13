@@ -11,6 +11,7 @@ from lucas.utils import merge_by_key
 
 from lucas.clients.mistral import MistralClient
 from lucas.clients.cerebras import CerebrasClient
+from lucas.clients.groq import GroqClient
 
 def main():
     logging.basicConfig(
@@ -52,7 +53,8 @@ def main():
     user_message = prompt + index_formatted + '\n\n' + task
 
     #client = MistralClient()
-    client = CerebrasClient()
+    #client = CerebrasClient()
+    client = GroqClient()
     toolset = Toolset(codebase_path)
 
     reply = client.send(user_message, toolset)
