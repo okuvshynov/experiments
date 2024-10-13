@@ -10,7 +10,7 @@ from lucas.tools.toolset import Toolset
 from lucas.utils import merge_by_key
 
 from lucas.clients.mistral import MistralClient
-from lucas.clients.cerebras import CerebrasClient
+from lucas.clients.cerebras_v0 import CerebrasClient
 
 def main():
     logging.basicConfig(
