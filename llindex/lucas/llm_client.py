@@ -11,11 +11,13 @@ from lucas.context import ChunkContext, DirContext
 from lucas.clients.groq import GroqClient
 from lucas.clients.local import LocalClient
 from lucas.clients.cerebras import CerebrasClient
+from lucas.clients.mistral import MistralClient
 
 client_map = {
     'LocalClient' : LocalClient,
     'GroqClient' : GroqClient,
     'CerebrasClient' : CerebrasClient,
+    'MistralClient' : MistralClient,
 }
 
 script_dir = os.path.dirname(__file__)
