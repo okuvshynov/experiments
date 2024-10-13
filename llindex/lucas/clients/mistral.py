@@ -1,6 +1,3 @@
-# we need to have a client which can work with both sending 
-# individual messages and agent-like tool interactions
-
 import json
 import logging
 import os
