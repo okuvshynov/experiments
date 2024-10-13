@@ -11,7 +11,7 @@ from lucas.utils import merge_by_key
 from lucas.token_counters import tiktoken_counter
 from lucas.context import ChunkContext, DirContext
 
-class CerebrasClient0:
+class CerebrasClient:
     def __init__(self, tokens_rate=5000, period=20, max_tokens=4096, model='llama3.1-70b'):
         self.api_key: str = os.environ.get('CEREBRAS_API_KEY')
         if self.api_key is None:
@@ -79,8 +79,6 @@ class CerebrasClient0:
                 time.sleep(wait_for)
 
             response = requests.post(self.url, headers=self.headers, data=payload)
-
-            print(response)
 
             # Check if the request was successful
             if response.status_code != 200:
