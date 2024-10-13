@@ -10,6 +10,7 @@ from lucas.tools.toolset import Toolset
 from lucas.utils import merge_by_key
 
 from lucas.clients.mistral import MistralClient
+from lucas.clients.cerebras import CerebrasClient
 
 def main():
     logging.basicConfig(
@@ -51,7 +52,7 @@ def main():
     task = f'<task>{message}</task>'
     user_message = prompt + index_formatted + '\n\n' + task
 
-    client = MistralClient()
+    client = CerebrasClient()
     toolset = Toolset(codebase_path)
 
     reply = client.send(user_message, toolset)
