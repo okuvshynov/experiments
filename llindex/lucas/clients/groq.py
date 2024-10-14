@@ -111,15 +111,12 @@ class GroqClient:
             else:
                 # got final reply
                 logging.info('received final reply')
-                return reply
+                return reply['message']['content']
         logging.warning(f'no reply after {max_iterations} interactions')
         return None
 
     def query(self, context):
-        reply = self.send(context.message, max_iterations=1)
-        if reply is None:
-            return None
-        return reply['message']['content']
+        return self.send(context.message, max_iterations=1)
 
     def model_id(self):
         return f'groq:{self.model}'

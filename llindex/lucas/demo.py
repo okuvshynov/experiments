@@ -12,6 +12,7 @@ from lucas.utils import merge_by_key
 from lucas.clients.mistral import MistralClient
 from lucas.clients.cerebras import CerebrasClient
 from lucas.clients.groq import GroqClient
+from lucas.clients.claude import ClaudeClient
 
 def main():
     logging.basicConfig(
@@ -52,13 +53,14 @@ def main():
     task = f'<task>{message}</task>'
     user_message = prompt + index_formatted + '\n\n' + task
 
-    #client = MistralClient()
+    client = MistralClient()
     #client = CerebrasClient()
-    client = GroqClient()
+    #client = GroqClient()
+    #client = ClaudeClient()
     toolset = Toolset(codebase_path)
 
     reply = client.send(user_message, toolset)
-    print(reply['message']['content'])
+    print(reply)
 
 if __name__ == '__main__':
     main()

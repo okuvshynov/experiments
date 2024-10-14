@@ -12,12 +12,14 @@ from lucas.clients.groq import GroqClient
 from lucas.clients.local import LocalClient
 from lucas.clients.cerebras import CerebrasClient
 from lucas.clients.mistral import MistralClient
+from lucas.clients.claude import ClaudeClient
 
 client_map = {
     'LocalClient' : LocalClient,
     'GroqClient' : GroqClient,
     'CerebrasClient' : CerebrasClient,
     'MistralClient' : MistralClient,
+    'ClaudeClient' : ClaudeClient,
 }
 
 script_dir = os.path.dirname(__file__)
