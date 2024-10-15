@@ -161,32 +161,3 @@ class Indexer:
         # now we need to save new dir index (as old index might contain deleted nodes).
         save_index(results, dir_index, self.index_file)
 
-    def loop(self):
-        # naive loop, sleep for N seconds and then process again.
-        # if nothing was changed, we won't query model. 
-        # still, better to use something watchdog
-        while True:
-            logging.info('starting next iteration')
-            self.run()
-            logging.info(f'Waiting {self.freq} seconds before checking for updates.')
-            time.sleep(self.freq)
-
-def main():
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s %(levelname)s: %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S',
-        handlers=[
-            logging.StreamHandler()
-        ]
-    )
-    if len(sys.argv) > 1:
-        config_path = sys.argv[1]
-    else:
-        config_path = os.path.join(os.path.dirname(__file__), 'indexer.yaml')
-    config = open_yaml(config_path)
-    indexer = Indexer(config)
-    indexer.loop()
-
-if __name__ == '__main__':
-    main()
