@@ -1,5 +1,3 @@
-# this is main entry point for the service
-
 from flask import Flask, request, jsonify
 import copy
 import os
