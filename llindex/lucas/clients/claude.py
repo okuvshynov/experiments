@@ -83,7 +83,7 @@ class ClaudeClient:
                 logging.info(f'client-side rate-limiting. Waiting for {wait_for} seconds')
                 time.sleep(wait_for)
 
-            chat_logger.info(f'>> Claude: {payload}')
+            #chat_logger.info(f'>> Claude: {payload}')
 
             response = requests.post(self.url, headers=self.headers, data=payload)
 
@@ -94,7 +94,7 @@ class ClaudeClient:
 
             data = response.json()
 
-            chat_logger.info(f'<< Claude: {data}')
+            #chat_logger.info(f'<< Claude: {data}')
 
             self.usage = merge_by_key(self.usage, data['usage'])
             logging.info(f'Aggregate usage: {self.usage}')

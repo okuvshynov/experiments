@@ -1,0 +1,89 @@
+# this is an attempt to do everything:
+# - give a very high level query with tool access
+# - give an index
+# - expect a set of patches as final output
+import copy
+import json
+import logging
+import os
+import re
+import requests
+import sys
+import threading
+import time
+import subprocess
+
+from lucas.llm_client import client_factory
+from lucas.index_format import format_default
+from lucas.tools.toolset import Toolset
+
+def apply_patch(file_path, patch_content):
+    try:
+        result = subprocess.run(['patch', file_path], input=patch_content, text=True, capture_output=True, check=True)
+        return True
+    except subprocess.CalledProcessError as e:
+        logging.error("Error applying patch.")
+
+    return False
+
+def parse_patch_file(content):
+    # Create a dictionary to store the results
+    patch_dict = {}
+
+    # Use regex to find all patches
+    patches = re.findall(r'<patch>(.*?)</patch>', content, re.DOTALL)
+
+    for patch in patches:
+        # Extract file path and content for each patch
+        file_match = re.search(r'<file>(.*?)</file>', patch, re.DOTALL)
+        content_match = re.search(r'<content>(.*?)</content>', patch, re.DOTALL)
+
+        if file_match and content_match:
+            file_path = file_match.group(1).strip()
+            patch_content = content_match.group(1).strip()
+            patch_dict[file_path] = patch_content
+
+    return patch_dict
+
+def yolo(query):
+    codebase_path = query['directory']
+    index_file = os.path.expanduser(os.path.join(codebase_path, ".llidx"))
+
+    if not os.path.isfile(index_file):
+        logging.error(f"The index file '{index_file}' does not exist")
+        return None
+    with open(index_file, 'r') as f:
+        index = json.load(f)
+
+    logging.info('loaded index')
+    index_formatted = format_default(index)
+
+    script_dir = os.path.dirname(__file__)
+
+    with open(os.path.join(script_dir, 'prompts', 'yolo.txt')) as f:
+        prompt = f.read()
+
+    message = query['message']
+    task = f'<task>{message}</task>'
+    user_message = prompt + index_formatted + '\n\n' + task
+
+    client = client_factory(query['client'])
+    toolset = Toolset(codebase_path)
+
+    reply = client.send(user_message, toolset)
+
+    if reply is None:
+        logging.error('YOLO failed.')
+        return None
+
+    patches = parse_patch_file(reply)
+    applied = 0
+
+    for path, patch in patches.items():
+        print(path)
+        #print(patch)
+        ok = apply_patch(os.path.join(codebase_path, path), patch)
+        if ok:
+            applied += 1
+
+    return f'received {len(patches)} patches, applied {applied}.'

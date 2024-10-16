@@ -12,6 +12,7 @@ from lucas.llm_client import client_factory
 from lucas.index_format import format_default
 from lucas.tools.toolset import Toolset
 from lucas.indexer import Indexer
+from lucas.yolo import yolo
 
 app = Flask(__name__)
 
@@ -31,6 +32,11 @@ def process_jobs():
             indexer.run()
         logging.info("Waiting for next processing batch")
         time.sleep(10)  # Wait for 10 seconds before next iteration
+
+@app.route('/yolo', methods=['POST'])
+def handle_yolo():
+    query = request.json
+    return jsonify({"reply": yolo(query)}), 200
 
 @app.route('/query', methods=['POST'])
 def query():
@@ -135,7 +141,7 @@ if __name__ == '__main__':
         ]
     )
 
-    background_thread = threading.Thread(target=process_jobs, daemon=True)
-    background_thread.start()
+    #background_thread = threading.Thread(target=process_jobs, daemon=True)
+    #background_thread.start()
 
     app.run(debug=True)
