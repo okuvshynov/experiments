@@ -46,7 +46,7 @@ def parse_patch_file(content):
     return patch_dict
 
 def yolo(query):
-    codebase_path = query['directory']
+    codebase_path = os.path.expanduser(query['directory'])
     index_file = os.path.expanduser(os.path.join(codebase_path, ".llidx"))
 
     if not os.path.isfile(index_file):
@@ -78,6 +78,7 @@ def yolo(query):
 
     patches = parse_patch_file(reply)
     applied = 0
+    i = 0
 
     for path, patch in patches.items():
         print(path)
@@ -85,6 +86,7 @@ def yolo(query):
         ok = apply_patch(os.path.join(codebase_path, path), patch)
         with open(f'/tmp/patches/{i}.patch', 'w') as f:
             f.write(patch)
+        i += 1
         #if ok:
         #    applied += 1
 
