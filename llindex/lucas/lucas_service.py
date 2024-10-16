@@ -37,7 +37,7 @@ def query():
     query = request.json
 
     codebase_path = query['directory']
-    index_file = os.path.join(codebase_path, ".llidx")
+    index_file = os.path.expanduser(os.path.join(codebase_path, ".llidx"))
 
     if not os.path.isfile(index_file):
         logging.warning(f"The index file '{index_file}' does not exist. Continue without index.")
@@ -64,6 +64,25 @@ def query():
     reply = client.send(user_message, toolset)
 
     return jsonify({"reply": reply}), 200
+
+# TODO: should this be a separate endpoint?
+# or should it also try plain patch
+@app.route('/fuzzy_patch', methods=['POST'])
+def fuzzy_patch():
+    query = request.json
+    file_content = query['file_content']
+    patch = query['patch']
+    script_dir = os.path.dirname(__file__)
+
+    with open(os.path.join(script_dir, 'prompts', 'fuzzy_patch.txt')) as f:
+        prompt = f.read()
+
+    message = prompt + "\n\n" + f'<file>{file_content}</file>'
+
+    client = client_factory(query['client'])
+    reply = client.send(message)
+    print(reply)
+
 
 @app.route('/jobs', methods=['POST'])
 def create_job():

@@ -13,7 +13,6 @@ from typing import List
 from lucas.llm_client import llm_summarize_files, client_factory, llm_summarize_dir
 from lucas.crawler import Crawler
 from lucas.types import FileEntryList
-from lucas.config import open_yaml
 from lucas.token_counters import token_counter_factory
 from lucas.context import ChunkContext, DirContext
 from lucas.utils import load_index, save_index, chunk_tasks

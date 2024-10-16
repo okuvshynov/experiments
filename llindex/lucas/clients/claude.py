@@ -7,6 +7,7 @@ import time
 
 from lucas.tools.toolset import Toolset
 from lucas.utils import merge_by_key
+from lucas.chat_logger import chat_logger
 
 from lucas.token_counters import tiktoken_counter
 from lucas.context import ChunkContext, DirContext
@@ -82,6 +83,8 @@ class ClaudeClient:
                 logging.info(f'client-side rate-limiting. Waiting for {wait_for} seconds')
                 time.sleep(wait_for)
 
+            chat_logger.info(f'>> Claude: {payload}')
+
             response = requests.post(self.url, headers=self.headers, data=payload)
 
             # Check if the request was successful
@@ -90,6 +93,8 @@ class ClaudeClient:
                 return None
 
             data = response.json()
+
+            chat_logger.info(f'<< Claude: {data}')
 
             self.usage = merge_by_key(self.usage, data['usage'])
             logging.info(f'Aggregate usage: {self.usage}')

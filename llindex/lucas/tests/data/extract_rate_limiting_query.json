@@ -1,0 +1,8 @@
+{
+    "directory": "~/projects/experiments/llindex",
+    "message": "Let's create a rate limiter module and use it from each client",
+    "client": {
+        "type": "ClaudeClient",
+        "model": "claude-3-5-sonnet-20240620"
+    }
+}
