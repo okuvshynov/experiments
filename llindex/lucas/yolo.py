@@ -83,7 +83,9 @@ def yolo(query):
         print(path)
         #print(patch)
         ok = apply_patch(os.path.join(codebase_path, path), patch)
-        if ok:
-            applied += 1
+        with open(f'/tmp/patches/{i}.patch', 'w') as f:
+            f.write(patch)
+        #if ok:
+        #    applied += 1
 
     return f'received {len(patches)} patches, applied {applied}.'
