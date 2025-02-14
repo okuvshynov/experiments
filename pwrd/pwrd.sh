@@ -27,7 +27,6 @@ process_powermetrics() {
             current_file=~/.pwr/${timestamp}.$(printf "%06d" "$seq").xml
             echo "$line" > "$current_file"
         else
-            # Append to current file
             echo "$line" >> "$current_file"
         fi
     done
