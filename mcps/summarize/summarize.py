@@ -19,14 +19,17 @@ async def summarize_impl(content: str) -> str | None:
     
     try:
         async with httpx.AsyncClient() as client:
-            response = await client.post(url, headers=headers, json=request)
+            response = await client.post(url, headers=headers, json=request, timeout=30.0)
+            response.raise_for_status()  # Raise exception for non-200 responses
             result = response.json()
             if "choices" in result and len(result["choices"]) > 0:
                 if "message" in result["choices"][0] and "content" in result["choices"][0]["message"]:
                     return result["choices"][0]["message"]["content"]
-        return None
-    except Exception:
-        return None
+            return f"Invalid response format: {result}"
+    except Exception as e:
+        error_msg = f"Error: {str(e)}"
+        print(error_msg)
+        return error_msg
 
 @mcp.tool()
 async def summarize(file_paths: List[str], root: str) -> str:
