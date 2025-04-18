@@ -43,4 +43,6 @@ We use https://github.com/okuvshynov/cubestat.
 
 Now, we can use initref command from within claude code app, which will:
 1. Pass files for summarization to our local LLM
-2. Use the summaries to generate documentation, saving on limits.
+2. Use the summaries to generate documentation, saving on tokens/limits
+3. Result is https://github.com/okuvshynov/cubestat/commit/cd482d964ccbc2449d56e99a87f0172df412d489
+
