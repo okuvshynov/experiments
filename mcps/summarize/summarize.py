@@ -3,7 +3,15 @@ import httpx
 import os.path
 import sys
 import asyncio
+import logging
 from mcp.server.fastmcp import FastMCP
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger('summarize')
 
 # Initialize FastMCP server
 mcp = FastMCP("summarize")
@@ -11,6 +19,8 @@ mcp = FastMCP("summarize")
 prompt = """
 For each file provided, write a brief summary. Include the connections between files if you have identified them.
 """
+
+MAX_TOKENS_PER_BATCH = 2**11
 
 async def token_count(content: str) -> int:
     headers = {
@@ -28,7 +38,8 @@ async def token_count(content: str) -> int:
             result = response.json()
             return len(result["tokens"])
     except Exception as e:
-        error_msg = f"Error: {str(e)}"
+        error_msg = f"Error calculating token count: {str(e)}"
+        logger.error(error_msg)
         return 0
 
 async def summarize_impl(content: str) -> str | None:
@@ -50,7 +61,8 @@ async def summarize_impl(content: str) -> str | None:
                     return result["choices"][0]["message"]["content"]
             return f"Invalid response format: {result}"
     except Exception as e:
-        error_msg = f"Error: {str(e)}"
+        error_msg = f"Error during summarization: {str(e)}"
+        logger.error(error_msg)
         return error_msg
 
 @mcp.tool()
@@ -61,20 +73,60 @@ async def summarize(file_paths: List[str], root: str) -> str:
         file_paths: List of file paths to summarize (relative to root)
         root: Root directory where files are located
     """
-    combined_content = ""
+    
+    # First, load all files and count tokens for each
+    file_contents = []
+    file_token_counts = []
+    
     for rel_path in file_paths:
         try:
             full_path = os.path.join(root, rel_path)
             with open(full_path, 'r') as file:
-                content = file.read()
-                combined_content += f"{rel_path}:\n{content}\n\n"
+                content = f"{rel_path}:\n{file.read()}\n\n"
+                file_contents.append(content)
+                tokens = await token_count(content)
+                file_token_counts.append(tokens)
+                logger.info(f"File {rel_path}: {tokens} tokens")
         except Exception as e:
-            combined_content += f"{rel_path}:\nError reading file: {str(e)}\n\n"
-            
-    tc = await token_count(combined_content)
-    print(f"Token count = {tc}")
-    summary = await summarize_impl(combined_content)
-    return summary if summary else "Failed to generate summary"
+            error_content = f"{rel_path}:\nError reading file: {str(e)}\n\n"
+            file_contents.append(error_content)
+            file_token_counts.append(await token_count(error_content))
+    
+    # Split files into batches that don't exceed MAX_TOKENS_PER_BATCH
+    batches = []
+    current_batch = []
+    current_batch_tokens = 0
+    
+    for i, (content, tokens) in enumerate(zip(file_contents, file_token_counts)):
+        # If a single file exceeds the token limit, we'll still include it in its own batch
+        if current_batch_tokens + tokens > MAX_TOKENS_PER_BATCH and current_batch:
+            batches.append(current_batch)
+            current_batch = []
+            current_batch_tokens = 0
+        
+        current_batch.append(content)
+        current_batch_tokens += tokens
+    
+    # Add the last batch if not empty
+    if current_batch:
+        batches.append(current_batch)
+    
+    logger.info(f"Split into {len(batches)} batches")
+    
+    # Process each batch and concatenate results
+    all_summaries = []
+    for i, batch in enumerate(batches):
+        combined_content = "".join(batch)
+        logger.info(f"Processing batch {i+1}/{len(batches)}")
+        batch_summary = await summarize_impl(combined_content)
+        if batch_summary:
+            all_summaries.append(batch_summary)
+        else:
+            all_summaries.append(f"Failed to generate summary for batch {i+1}")
+    
+    # Combine all summaries
+    final_summary = "\n\n".join(all_summaries)
+    return final_summary
 
 async def test_summarize():
     """Test function that summarizes the current script file"""
@@ -82,7 +134,7 @@ async def test_summarize():
     current_file = os.path.basename(__file__)
 
     result = await summarize([current_file], current_dir)
-    print(f"Summary of {current_file}:\n{result}")
+    logger.info(f"Summary of {current_file}:\n{result}")
 
 if __name__ == "__main__":
     if "--test" in sys.argv:
