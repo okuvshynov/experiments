@@ -1,4 +1,4 @@
-local LLM summarization MCP server.
+# local LLM summarization MCP server.
 
 Scenario:
 
