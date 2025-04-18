@@ -16,7 +16,7 @@ logger = logging.getLogger('summarize')
 
 # Parse command-line arguments
 parser = argparse.ArgumentParser(description='Summarize files content')
-parser.add_argument('--max-tokens', type=int, default=2**11, 
+parser.add_argument('--max-tokens', type=int, default=2**14, 
                     help='Maximum tokens per batch')
 parser.add_argument('--base-url', type=str, default='http://localhost:8080',
                     help='Base URL for API endpoints (default: http://localhost:8080)')
