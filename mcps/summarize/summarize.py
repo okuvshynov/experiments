@@ -4,6 +4,7 @@ import os.path
 import sys
 import asyncio
 import logging
+import argparse
 from mcp.server.fastmcp import FastMCP
 
 # Configure logging
@@ -13,6 +14,15 @@ logging.basicConfig(
 )
 logger = logging.getLogger('summarize')
 
+# Parse command-line arguments
+parser = argparse.ArgumentParser(description='Summarize files content')
+parser.add_argument('--max-tokens', type=int, default=2**11, 
+                    help='Maximum tokens per batch')
+parser.add_argument('--base-url', type=str, default='http://localhost:8080',
+                    help='Base URL for API endpoints (default: http://localhost:8080)')
+parser.add_argument('--test', action='store_true', help='Run test function')
+args, unknown = parser.parse_known_args()
+
 # Initialize FastMCP server
 mcp = FastMCP("summarize")
 
@@ -20,13 +30,16 @@ prompt = """
 For each file provided, write a brief summary. Include the connections between files if you have identified them.
 """
 
-MAX_TOKENS_PER_BATCH = 2**11
+MAX_TOKENS_PER_BATCH = args.max_tokens
+BASE_URL = args.base_url
+
+logger.info(f"Configured with MAX_TOKENS_PER_BATCH={MAX_TOKENS_PER_BATCH}, BASE_URL={BASE_URL}")
 
 async def token_count(content: str) -> int:
     headers = {
         "Content-Type": "application/json"
     }
-    url = "http://localhost:8080/tokenize"
+    url = f"{BASE_URL}/tokenize"
     request = {
         "content": content
     }
@@ -46,7 +59,7 @@ async def summarize_impl(content: str) -> str | None:
     headers = {
         "Content-Type": "application/json"
     }
-    url = "http://localhost:8080/v1/chat/completions"
+    url = f"{BASE_URL}/v1/chat/completions"
     request = {
         "messages": [{"role": "user", "content": f"{prompt}\n{content}"}]
     }
@@ -137,7 +150,7 @@ async def test_summarize():
     logger.info(f"Summary of {current_file}:\n{result}")
 
 if __name__ == "__main__":
-    if "--test" in sys.argv:
+    if args.test:
         # Run the test function
         asyncio.run(test_summarize())
     else:
