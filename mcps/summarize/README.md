@@ -33,30 +33,14 @@ I used [llama.cpp server](https://github.com/ggml-org/llama.cpp/tree/master/exam
 
 In this case we add it globally, not per project (-s flag)
 
-### Now within claude code we can instruct it like this
+### define custom claude command to your project
 
-(Using https://github.com/okuvshynov/cubestat as example)
+We use https://github.com/okuvshynov/cubestat.
 
-```
-> Use summarize tool to get the summaries for metrics implementations. Do not read the content of the file yourself, get the summary using the tool
+```git clone https://github.com/okuvshynov/cubestat.git```
 
-  summarize:summarize   (file_paths: ["cubestat/metrics/base_metric.py","cubestat/metrics/cpu.py","cubestat/metrics/memory.py","cubestat/metrics/disk.py","cubestat/metrics/gpu.py","cubestat/…e
-  (MCP)                 trics/network.py","cubestat/metrics/accel.py","cubestat/metrics/power.py","cubestat/metrics/swap.py","cubestat/metrics/mock.py"], root:
-                        "/Users/oleksandr/projects/cubestat")
-...
+```mkdir -p cubestat/.claude/commands && cp experiments/mcps/commands/initref.md cubestat/.claude/commands```
 
-Here are the summaries of the metric implementations:
-  - base_metric.py: Abstract base class with abstract methods subclasses must implement and some default implementations.
-  - cpu.py: CPU usage monitoring with platform-specific implementations, display modes, and command line arguments.
-  - memory.py: Memory usage monitoring with platform-specific implementations, display modes, and command line arguments.
-  - disk.py: Disk I/O monitoring with platform-specific implementations, display modes, and command line arguments.
-  - gpu.py: GPU monitoring with platform-specific implementations, display modes, and command line arguments.
-  - network.py: Network I/O monitoring with platform-specific implementations, display modes, and command line arguments.
-  - accel.py: Accelerator (ANE) monitoring for macOS only with display modes and command line arguments.
-  - power.py: Power usage monitoring for macOS only with display modes and command line arguments.
-  - swap.py: Swap memory monitoring with platform-specific implementations, display modes, and command line arguments.
-  - mock.py: Mock metric class for testing with a simple platform-agnostic implementation.
-
-```
-
-Observe very low cost on claude side and 10k tokens on local llm.
+Now, we can use initref command from within claude code app, which will:
+1. Pass files for summarization to our local LLM
+2. Use the summaries to generate documentation, saving on limits.

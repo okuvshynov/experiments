@@ -80,7 +80,7 @@ async def summarize_impl(content: str) -> str | None:
 
 @mcp.tool()
 async def summarize(file_paths: List[str], root: str) -> str:
-    """Summarize the content of multiple files
+    """Summarize the content of multiple files and relationships between them
 
     Args:
         file_paths: List of file paths to summarize (relative to root)
