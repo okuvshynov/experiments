@@ -1,0 +1,43 @@
+# Build directories
+/build/
+/out/
+/cmake-build-*/
+
+# CMake generated files
+CMakeCache.txt
+CMakeFiles/
+*.cmake
+Makefile
+*.ninja
+
+# Compiled object files
+*.o
+*.obj
+
+# Precompiled headers
+*.gch
+*.pch
+
+# Compiled dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Compiled static libraries
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app
+hmp
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*~
+
+# macOS
+.DS_Store
