@@ -1,4 +1,4 @@
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 from .core import (
     detect_delimiter,
@@ -8,6 +8,15 @@ from .core import (
     execute_query,
     format_output,
 )
+from .query_builder import (
+    parse_aggregation,
+    build_heatmap_query,
+    parse_chart_command,
+)
+from .charts import (
+    create_heatmap,
+    format_chart_output,
+)
 
 __all__ = [
     "detect_delimiter",
@@ -16,4 +25,9 @@ __all__ = [
     "create_table_from_csv",
     "execute_query",
     "format_output",
+    "parse_aggregation",
+    "build_heatmap_query",
+    "parse_chart_command",
+    "create_heatmap",
+    "format_chart_output",
 ]

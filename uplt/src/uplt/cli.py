@@ -2,14 +2,22 @@ import sys
 import sqlite3
 import argparse
 from .core import create_table_from_csv, execute_query, format_output
+from .query_builder import parse_chart_command, build_heatmap_query
+from .charts import format_chart_output
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Execute SQL queries on CSV data from stdin',
-        epilog='Example: cat data.csv | uplt "SELECT foo, bar, SUM(baz) FROM data GROUP BY foo, bar"'
+        description='Execute SQL queries on CSV data from stdin or create terminal charts',
+        epilog='Examples:\n'
+               '  SQL query: cat data.csv | uplt query "SELECT * FROM data"\n'
+               '  Heatmap: cat data.csv | uplt heatmap x_field y_field "avg(value)"\n',
+        formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    parser.add_argument('query', help='SQL query to execute')
+    
+    # Make command positional but with nargs='*' to handle variable arguments
+    parser.add_argument('command', nargs='*', 
+                       help='Command: "query" for SQL or chart type (e.g., "heatmap")')
     parser.add_argument('--table-name', '-t', default='data', 
                        help='Name for the SQLite table (default: data)')
     parser.add_argument('--delimiter', '-d', 
@@ -20,6 +28,12 @@ def main():
                        help='Show additional information')
     
     args = parser.parse_args()
+    
+    # Handle backward compatibility: if no command specified, treat as raw SQL
+    if not args.command:
+        print("Error: No command specified. Use 'query' for SQL or a chart type.", file=sys.stderr)
+        parser.print_help()
+        sys.exit(1)
     
     try:
         # Read CSV data from stdin
@@ -50,15 +64,56 @@ def main():
             count = cursor.fetchone()[0]
             print(f"Loaded {count} rows", file=sys.stderr)
         
-        # Execute query
-        results = execute_query(cursor, args.query)
+        # Determine mode and execute
+        command_type = args.command[0]
         
-        # Output results
-        if results:
-            output = format_output(results, cursor.description)
-            print(output, end='')
-        elif args.verbose:
-            print("Query returned no results.", file=sys.stderr)
+        if command_type == "query":
+            # Raw SQL mode
+            if len(args.command) < 2:
+                print("Error: SQL query required after 'query'", file=sys.stderr)
+                sys.exit(1)
+            
+            query = args.command[1]
+            results = execute_query(cursor, query)
+            
+            # Output results as CSV
+            if results:
+                output = format_output(results, cursor.description)
+                print(output, end='')
+            elif args.verbose:
+                print("Query returned no results.", file=sys.stderr)
+        
+        else:
+            # Chart mode
+            try:
+                chart_type, options = parse_chart_command(args.command)
+                
+                # Build appropriate query based on chart type
+                if chart_type == "heatmap":
+                    query = build_heatmap_query(
+                        options["x_field"],
+                        options["y_field"],
+                        options["value_field"],
+                        args.table_name
+                    )
+                    
+                    if args.verbose:
+                        print(f"Generated query: {query}", file=sys.stderr)
+                    
+                    results = execute_query(cursor, query)
+                    
+                    if results:
+                        chart = format_chart_output(chart_type, results)
+                        print(chart)
+                    else:
+                        print("No data to plot.", file=sys.stderr)
+                else:
+                    print(f"Chart type '{chart_type}' not yet implemented", file=sys.stderr)
+                    sys.exit(1)
+                    
+            except ValueError as e:
+                print(f"Error: {e}", file=sys.stderr)
+                sys.exit(1)
         
         conn.close()
         

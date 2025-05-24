@@ -1,6 +1,6 @@
 # uplt
 
-Execute SQL queries on CSV data from stdin.
+Execute SQL queries on CSV data from stdin and create terminal charts.
 
 ## Installation
 
@@ -16,41 +16,71 @@ uv pip install uplt
 
 ## Usage
 
-Pipe CSV data to `uplt` and provide a SQL query:
+uplt supports two modes:
+1. **SQL Query Mode**: Execute raw SQL queries on CSV data
+2. **Chart Mode**: Create terminal-based charts from CSV data
+
+### SQL Query Mode
+
+Pipe CSV data to `uplt` with the `query` command:
 
 ```bash
-cat data.csv | uplt "SELECT foo, bar, SUM(baz) FROM data GROUP BY foo, bar"
+cat data.csv | uplt query "SELECT foo, bar, SUM(baz) FROM data GROUP BY foo, bar"
+```
+
+### Chart Mode
+
+Create visualizations directly in your terminal:
+
+```bash
+# Basic heatmap counting occurrences
+cat data.csv | uplt heatmap x_field y_field
+
+# Heatmap with aggregation
+cat data.csv | uplt heatmap department age "avg(salary)"
 ```
 
 ## Examples
 
-### Basic query
+### SQL Queries
+
+#### Basic query
 ```bash
-cat data/test.csv | uplt "SELECT * FROM data WHERE age > 30"
+cat data/test.csv | uplt query "SELECT * FROM data WHERE age > 30"
 ```
 
-### Aggregation
+#### Aggregation
 ```bash
-cat data/test.csv | uplt "SELECT department, AVG(salary) FROM data GROUP BY department"
+cat data/test.csv | uplt query "SELECT department, AVG(salary) FROM data GROUP BY department"
 ```
 
-### Custom table name
+#### Custom table name
 ```bash
-cat data.csv | uplt -t employees "SELECT * FROM employees WHERE department = 'Engineering'"
+cat data.csv | uplt -t employees query "SELECT * FROM employees WHERE department = 'Engineering'"
 ```
 
-### Verbose mode
+### Charts
+
+#### Basic heatmap (counts occurrences)
 ```bash
-cat data.csv | uplt -v "SELECT COUNT(*) FROM data"
+cat data/test.csv | uplt heatmap department age
 ```
+
+#### Heatmap with aggregation
+```bash
+cat data/test.csv | uplt heatmap department age "avg(salary)"
+cat data/test.csv | uplt heatmap department age "sum(salary)"
+cat data/test.csv | uplt heatmap department age "max(salary)"
+```
+
+The heatmap uses Unicode block characters (░▒▓█) to show intensity.
 
 ## Options
 
-- `query`: SQL query to execute (required)
 - `--table-name`, `-t`: Name for the SQLite table (default: data)
 - `--delimiter`, `-d`: CSV delimiter (auto-detected if not specified)
 - `--no-headers`: Treat first row as data, not headers
-- `--verbose`, `-v`: Show additional information
+- `--verbose`, `-v`: Show additional information (including generated SQL for charts)
 
 ## Features
 
