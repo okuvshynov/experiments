@@ -1,5 +1,8 @@
 # uplt
 
+[![CI](https://github.com/okuvshynov/experiments/workflows/CI/badge.svg)](https://github.com/okuvshynov/experiments/actions/workflows/ci.yml)
+[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+
 Execute SQL queries on CSV data from stdin and create terminal charts.
 
 ## Installation
