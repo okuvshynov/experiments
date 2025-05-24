@@ -20,7 +20,24 @@ uplt is a Python package that allows users to execute SQL queries on CSV data fr
 Before committing changes, always run:
 ```bash
 python -m pytest  # Run all tests
+python -m pytest --cov=uplt  # Run tests with coverage
 ```
+
+### CI/CD
+GitHub Actions are configured to run automatically on:
+- Pull requests to main branch
+- Pushes to main branch
+
+The CI pipeline includes:
+1. **Linting** (ruff, black, isort) - currently set to continue on error
+2. **Unit tests** - runs on multiple Python versions (3.8-3.12) and OS (Ubuntu, Windows, macOS)
+3. **Integration tests** - tests the CLI commands with real data
+4. **Code coverage** - uploads results to Codecov
+
+Configuration files:
+- `.github/workflows/ci.yml` - Main CI workflow
+- `.github/dependabot.yml` - Automated dependency updates
+- Linting config in `pyproject.toml`
 
 ## Usage Examples
 
