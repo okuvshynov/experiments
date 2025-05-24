@@ -73,7 +73,10 @@ cat data/test.csv | uplt heatmap department age "sum(salary)"
 cat data/test.csv | uplt heatmap department age "max(salary)"
 ```
 
-The heatmap uses Unicode block characters (░▒▓█) to show intensity.
+The heatmap uses Unicode block characters (░▒▓█) to show intensity. It automatically detects numeric vs categorical axes:
+- Numeric axes are displayed with proper scales and binning
+- Categorical axes show distinct values
+- Sparse numeric data is handled with interpolated bins
 
 ## Options
 

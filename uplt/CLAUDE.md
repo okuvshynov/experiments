@@ -44,6 +44,12 @@ cat data/test.csv | uplt heatmap department age "avg(salary)"
 - Uses Unicode block characters: ░▒▓█
 - Automatically normalizes values to character intensity
 - Handles missing cells and non-numeric values gracefully
+- **NEW**: Automatic axis type detection:
+  - Numeric axes: Creates proper scales with binning (e.g., 0-10, 10-20, etc.)
+  - Categorical axes: Shows distinct values as-is
+  - Mixed mode: Can have one numeric and one categorical axis
+- Sparse numeric data is properly binned into the grid
+- Fixed: All data points are now correctly displayed, including edge values at scale boundaries
 
 ### SQL Query Builder
 - Parses aggregation functions: avg(), sum(), min(), max(), count()
