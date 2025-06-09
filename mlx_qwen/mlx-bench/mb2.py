@@ -206,7 +206,6 @@ def generate_step(
     kv_bits: Optional[int] = None,
     kv_group_size: int = 64,
     quantized_kv_start: int = 0,
-    prompt_progress_callback: Optional[Callable[int, int]] = None,
 ) -> Generator[Tuple[mx.array, mx.array], None, None]:
     """
     A generator producing token ids based on the given prompt from the model.
@@ -231,9 +230,6 @@ def generate_step(
         kv_group_size (int): Group size for KV cache quantization. Default: ``64``.
         quantized_kv_start (int): Step to begin using a quantized KV cache.
            when ``kv_bits`` is non-None. Default: ``0``.
-        prompt_progress_callback (Callable[int, int]): A call-back which takes the
-           prompt tokens processed so far and the total number of prompt tokens.
-           prompt tokens. Default: ``None``.
 
     Yields:
         Tuple[mx.array, mx.array]: One token and a vector of log probabilities.
@@ -250,7 +246,6 @@ def generate_step(
     elif len(prompt_cache) != len(model.layers):
         raise ValueError("Wrong number of layers in the prompt cache.")
 
-    prompt_progress_callback = prompt_progress_callback or (lambda *_: None)
 
     quantize_cache_fn = functools.partial(
         maybe_quantize_kv_cache,
@@ -291,7 +286,6 @@ def generate_step(
             _model_call(y[:prefill_step_size][None])
             quantize_cache_fn(prompt_cache)
             mx.eval([c.state for c in prompt_cache])
-            prompt_progress_callback(prompt_processed_tokens, total_prompt_tokens)
             prompt_processed_tokens += prefill_step_size
             y = y[prefill_step_size:]
             mx.clear_cache()
@@ -306,7 +300,6 @@ def generate_step(
             mx.async_eval(next_y, next_logprobs)
         if n == 0:
             mx.eval(y)
-            prompt_progress_callback(total_prompt_tokens, total_prompt_tokens)
         if n == max_tokens:
             break
         yield y.item(), logprobs
