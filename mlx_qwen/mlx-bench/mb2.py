@@ -257,12 +257,10 @@ def generate_step(
     y = prompt
     with mx.stream(generation_stream):
         total_prompt_tokens = y.shape[0]
-        prompt_processed_tokens = 0
         while y.shape[0] > prefill_step_size:
             model(y[:prefill_step_size][None], cache=prompt_cache)
             quantize_cache_fn(prompt_cache)
             mx.eval([c.state for c in prompt_cache])
-            prompt_processed_tokens += prefill_step_size
             y = y[prefill_step_size:]
             mx.clear_cache()
 
@@ -274,8 +272,6 @@ def generate_step(
         if n != max_tokens:
             next_y = _step(y)
             mx.async_eval(next_y)
-        if n == 0:
-            mx.eval(y)
         if n == max_tokens:
             break
         yield y.item()
@@ -389,7 +385,6 @@ def main():
             f"{response.generation_tps:.3f} tokens-per-sec"
         )
         print(f"Peak memory: {response.peak_memory:.3f} GB")
-
 
 if __name__ == "__main__":
     main()
