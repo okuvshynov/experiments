@@ -641,7 +641,9 @@ def stream_generate(
                 prompt_time = time.perf_counter() - tic
                 prompt_tps = prompt.size / prompt_time
                 tic = time.perf_counter()
-            #if token in tokenizer.eos_token_ids:
+            # We always generate max_tokens for benchmarking purposes
+            # and ignore eos
+            # if token in tokenizer.eos_token_ids:
             #    break
 
             detokenizer.add_token(token)
@@ -858,8 +860,4 @@ def main():
 
 
 if __name__ == "__main__":
-    print(
-        "Calling `python -m mlx_lm.generate...` directly is deprecated."
-        " Use `mlx_lm.generate...` or `python -m mlx_lm generate ...` instead."
-    )
     main()
