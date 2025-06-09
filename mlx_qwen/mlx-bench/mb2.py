@@ -252,7 +252,7 @@ def generate_step(
         kv_bits=kv_bits,
     )
 
-    sampler = sampler or (lambda x: mx.argmax(x, axis=-1))
+    sampler = sampler or make_sampler(0.0)
 
     def _model_call(y):
         return model(y, cache=prompt_cache)
@@ -295,7 +295,6 @@ def generate_step(
             mx.clear_cache()
         y = next_y
         n += 1
-
 
 
 def stream_generate(
@@ -359,7 +358,6 @@ def stream_generate(
         )
 
 
-
 def main():
     parser = setup_arg_parser()
     args = parser.parse_args()
@@ -373,8 +371,6 @@ def main():
 
     prompt = prepare_prompt(args, tokenizer)
 
-    sampler = make_sampler(0.0)
-    
     print("=" * 10)
     text = ""
     for response in stream_generate(
@@ -382,9 +378,7 @@ def main():
         tokenizer,
         prompt,
         max_tokens=args.max_tokens,
-        sampler=sampler,
         max_kv_size=args.max_kv_size,
-        prompt_cache=None,
         kv_bits=args.kv_bits,
         kv_group_size=args.kv_group_size,
         quantized_kv_start=args.quantized_kv_start,
