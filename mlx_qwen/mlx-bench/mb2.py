@@ -160,7 +160,6 @@ class GenerationResponse:
     Args:
         text (str): The next segment of decoded text. This can be an empty string.
         token (int): The next token.
-        logprobs (mx.array): A vector of log probabilities.
         prompt_tokens (int): The number of tokens in the prompt.
         prompt_tps (float): The prompt processing tokens-per-second.
         generation_tokens (int): The number of generated tokens.
@@ -170,7 +169,6 @@ class GenerationResponse:
 
     text: str
     token: int
-    logprobs: mx.array
     prompt_tokens: int
     prompt_tps: float
     generation_tokens: int
@@ -204,7 +202,7 @@ def generate_step(
     kv_bits: Optional[int] = None,
     kv_group_size: int = 64,
     quantized_kv_start: int = 0,
-) -> Generator[Tuple[mx.array, mx.array], None, None]:
+) -> Generator[mx.array, None, None]:
     """
     A generator producing token ids based on the given prompt from the model.
 
@@ -230,7 +228,7 @@ def generate_step(
            when ``kv_bits`` is non-None. Default: ``0``.
 
     Yields:
-        Tuple[mx.array, mx.array]: One token and a vector of log probabilities.
+        mx.array: One token.
     """
 
     tokens = None
@@ -274,7 +272,7 @@ def generate_step(
 
             logprobs = logits - mx.logsumexp(logits, keepdims=True)
             y = sampler(logprobs)
-            return y, logprobs.squeeze(0)
+            return y
 
     y = prompt
     with mx.stream(generation_stream):
@@ -288,22 +286,22 @@ def generate_step(
             y = y[prefill_step_size:]
             mx.clear_cache()
 
-        y, logprobs = _step(y)
+        y = _step(y)
 
-    mx.async_eval(y, logprobs)
+    mx.async_eval(y)
     n = 0
     while True:
         if n != max_tokens:
-            next_y, next_logprobs = _step(y)
-            mx.async_eval(next_y, next_logprobs)
+            next_y = _step(y)
+            mx.async_eval(next_y)
         if n == 0:
             mx.eval(y)
         if n == max_tokens:
             break
-        yield y.item(), logprobs
+        yield y.item()
         if n % 256 == 0:
             mx.clear_cache()
-        y, logprobs = next_y, next_logprobs
+        y = next_y
         n += 1
 
 
@@ -347,22 +345,17 @@ def stream_generate(
     with wired_limit(model, [generation_stream]):
         detokenizer.reset()
         tic = time.perf_counter()
-        for n, (token, logprobs) in enumerate(token_generator):
+        for n, token in enumerate(token_generator):
             if n == 0:
                 prompt_time = time.perf_counter() - tic
                 prompt_tps = prompt.size / prompt_time
                 tic = time.perf_counter()
-            # We always generate max_tokens for benchmarking purposes
-            # and ignore eos
-            # if token in tokenizer.eos_token_ids:
-            #    break
 
             detokenizer.add_token(token)
 
             yield GenerationResponse(
                 text=detokenizer.last_segment,
                 token=token,
-                logprobs=logprobs,
                 prompt_tokens=prompt.size,
                 prompt_tps=prompt_tps,
                 generation_tokens=n + 1,
@@ -374,7 +367,6 @@ def stream_generate(
         yield GenerationResponse(
             text=detokenizer.last_segment,
             token=token,
-            logprobs=logprobs,
             prompt_tokens=prompt.size,
             prompt_tps=prompt_tps,
             generation_tokens=n + 1,
