@@ -30,8 +30,9 @@ from mlx_lm.sample_utils import make_sampler
 from mlx_lm.tokenizer_utils import TokenizerWrapper
 from mlx_lm.utils import load
 
-DEFAULT_PROMPT = "hello"
 DEFAULT_MAX_TOKENS = 100
+DEFAULT_PROMPT_LENGTH = 1000
+DEFAULT_PROMPT = "The quick brown fox jumps over the lazy dog. "
 DEFAULT_MODEL = "mlx-community/Llama-3.2-3B-Instruct-4bit"
 DEFAULT_QUANTIZED_KV_START = 5000
 
@@ -56,7 +57,13 @@ def setup_arg_parser():
         "--prompt",
         "-p",
         default=DEFAULT_PROMPT,
-        help="Message to be processed by the model ('-' reads from stdin)",
+        help="Base prompt text to repeat ('-' reads from stdin)",
+    )
+    parser.add_argument(
+        "--prompt-length",
+        type=int,
+        default=DEFAULT_PROMPT_LENGTH,
+        help="Target number of tokens for the prompt",
     )
     parser.add_argument(
         "--max-tokens",
@@ -449,9 +456,21 @@ def main():
         tokenizer_config=tokenizer_config,
     )
 
-    prompt = args.prompt.replace("\\n", "\n").replace("\\t", "\t")
-    prompt = sys.stdin.read() if prompt == "-" else prompt
-    prompt = tokenizer.encode(prompt)
+    # Get the base prompt
+    base_prompt = args.prompt.replace("\\n", "\n").replace("\\t", "\t")
+    base_prompt = sys.stdin.read() if base_prompt == "-" else base_prompt
+    
+    # Tokenize the base prompt
+    base_tokens = tokenizer.encode(base_prompt)
+    
+    # Repeat tokens to reach desired length
+    target_length = args.prompt_length
+    if len(base_tokens) > 0:
+        repeats = (target_length + len(base_tokens) - 1) // len(base_tokens)
+        prompt = base_tokens * repeats
+        prompt = prompt[:target_length]
+    else:
+        prompt = []
 
     sampler = make_sampler(0.0)
     response = generate(
