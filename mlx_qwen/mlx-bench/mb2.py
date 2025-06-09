@@ -245,12 +245,9 @@ def generate_step(
 
     sampler = make_sampler(0.0)
 
-    def _model_call(y):
-        return model(y, cache=prompt_cache)
-
     def _step(y):
         with mx.stream(generation_stream):
-            logits = _model_call(y[None])
+            logits = model(y[None], cache=prompt_cache)
             logits = logits[:, -1, :]
             quantize_cache_fn(prompt_cache)
             logprobs = logits - mx.logsumexp(logits, keepdims=True)
@@ -262,7 +259,7 @@ def generate_step(
         total_prompt_tokens = y.shape[0]
         prompt_processed_tokens = 0
         while y.shape[0] > prefill_step_size:
-            _model_call(y[:prefill_step_size][None])
+            model(y[:prefill_step_size][None], cache=prompt_cache)
             quantize_cache_fn(prompt_cache)
             mx.eval([c.state for c in prompt_cache])
             prompt_processed_tokens += prefill_step_size
