@@ -368,45 +368,6 @@ def stream_generate(
         )
 
 
-def generate(
-    model: nn.Module,
-    tokenizer: Union[PreTrainedTokenizer, TokenizerWrapper],
-    prompt: List[int],
-    **kwargs,
-) -> str:
-    """
-    Generate a complete response from the model.
-
-    Args:
-       model (nn.Module): The language model.
-       tokenizer (PreTrainedTokenizer): The tokenizer.
-       prompt (List[int]): The input prompt as integer tokens.
-       kwargs: The remaining options get passed to :func:`stream_generate`.
-          See :func:`stream_generate` for more details.
-    """
-    print("=" * 10)
-
-    text = ""
-    for response in stream_generate(model, tokenizer, prompt, **kwargs):
-        print(response.text, end="", flush=True)
-        text += response.text
-
-    print()
-    print("=" * 10)
-    if len(text) == 0:
-        print("No text generated for this prompt")
-        return text
-    print(
-        f"Prompt: {response.prompt_tokens} tokens, "
-        f"{response.prompt_tps:.3f} tokens-per-sec"
-    )
-    print(
-        f"Generation: {response.generation_tokens} tokens, "
-        f"{response.generation_tps:.3f} tokens-per-sec"
-    )
-    print(f"Peak memory: {response.peak_memory:.3f} GB")
-    return text
-
 
 def main():
     parser = setup_arg_parser()
@@ -422,7 +383,10 @@ def main():
     prompt = prepare_prompt(args, tokenizer)
 
     sampler = make_sampler(0.0)
-    response = generate(
+    
+    print("=" * 10)
+    text = ""
+    for response in stream_generate(
         model,
         tokenizer,
         prompt,
@@ -434,7 +398,24 @@ def main():
         kv_group_size=args.kv_group_size,
         quantized_kv_start=args.quantized_kv_start,
         prefill_step_size=args.prefill_step_size,
-    )
+    ):
+        print(response.text, end="", flush=True)
+        text += response.text
+    
+    print()
+    print("=" * 10)
+    if len(text) == 0:
+        print("No text generated for this prompt")
+    else:
+        print(
+            f"Prompt: {response.prompt_tokens} tokens, "
+            f"{response.prompt_tps:.3f} tokens-per-sec"
+        )
+        print(
+            f"Generation: {response.generation_tokens} tokens, "
+            f"{response.generation_tps:.3f} tokens-per-sec"
+        )
+        print(f"Peak memory: {response.peak_memory:.3f} GB")
 
 
 if __name__ == "__main__":
