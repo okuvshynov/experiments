@@ -35,6 +35,7 @@ DEFAULT_PROMPT_LENGTH = 1000
 DEFAULT_PROMPT = "The quick brown fox jumps over the lazy dog. "
 DEFAULT_MODEL = "mlx-community/Llama-3.2-3B-Instruct-4bit"
 DEFAULT_QUANTIZED_KV_START = 5000
+DEFAULT_PREFILL_STEP_SIZE = 2048
 
 
 def str2bool(string):
@@ -103,6 +104,12 @@ def setup_arg_parser():
         "from this step onwards.",
         type=int,
         default=DEFAULT_QUANTIZED_KV_START,
+    )
+    parser.add_argument(
+        "--prefill-step-size",
+        help="Number of tokens to process at once during prompt prefill",
+        type=int,
+        default=DEFAULT_PREFILL_STEP_SIZE,
     )
     return parser
 
@@ -485,6 +492,7 @@ def main():
         kv_bits=args.kv_bits,
         kv_group_size=args.kv_group_size,
         quantized_kv_start=args.quantized_kv_start,
+        prefill_step_size=args.prefill_step_size,
     )
     if not args.verbose:
         print(response)
