@@ -32,8 +32,6 @@ from mlx_lm.utils import load
 
 DEFAULT_PROMPT = "hello"
 DEFAULT_MAX_TOKENS = 100
-DEFAULT_TEMP = 0.0
-DEFAULT_SEED = None
 DEFAULT_MODEL = "mlx-community/Llama-3.2-3B-Instruct-4bit"
 DEFAULT_QUANTIZED_KV_START = 5000
 
@@ -66,15 +64,6 @@ def setup_arg_parser():
         type=int,
         default=DEFAULT_MAX_TOKENS,
         help="Maximum number of tokens to generate",
-    )
-    parser.add_argument(
-        "--temp", type=float, default=DEFAULT_TEMP, help="Sampling temperature (0.0 for deterministic)"
-    )
-    parser.add_argument(
-        "--seed",
-        type=int,
-        default=DEFAULT_SEED,
-        help="PRNG seed",
     )
     parser.add_argument(
         "--verbose",
@@ -448,8 +437,6 @@ def main():
     parser = setup_arg_parser()
     args = parser.parse_args()
 
-    if args.seed is not None:
-        mx.random.seed(args.seed)
 
     # Building tokenizer_config
     tokenizer_config = {}
@@ -466,7 +453,7 @@ def main():
     prompt = sys.stdin.read() if prompt == "-" else prompt
     prompt = tokenizer.encode(prompt)
 
-    sampler = make_sampler(args.temp)
+    sampler = make_sampler(0.0)
     response = generate(
         model,
         tokenizer,
