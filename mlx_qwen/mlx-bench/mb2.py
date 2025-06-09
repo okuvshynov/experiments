@@ -60,13 +60,6 @@ def setup_arg_parser():
         help="Optional path for the trained adapter weights and config.",
     )
     parser.add_argument(
-        "--extra-eos-token",
-        type=str,
-        default=(),
-        nargs="+",
-        help="Add tokens in the list of eos tokens that stop generation.",
-    )
-    parser.add_argument(
         "--prompt",
         "-p",
         default=DEFAULT_PROMPT,
@@ -474,8 +467,6 @@ def main():
         adapter_path=args.adapter_path,
         tokenizer_config=tokenizer_config,
     )
-    for eos_token in args.extra_eos_token:
-        tokenizer.add_eos_token(eos_token)
 
     prompt = args.prompt.replace("\\n", "\n").replace("\\t", "\t")
     prompt = sys.stdin.read() if prompt == "-" else prompt
