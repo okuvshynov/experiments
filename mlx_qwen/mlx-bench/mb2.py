@@ -73,20 +73,10 @@ def setup_arg_parser():
         help="Add tokens in the list of eos tokens that stop generation.",
     )
     parser.add_argument(
-        "--system-prompt",
-        default=None,
-        help="System prompt to be used for the chat template",
-    )
-    parser.add_argument(
         "--prompt",
         "-p",
         default=DEFAULT_PROMPT,
         help="Message to be processed by the model ('-' reads from stdin)",
-    )
-    parser.add_argument(
-        "--prefill-response",
-        default=None,
-        help="Prefill response to be used for the chat template",
     )
     parser.add_argument(
         "--max-tokens",
@@ -130,22 +120,6 @@ def setup_arg_parser():
         type=int,
         default=DEFAULT_SEED,
         help="PRNG seed",
-    )
-    parser.add_argument(
-        "--ignore-chat-template",
-        action="store_true",
-        help="Use the raw prompt without the tokenizer's chat template.",
-    )
-    parser.add_argument(
-        "--use-default-chat-template",
-        action="store_true",
-        help="Use the default chat template",
-    )
-    parser.add_argument(
-        "--chat-template-config",
-        help="Additional config for `apply_chat_template`. Should be a dictionary of"
-        " string keys to values represented as a JSON decodable string.",
-        default=None,
     )
     parser.add_argument(
         "--verbose",
@@ -536,37 +510,9 @@ def main():
     for eos_token in args.extra_eos_token:
         tokenizer.add_eos_token(eos_token)
 
-    template_kwargs = {}
-    if args.chat_template_config is not None:
-        template_kwargs = json.loads(args.chat_template_config)
-
-    if args.use_default_chat_template:
-        if tokenizer.chat_template is None:
-            tokenizer.chat_template = tokenizer.default_chat_template
-
     prompt = args.prompt.replace("\\n", "\n").replace("\\t", "\t")
     prompt = sys.stdin.read() if prompt == "-" else prompt
-    if not args.ignore_chat_template and tokenizer.chat_template is not None:
-        if args.system_prompt is not None:
-            messages = [{"role": "system", "content": args.system_prompt}]
-        else:
-            messages = []
-        messages.append({"role": "user", "content": prompt})
-
-        has_prefill = args.prefill_response is not None
-        if has_prefill:
-            messages.append({"role": "assistant", "content": args.prefill_response})
-        prompt = tokenizer.apply_chat_template(
-            messages,
-            tokenize=False,
-            continue_final_message=has_prefill,
-            add_generation_prompt=not has_prefill,
-            **template_kwargs,
-        )
-
-        prompt = tokenizer.encode(prompt, add_special_tokens=False)
-    else:
-        prompt = tokenizer.encode(prompt)
+    prompt = tokenizer.encode(prompt)
 
     sampler = make_sampler(
         args.temp,
