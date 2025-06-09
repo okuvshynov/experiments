@@ -33,12 +33,6 @@ from mlx_lm.utils import load
 DEFAULT_PROMPT = "hello"
 DEFAULT_MAX_TOKENS = 100
 DEFAULT_TEMP = 0.0
-DEFAULT_TOP_P = 1.0
-DEFAULT_MIN_P = 0.0
-DEFAULT_TOP_K = 0
-DEFAULT_XTC_PROBABILITY = 0.0
-DEFAULT_XTC_THRESHOLD = 0.0
-DEFAULT_MIN_TOKENS_TO_KEEP = 1
 DEFAULT_SEED = None
 DEFAULT_MODEL = "mlx-community/Llama-3.2-3B-Instruct-4bit"
 DEFAULT_QUANTIZED_KV_START = 5000
@@ -86,34 +80,7 @@ def setup_arg_parser():
         help="Maximum number of tokens to generate",
     )
     parser.add_argument(
-        "--temp", type=float, default=DEFAULT_TEMP, help="Sampling temperature"
-    )
-    parser.add_argument(
-        "--top-p", type=float, default=DEFAULT_TOP_P, help="Sampling top-p"
-    )
-    parser.add_argument(
-        "--min-p", type=float, default=DEFAULT_MIN_P, help="Sampling min-p"
-    )
-    parser.add_argument(
-        "--top-k", type=int, default=DEFAULT_TOP_K, help="Sampling top-k"
-    )
-    parser.add_argument(
-        "--xtc-probability",
-        type=float,
-        default=DEFAULT_XTC_PROBABILITY,
-        help="Probability of XTC sampling to happen each next token",
-    )
-    parser.add_argument(
-        "--xtc-threshold",
-        type=float,
-        default=0.0,
-        help="Thresold the probs of each next token candidate to be sampled by XTC",
-    )
-    parser.add_argument(
-        "--min-tokens-to-keep",
-        type=int,
-        default=DEFAULT_MIN_TOKENS_TO_KEEP,
-        help="Minimum tokens to keep for min-p sampling.",
+        "--temp", type=float, default=DEFAULT_TEMP, help="Sampling temperature (0.0 for deterministic)"
     )
     parser.add_argument(
         "--seed",
@@ -514,16 +481,7 @@ def main():
     prompt = sys.stdin.read() if prompt == "-" else prompt
     prompt = tokenizer.encode(prompt)
 
-    sampler = make_sampler(
-        args.temp,
-        args.top_p,
-        args.min_p,
-        args.min_tokens_to_keep,
-        top_k=args.top_k,
-        xtc_probability=args.xtc_probability,
-        xtc_threshold=args.xtc_threshold,
-        xtc_special_tokens=tokenizer.encode("\n") + list(tokenizer.eos_token_ids),
-    )
+    sampler = make_sampler(args.temp)
     response = generate(
         model,
         tokenizer,
