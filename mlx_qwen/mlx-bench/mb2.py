@@ -216,7 +216,6 @@ def generate_step(
     *,
     max_tokens: int = 256,
     sampler: Optional[Callable[mx.array, mx.array]] = None,
-    logits_processors: Optional[List[Callable[[mx.array, mx.array], mx.array]]] = None,
     max_kv_size: Optional[int] = None,
     prompt_cache: Optional[Any] = None,
     prefill_step_size: int = 2048,
@@ -234,9 +233,6 @@ def generate_step(
           generator. Default: ``256``.
         sampler (Callable[mx.array, mx.array], optional): A sampler for sampling a
           token from a vector of log probabilities. Default: ``None``.
-        logits_processors (List[Callable[[mx.array, mx.array], mx.array]], optional):
-          A list of functions that take tokens and logits and return the processed
-          logits. Default: ``None``.
         max_kv_size (int, optional): Maximum size of the key-value cache. Old
           entries (except the first 4 tokens) will be overwritten.
         prompt_cache (List[Any], optional): A pre-computed prompt cache. Note, if
@@ -251,8 +247,6 @@ def generate_step(
     Yields:
         mx.array: One token.
     """
-
-    tokens = None
 
     # Create the KV cache for generation
     if prompt_cache is None:
@@ -277,17 +271,11 @@ def generate_step(
         return model(y, cache=prompt_cache)
 
     def _step(y):
-        nonlocal tokens
-
         with mx.stream(generation_stream):
             logits = _model_call(y[None])
 
             logits = logits[:, -1, :]
 
-            if logits_processors:
-                tokens = mx.concat([tokens, y]) if tokens is not None else y
-                for processor in logits_processors:
-                    logits = processor(tokens, logits)
 
             quantize_cache_fn(prompt_cache)
 
