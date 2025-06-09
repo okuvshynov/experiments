@@ -345,8 +345,6 @@ def main():
 
     prompt = prepare_prompt(args, tokenizer)
 
-    print("=" * 10)
-    text = ""
     for response in stream_generate(
         model,
         tokenizer,
@@ -359,22 +357,18 @@ def main():
         prefill_step_size=args.prefill_step_size,
     ):
         print(response.text, end="", flush=True)
-        text += response.text
     
     print()
     print("=" * 10)
-    if len(text) == 0:
-        print("No text generated for this prompt")
-    else:
-        print(
-            f"Prompt: {response.prompt_tokens} tokens, "
-            f"{response.prompt_tps:.3f} tokens-per-sec"
-        )
-        print(
-            f"Generation: {response.generation_tokens} tokens, "
-            f"{response.generation_tps:.3f} tokens-per-sec"
-        )
-        print(f"Peak memory: {response.peak_memory:.3f} GB")
+    print(
+        f"Prompt: {response.prompt_tokens} tokens, "
+        f"{response.prompt_tps:.3f} tokens-per-sec"
+    )
+    print(
+        f"Generation: {response.generation_tokens} tokens, "
+        f"{response.generation_tps:.3f} tokens-per-sec"
+    )
+    print(f"Peak memory: {response.peak_memory:.3f} GB")
 
 if __name__ == "__main__":
     main()
