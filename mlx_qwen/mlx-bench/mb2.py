@@ -16,7 +16,6 @@ from typing import (
 import mlx.core as mx
 import mlx.nn as nn
 from mlx.utils import tree_reduce
-from transformers import PreTrainedTokenizer
 
 from mlx_lm.models import cache
 from mlx_lm.models.cache import QuantizedKVCache
@@ -163,7 +162,6 @@ class GenerationResponse:
 
     Args:
         text (str): The next segment of decoded text. This can be an empty string.
-        token (int): The next token.
         prompt_tokens (int): The number of tokens in the prompt.
         prompt_tps (float): The prompt processing tokens-per-second.
         generation_tokens (int): The number of generated tokens.
@@ -172,7 +170,6 @@ class GenerationResponse:
     """
 
     text: str
-    token: int
     prompt_tokens: int
     prompt_tps: float
     generation_tokens: int
@@ -288,7 +285,7 @@ def stream_generate(
 
     Args:
         model (nn.Module): The model to use for generation.
-        tokenizer (PreTrainedTokenizer): The tokenizer.
+        tokenizer (TokenizerWrapper): The tokenizer.
         prompt (List[int]): The input prompt as integer tokens.
         kwargs: The remaining options get passed to :func:`generate_step`.
           See :func:`generate_step` for more details.
@@ -315,7 +312,6 @@ def stream_generate(
 
             yield GenerationResponse(
                 text=detokenizer.last_segment,
-                token=token,
                 prompt_tokens=prompt.size,
                 prompt_tps=prompt_tps,
                 generation_tokens=n + 1,
@@ -326,7 +322,6 @@ def stream_generate(
         detokenizer.finalize()
         yield GenerationResponse(
             text=detokenizer.last_segment,
-            token=token,
             prompt_tokens=prompt.size,
             prompt_tps=prompt_tps,
             generation_tokens=n + 1,
