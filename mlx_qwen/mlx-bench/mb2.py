@@ -55,11 +55,6 @@ def setup_arg_parser():
         default=None,
     )
     parser.add_argument(
-        "--adapter-path",
-        type=str,
-        help="Optional path for the trained adapter weights and config.",
-    )
-    parser.add_argument(
         "--prompt",
         "-p",
         default=DEFAULT_PROMPT,
@@ -464,7 +459,6 @@ def main():
 
     model, tokenizer = load(
         model_path,
-        adapter_path=args.adapter_path,
         tokenizer_config=tokenizer_config,
     )
 
