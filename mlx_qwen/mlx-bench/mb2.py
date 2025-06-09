@@ -42,6 +42,36 @@ def str2bool(string):
     return string.lower() not in ["false", "f"]
 
 
+def prepare_prompt(args, tokenizer) -> List[int]:
+    """
+    Prepare the prompt tokens based on command line arguments.
+    
+    Args:
+        args: Command line arguments
+        tokenizer: The tokenizer to use for encoding
+        
+    Returns:
+        List[int]: The prepared prompt tokens
+    """
+    # Get the base prompt
+    base_prompt = args.prompt.replace("\\n", "\n").replace("\\t", "\t")
+    base_prompt = sys.stdin.read() if base_prompt == "-" else base_prompt
+    
+    # Tokenize the base prompt
+    base_tokens = tokenizer.encode(base_prompt)
+    
+    # Repeat tokens to reach desired length
+    target_length = args.prompt_length
+    if len(base_tokens) > 0:
+        repeats = (target_length + len(base_tokens) - 1) // len(base_tokens)
+        prompt = base_tokens * repeats
+        prompt = prompt[:target_length]
+    else:
+        prompt = []
+    
+    return prompt
+
+
 def setup_arg_parser():
     """Set up and return the argument parser."""
     parser = argparse.ArgumentParser(description="LLM inference script")
@@ -309,7 +339,7 @@ def generate_step(
 def stream_generate(
     model: nn.Module,
     tokenizer: Union[PreTrainedTokenizer, TokenizerWrapper],
-    prompt: Union[str, mx.array, List[int]],
+    prompt: List[int],
     **kwargs,
 ) -> Generator[GenerationResponse, None, None]:
     """
@@ -318,8 +348,7 @@ def stream_generate(
     Args:
         model (nn.Module): The model to use for generation.
         tokenizer (PreTrainedTokenizer): The tokenizer.
-        prompt (Union[str, mx.array, List[int]]): The input prompt string or
-          integer tokens.
+        prompt (List[int]): The input prompt as integer tokens.
         kwargs: The remaining options get passed to :func:`generate_step`.
           See :func:`generate_step` for more details.
 
@@ -330,14 +359,7 @@ def stream_generate(
     if not isinstance(tokenizer, TokenizerWrapper):
         tokenizer = TokenizerWrapper(tokenizer)
 
-    if not isinstance(prompt, mx.array):
-        if isinstance(prompt, str):
-            # Try to infer if special tokens are needed
-            add_special_tokens = tokenizer.bos_token is None or not prompt.startswith(
-                tokenizer.bos_token
-            )
-            prompt = tokenizer.encode(prompt, add_special_tokens=add_special_tokens)
-        prompt = mx.array(prompt)
+    prompt = mx.array(prompt)
 
     detokenizer = tokenizer.detokenizer
 
@@ -378,9 +400,8 @@ def stream_generate(
 def generate(
     model: nn.Module,
     tokenizer: Union[PreTrainedTokenizer, TokenizerWrapper],
-    prompt: Union[str, List[int]],
+    prompt: List[int],
     verbose: bool = False,
-    formatter: Optional[Callable] = None,
     **kwargs,
 ) -> str:
     """
@@ -389,17 +410,12 @@ def generate(
     Args:
        model (nn.Module): The language model.
        tokenizer (PreTrainedTokenizer): The tokenizer.
-       prompt (Union[str, List[int]]): The input prompt string or integer tokens.
+       prompt (List[int]): The input prompt as integer tokens.
        verbose (bool): If ``True``, print tokens and timing information.
            Default: ``False``.
        kwargs: The remaining options get passed to :func:`stream_generate`.
           See :func:`stream_generate` for more details.
     """
-    if formatter is not None:
-        print(
-            "[Warning] Text formatting is deprecated and no longer used. "
-            "The argument will be removed in a future version."
-        )
     if verbose:
         print("=" * 10)
 
@@ -443,21 +459,7 @@ def main():
         tokenizer_config=tokenizer_config,
     )
 
-    # Get the base prompt
-    base_prompt = args.prompt.replace("\\n", "\n").replace("\\t", "\t")
-    base_prompt = sys.stdin.read() if base_prompt == "-" else base_prompt
-    
-    # Tokenize the base prompt
-    base_tokens = tokenizer.encode(base_prompt)
-    
-    # Repeat tokens to reach desired length
-    target_length = args.prompt_length
-    if len(base_tokens) > 0:
-        repeats = (target_length + len(base_tokens) - 1) // len(base_tokens)
-        prompt = base_tokens * repeats
-        prompt = prompt[:target_length]
-    else:
-        prompt = []
+    prompt = prepare_prompt(args, tokenizer)
 
     sampler = make_sampler(0.0)
     response = generate(
