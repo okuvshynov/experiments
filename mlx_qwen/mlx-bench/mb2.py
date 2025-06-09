@@ -114,6 +114,12 @@ def setup_arg_parser():
         type=int,
         default=2048,
     )
+    parser.add_argument(
+        "--verbose",
+        "-v",
+        action="store_true",
+        help="Print generated text output",
+    )
     return parser
 
 
@@ -156,12 +162,11 @@ def wired_limit(model: nn.Module, streams: Optional[List[mx.Stream]] = None):
 
 
 @dataclass
-class GenerationResponse:
+class PerfMetrics:
     """
-    The output of :func:`stream_generate`.
+    Performance metrics from text generation.
 
     Args:
-        text (str): The next segment of decoded text. This can be an empty string.
         prompt_tokens (int): The number of tokens in the prompt.
         prompt_tps (float): The prompt processing tokens-per-second.
         generation_tokens (int): The number of generated tokens.
@@ -169,7 +174,6 @@ class GenerationResponse:
         peak_memory (float): The peak memory used so far in GB.
     """
 
-    text: str
     prompt_tokens: int
     prompt_tps: float
     generation_tokens: int
@@ -274,25 +278,26 @@ def generate_step(
         n += 1
 
 
-def stream_generate(
+def generate(
     model: nn.Module,
     tokenizer: TokenizerWrapper,
     prompt: List[int],
+    verbose: bool = False,
     **kwargs,
-) -> Generator[GenerationResponse, None, None]:
+) -> PerfMetrics:
     """
-    A generator producing text based on the given prompt from the model.
+    Generate text based on the given prompt from the model.
 
     Args:
         model (nn.Module): The model to use for generation.
         tokenizer (TokenizerWrapper): The tokenizer.
         prompt (List[int]): The input prompt as integer tokens.
+        verbose (bool): Whether to print generated text during generation.
         kwargs: The remaining options get passed to :func:`generate_step`.
           See :func:`generate_step` for more details.
 
-    Yields:
-        GenerationResponse: An instance containing the generated text segment and
-            associated metadata. See :class:`GenerationResponse` for details.
+    Returns:
+        PerfMetrics: An instance containing the final generation metadata.
     """
     prompt = mx.array(prompt)
 
@@ -309,19 +314,15 @@ def stream_generate(
                 tic = time.perf_counter()
 
             detokenizer.add_token(token)
-
-            yield GenerationResponse(
-                text=detokenizer.last_segment,
-                prompt_tokens=prompt.size,
-                prompt_tps=prompt_tps,
-                generation_tokens=n + 1,
-                generation_tps=(n + 1) / (time.perf_counter() - tic),
-                peak_memory=mx.get_peak_memory() / 1e9,
-            )
+            
+            if verbose:
+                print(detokenizer.last_segment, end="", flush=True)
 
         detokenizer.finalize()
-        yield GenerationResponse(
-            text=detokenizer.last_segment,
+        if verbose:
+            print(detokenizer.last_segment, end="", flush=True)
+        
+        return PerfMetrics(
             prompt_tokens=prompt.size,
             prompt_tps=prompt_tps,
             generation_tokens=n + 1,
@@ -345,21 +346,26 @@ def main():
 
     prompt = prepare_prompt(args, tokenizer)
 
-    for response in stream_generate(
+    if args.verbose:
+        print("=" * 10)
+    
+    response = generate(
         model,
         tokenizer,
         prompt,
+        verbose=args.verbose,
         max_tokens=args.max_tokens,
         max_kv_size=args.max_kv_size,
         kv_bits=args.kv_bits,
         kv_group_size=args.kv_group_size,
         quantized_kv_start=args.quantized_kv_start,
         prefill_step_size=args.prefill_step_size,
-    ):
-        print(response.text, end="", flush=True)
+    )
     
-    print()
-    print("=" * 10)
+    if args.verbose:
+        print()
+        print("=" * 10)
+    
     print(
         f"Prompt: {response.prompt_tokens} tokens, "
         f"{response.prompt_tps:.3f} tokens-per-sec"
