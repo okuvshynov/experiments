@@ -38,7 +38,6 @@ DEFAULT_QUANTIZED_KV_START = 5000
 DEFAULT_PREFILL_STEP_SIZE = 2048
 
 
-
 def prepare_prompt(args, tokenizer) -> List[int]:
     """
     Prepare the prompt tokens based on command line arguments.
@@ -75,11 +74,8 @@ def setup_arg_parser():
     parser.add_argument(
         "--model",
         type=str,
-        help=(
-            "The path to the local model directory or Hugging Face repo. "
-            f"If no model is specified, then {DEFAULT_MODEL} is used."
-        ),
-        default=None,
+        help="The path to the local model directory or Hugging Face repo.",
+        default=DEFAULT_MODEL,
     )
     parser.add_argument(
         "--prompt",
@@ -273,12 +269,8 @@ def generate_step(
     def _step(y):
         with mx.stream(generation_stream):
             logits = _model_call(y[None])
-
             logits = logits[:, -1, :]
-
-
             quantize_cache_fn(prompt_cache)
-
             logprobs = logits - mx.logsumexp(logits, keepdims=True)
             y = sampler(logprobs)
             return y
@@ -420,15 +412,10 @@ def main():
     parser = setup_arg_parser()
     args = parser.parse_args()
 
-
-    # Building tokenizer_config
-    tokenizer_config = {}
-    tokenizer_config["trust_remote_code"] = True
-
-    model_path = args.model or DEFAULT_MODEL
+    tokenizer_config = {"trust_remote_code" : True}
 
     model, tokenizer = load(
-        model_path,
+        args.model,
         tokenizer_config=tokenizer_config,
     )
 
