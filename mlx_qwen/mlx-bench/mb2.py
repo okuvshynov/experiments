@@ -3,7 +3,6 @@
 import argparse
 import contextlib
 import functools
-import json
 import sys
 import time
 from dataclasses import dataclass
@@ -18,7 +17,6 @@ import mlx.nn as nn
 from mlx.utils import tree_reduce
 
 from mlx_lm.models import cache
-from mlx_lm.models.cache import QuantizedKVCache
 from mlx_lm.sample_utils import make_sampler
 from mlx_lm.tokenizer_utils import TokenizerWrapper
 from mlx_lm.utils import load
@@ -106,7 +104,7 @@ def setup_arg_parser():
         help="When --kv-bits is set, start quantizing the KV cache "
         "from this step onwards.",
         type=int,
-        default=5000,
+        default=0,
     )
     parser.add_argument(
         "--prefill-step-size",
@@ -119,6 +117,13 @@ def setup_arg_parser():
         "-v",
         action="store_true",
         help="Print generated text output",
+    )
+    parser.add_argument(
+        "--repeats",
+        "-r",
+        type=int,
+        default=1,
+        help="Number of times to repeat the benchmark",
     )
     return parser
 
@@ -253,7 +258,6 @@ def generate_step(
 
     y = prompt
     with mx.stream(generation_stream):
-        total_prompt_tokens = y.shape[0]
         while y.shape[0] > prefill_step_size:
             model(y[:prefill_step_size][None], cache=prompt_cache)
             quantize_cache_fn(prompt_cache)
@@ -346,35 +350,32 @@ def main():
 
     prompt = prepare_prompt(args, tokenizer)
 
-    if args.verbose:
-        print("=" * 10)
+    # Print CSV header
+    print("run,prompt_tokens,prompt_tps,generation_tokens,generation_tps,peak_memory_gb")
     
-    response = generate(
-        model,
-        tokenizer,
-        prompt,
-        verbose=args.verbose,
-        max_tokens=args.max_tokens,
-        max_kv_size=args.max_kv_size,
-        kv_bits=args.kv_bits,
-        kv_group_size=args.kv_group_size,
-        quantized_kv_start=args.quantized_kv_start,
-        prefill_step_size=args.prefill_step_size,
-    )
-    
-    if args.verbose:
-        print()
-        print("=" * 10)
-    
-    print(
-        f"Prompt: {response.prompt_tokens} tokens, "
-        f"{response.prompt_tps:.3f} tokens-per-sec"
-    )
-    print(
-        f"Generation: {response.generation_tokens} tokens, "
-        f"{response.generation_tps:.3f} tokens-per-sec"
-    )
-    print(f"Peak memory: {response.peak_memory:.3f} GB")
+    for run_idx in range(args.repeats):
+        if args.verbose:
+            print("=" * 10)
+        
+        response = generate(
+            model,
+            tokenizer,
+            prompt,
+            verbose=args.verbose,
+            max_tokens=args.max_tokens,
+            max_kv_size=args.max_kv_size,
+            kv_bits=args.kv_bits,
+            kv_group_size=args.kv_group_size,
+            quantized_kv_start=args.quantized_kv_start,
+            prefill_step_size=args.prefill_step_size,
+        )
+        
+        if args.verbose:
+            print()
+            print("=" * 10)
+        
+        # Print CSV row
+        print(f"{run_idx + 1},{response.prompt_tokens},{response.prompt_tps:.3f},{response.generation_tokens},{response.generation_tps:.3f},{response.peak_memory:.3f}")
 
 if __name__ == "__main__":
     main()
