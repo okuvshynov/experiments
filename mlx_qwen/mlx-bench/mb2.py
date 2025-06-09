@@ -23,19 +23,10 @@ from mlx.utils import tree_reduce
 from transformers import PreTrainedTokenizer
 
 from mlx_lm.models import cache
-from mlx_lm.models.cache import (
-    QuantizedKVCache,
-)
+from mlx_lm.models.cache import QuantizedKVCache
 from mlx_lm.sample_utils import make_sampler
 from mlx_lm.tokenizer_utils import TokenizerWrapper
 from mlx_lm.utils import load
-
-DEFAULT_MAX_TOKENS = 100
-DEFAULT_PROMPT_LENGTH = 1000
-DEFAULT_PROMPT = "The quick brown fox jumps over the lazy dog. "
-DEFAULT_MODEL = "mlx-community/Llama-3.2-3B-Instruct-4bit"
-DEFAULT_QUANTIZED_KV_START = 5000
-DEFAULT_PREFILL_STEP_SIZE = 2048
 
 
 def prepare_prompt(args, tokenizer) -> List[int]:
@@ -75,25 +66,25 @@ def setup_arg_parser():
         "--model",
         type=str,
         help="The path to the local model directory or Hugging Face repo.",
-        default=DEFAULT_MODEL,
+        default="mlx-community/Llama-3.2-3B-Instruct-4bit",
     )
     parser.add_argument(
         "--prompt",
         "-p",
-        default=DEFAULT_PROMPT,
+        default="The quick brown fox jumps over the lazy dog. ",
         help="Base prompt text to repeat ('-' reads from stdin)",
     )
     parser.add_argument(
         "--prompt-length",
         type=int,
-        default=DEFAULT_PROMPT_LENGTH,
+        default=1000,
         help="Target number of tokens for the prompt",
     )
     parser.add_argument(
         "--max-tokens",
         "-m",
         type=int,
-        default=DEFAULT_MAX_TOKENS,
+        default=100,
         help="Maximum number of tokens to generate",
     )
     parser.add_argument(
@@ -120,13 +111,13 @@ def setup_arg_parser():
         help="When --kv-bits is set, start quantizing the KV cache "
         "from this step onwards.",
         type=int,
-        default=DEFAULT_QUANTIZED_KV_START,
+        default=5000,
     )
     parser.add_argument(
         "--prefill-step-size",
         help="Number of tokens to process at once during prompt prefill",
         type=int,
-        default=DEFAULT_PREFILL_STEP_SIZE,
+        default=2048,
     )
     return parser
 
