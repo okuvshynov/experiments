@@ -38,9 +38,6 @@ DEFAULT_QUANTIZED_KV_START = 5000
 DEFAULT_PREFILL_STEP_SIZE = 2048
 
 
-def str2bool(string):
-    return string.lower() not in ["false", "f"]
-
 
 def prepare_prompt(args, tokenizer) -> List[int]:
     """
@@ -102,12 +99,6 @@ def setup_arg_parser():
         type=int,
         default=DEFAULT_MAX_TOKENS,
         help="Maximum number of tokens to generate",
-    )
-    parser.add_argument(
-        "--verbose",
-        type=str2bool,
-        default=True,
-        help="Log verbose output when 'True' or 'T' or only print the response when 'False' or 'F'",
     )
     parser.add_argument(
         "--max-kv-size",
@@ -401,7 +392,6 @@ def generate(
     model: nn.Module,
     tokenizer: Union[PreTrainedTokenizer, TokenizerWrapper],
     prompt: List[int],
-    verbose: bool = False,
     **kwargs,
 ) -> str:
     """
@@ -411,35 +401,30 @@ def generate(
        model (nn.Module): The language model.
        tokenizer (PreTrainedTokenizer): The tokenizer.
        prompt (List[int]): The input prompt as integer tokens.
-       verbose (bool): If ``True``, print tokens and timing information.
-           Default: ``False``.
        kwargs: The remaining options get passed to :func:`stream_generate`.
           See :func:`stream_generate` for more details.
     """
-    if verbose:
-        print("=" * 10)
+    print("=" * 10)
 
     text = ""
     for response in stream_generate(model, tokenizer, prompt, **kwargs):
-        if verbose:
-            print(response.text, end="", flush=True)
+        print(response.text, end="", flush=True)
         text += response.text
 
-    if verbose:
-        print()
-        print("=" * 10)
-        if len(text) == 0:
-            print("No text generated for this prompt")
-            return
-        print(
-            f"Prompt: {response.prompt_tokens} tokens, "
-            f"{response.prompt_tps:.3f} tokens-per-sec"
-        )
-        print(
-            f"Generation: {response.generation_tokens} tokens, "
-            f"{response.generation_tps:.3f} tokens-per-sec"
-        )
-        print(f"Peak memory: {response.peak_memory:.3f} GB")
+    print()
+    print("=" * 10)
+    if len(text) == 0:
+        print("No text generated for this prompt")
+        return text
+    print(
+        f"Prompt: {response.prompt_tokens} tokens, "
+        f"{response.prompt_tps:.3f} tokens-per-sec"
+    )
+    print(
+        f"Generation: {response.generation_tokens} tokens, "
+        f"{response.generation_tps:.3f} tokens-per-sec"
+    )
+    print(f"Peak memory: {response.peak_memory:.3f} GB")
     return text
 
 
@@ -467,7 +452,6 @@ def main():
         tokenizer,
         prompt,
         max_tokens=args.max_tokens,
-        verbose=args.verbose,
         sampler=sampler,
         max_kv_size=args.max_kv_size,
         prompt_cache=None,
@@ -476,8 +460,6 @@ def main():
         quantized_kv_start=args.quantized_kv_start,
         prefill_step_size=args.prefill_step_size,
     )
-    if not args.verbose:
-        print(response)
 
 
 if __name__ == "__main__":
