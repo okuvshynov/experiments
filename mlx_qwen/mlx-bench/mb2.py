@@ -25,7 +25,6 @@ from transformers import PreTrainedTokenizer
 from mlx_lm.models import cache
 from mlx_lm.models.cache import (
     QuantizedKVCache,
-    load_prompt_cache,
 )
 from mlx_lm.sample_utils import make_sampler
 from mlx_lm.tokenizer_utils import TokenizerWrapper
@@ -159,12 +158,6 @@ def setup_arg_parser():
         type=int,
         help="Set the maximum key-value cache size",
         default=None,
-    )
-    parser.add_argument(
-        "--prompt-cache-file",
-        type=str,
-        default=None,
-        help="A file containing saved KV caches to avoid recomputing them",
     )
     parser.add_argument(
         "--kv-bits",
@@ -529,40 +522,11 @@ def main():
     if args.seed is not None:
         mx.random.seed(args.seed)
 
-    # Load the prompt cache and metadata if a cache file is provided
-    using_cache = args.prompt_cache_file is not None
-    if using_cache:
-        prompt_cache, metadata = load_prompt_cache(
-            args.prompt_cache_file,
-            return_metadata=True,
-        )
-        if isinstance(prompt_cache[0], QuantizedKVCache):
-            if args.kv_bits is not None and args.kv_bits != prompt_cache[0].bits:
-                raise ValueError(
-                    "--kv-bits does not match the kv cache loaded from --prompt-cache-file."
-                )
-            if args.kv_group_size != prompt_cache[0].group_size:
-                raise ValueError(
-                    "--kv-group-size does not match the kv cache loaded from --prompt-cache-file."
-                )
-
     # Building tokenizer_config
-    tokenizer_config = (
-        {} if not using_cache else json.loads(metadata["tokenizer_config"])
-    )
+    tokenizer_config = {}
     tokenizer_config["trust_remote_code"] = True
 
-    model_path = args.model
-    if using_cache:
-        if model_path is None:
-            model_path = metadata["model"]
-        elif model_path != metadata["model"]:
-            raise ValueError(
-                f"Providing a different model ({model_path}) than that "
-                f"used to create the prompt cache ({metadata['model']}) "
-                "is an error."
-            )
-    model_path = model_path or DEFAULT_MODEL
+    model_path = args.model or DEFAULT_MODEL
 
     model, tokenizer = load(
         model_path,
@@ -579,8 +543,6 @@ def main():
     if args.use_default_chat_template:
         if tokenizer.chat_template is None:
             tokenizer.chat_template = tokenizer.default_chat_template
-    elif using_cache:
-        tokenizer.chat_template = json.loads(metadata["chat_template"])
 
     prompt = args.prompt.replace("\\n", "\n").replace("\\t", "\t")
     prompt = sys.stdin.read() if prompt == "-" else prompt
@@ -602,17 +564,6 @@ def main():
             **template_kwargs,
         )
 
-        # Treat the prompt as a suffix assuming that the prefix is in the
-        # stored kv cache.
-        if using_cache:
-            messages[-1]["content"] = "<query>"
-            test_prompt = tokenizer.apply_chat_template(
-                messages,
-                tokenize=False,
-                continue_final_message=has_prefill,
-                add_generation_prompt=not has_prefill,
-            )
-            prompt = prompt[test_prompt.index("<query>") :]
         prompt = tokenizer.encode(prompt, add_special_tokens=False)
     else:
         prompt = tokenizer.encode(prompt)
@@ -635,7 +586,7 @@ def main():
         verbose=args.verbose,
         sampler=sampler,
         max_kv_size=args.max_kv_size,
-        prompt_cache=prompt_cache if using_cache else None,
+        prompt_cache=None,
         kv_bits=args.kv_bits,
         kv_group_size=args.kv_group_size,
         quantized_kv_start=args.quantized_kv_start,
