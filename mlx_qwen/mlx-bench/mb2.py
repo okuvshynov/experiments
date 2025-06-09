@@ -8,13 +8,9 @@ import sys
 import time
 from dataclasses import dataclass
 from typing import (
-    Any,
-    Callable,
     Generator,
     List,
     Optional,
-    Tuple,
-    Union,
 )
 
 import mlx.core as mx
@@ -283,7 +279,7 @@ def generate_step(
 
 def stream_generate(
     model: nn.Module,
-    tokenizer: Union[PreTrainedTokenizer, TokenizerWrapper],
+    tokenizer: TokenizerWrapper,
     prompt: List[int],
     **kwargs,
 ) -> Generator[GenerationResponse, None, None]:
@@ -301,9 +297,6 @@ def stream_generate(
         GenerationResponse: An instance containing the generated text segment and
             associated metadata. See :class:`GenerationResponse` for details.
     """
-    if not isinstance(tokenizer, TokenizerWrapper):
-        tokenizer = TokenizerWrapper(tokenizer)
-
     prompt = mx.array(prompt)
 
     detokenizer = tokenizer.detokenizer
@@ -352,6 +345,8 @@ def main():
         args.model,
         tokenizer_config=tokenizer_config,
     )
+    if not isinstance(tokenizer, TokenizerWrapper):
+        tokenizer = TokenizerWrapper(tokenizer)
 
     prompt = prepare_prompt(args, tokenizer)
 
