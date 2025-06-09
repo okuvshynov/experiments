@@ -41,7 +41,7 @@ def prepare_prompt(args, tokenizer) -> List[int]:
     base_tokens = tokenizer.encode(base_prompt)
     
     # Repeat tokens to reach desired length
-    target_length = args.prompt_length
+    target_length = args.n_prompt
     if len(base_tokens) > 0:
         repeats = (target_length + len(base_tokens) - 1) // len(base_tokens)
         prompt = base_tokens * repeats
@@ -68,7 +68,8 @@ def setup_arg_parser():
         help="Base prompt text to repeat ('-' reads from stdin)",
     )
     parser.add_argument(
-        "--prompt-length",
+        "--n-prompt",
+        "-np",
         type=int,
         default=1000,
         help="Target number of tokens for the prompt",
