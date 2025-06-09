@@ -202,9 +202,7 @@ def generate_step(
     model: nn.Module,
     *,
     max_tokens: int = 256,
-    sampler: Optional[Callable[mx.array, mx.array]] = None,
     max_kv_size: Optional[int] = None,
-    prompt_cache: Optional[Any] = None,
     prefill_step_size: int = 2048,
     kv_bits: Optional[int] = None,
     kv_group_size: int = 64,
@@ -218,12 +216,8 @@ def generate_step(
         model (nn.Module): The model to use for generation.
         max_tokens (int): The maximum number of tokens. Use``-1`` for an infinite
           generator. Default: ``256``.
-        sampler (Callable[mx.array, mx.array], optional): A sampler for sampling a
-          token from a vector of log probabilities. Default: ``None``.
         max_kv_size (int, optional): Maximum size of the key-value cache. Old
           entries (except the first 4 tokens) will be overwritten.
-        prompt_cache (List[Any], optional): A pre-computed prompt cache. Note, if
-          provided, the cache will be updated in place.
         prefill_step_size (int): Step size for processing the prompt.
         kv_bits (int, optional): Number of bits to use for KV cache quantization.
           None implies no cache quantization. Default: ``None``.
@@ -236,13 +230,10 @@ def generate_step(
     """
 
     # Create the KV cache for generation
-    if prompt_cache is None:
-        prompt_cache = cache.make_prompt_cache(
-            model,
-            max_kv_size=max_kv_size,
-        )
-    elif len(prompt_cache) != len(model.layers):
-        raise ValueError("Wrong number of layers in the prompt cache.")
+    prompt_cache = cache.make_prompt_cache(
+        model,
+        max_kv_size=max_kv_size,
+    )
 
 
     quantize_cache_fn = functools.partial(
@@ -252,7 +243,7 @@ def generate_step(
         kv_bits=kv_bits,
     )
 
-    sampler = sampler or make_sampler(0.0)
+    sampler = make_sampler(0.0)
 
     def _model_call(y):
         return model(y, cache=prompt_cache)
