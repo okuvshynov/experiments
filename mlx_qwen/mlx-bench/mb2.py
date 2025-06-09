@@ -74,11 +74,11 @@ def setup_arg_parser():
         help="Target number of tokens for the prompt",
     )
     parser.add_argument(
-        "--max-tokens",
-        "-m",
+        "--n-generate",
+        "-n",
         type=int,
         default=100,
-        help="Maximum number of tokens to generate",
+        help="Number of tokens to generate",
     )
     parser.add_argument(
         "--max-kv-size",
@@ -203,7 +203,7 @@ def generate_step(
     prompt: mx.array,
     model: nn.Module,
     *,
-    max_tokens: int = 256,
+    n_generate: int = 256,
     max_kv_size: Optional[int] = None,
     prefill_step_size: int = 2048,
     kv_bits: Optional[int] = None,
@@ -216,7 +216,7 @@ def generate_step(
     Args:
         prompt (mx.array): The input prompt.
         model (nn.Module): The model to use for generation.
-        max_tokens (int): The maximum number of tokens. Use``-1`` for an infinite
+        n_generate (int): The number of tokens to generate. Use``-1`` for an infinite
           generator. Default: ``256``.
         max_kv_size (int, optional): Maximum size of the key-value cache. Old
           entries (except the first 4 tokens) will be overwritten.
@@ -270,10 +270,10 @@ def generate_step(
     mx.async_eval(y)
     n = 0
     while True:
-        if n != max_tokens:
+        if n != n_generate:
             next_y = _step(y)
             mx.async_eval(next_y)
-        if n == max_tokens:
+        if n == n_generate:
             break
         yield y.item()
         if n % 256 == 0:
@@ -362,7 +362,7 @@ def main():
             tokenizer,
             prompt,
             verbose=args.verbose,
-            max_tokens=args.max_tokens,
+            n_generate=args.n_generate,
             max_kv_size=args.max_kv_size,
             kv_bits=args.kv_bits,
             kv_group_size=args.kv_group_size,
