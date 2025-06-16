@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HTTP Proxy Log Explorer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+        }
+        
+        .container {
+            display: flex;
+            height: 100vh;
+        }
+        
+        .sidebar {
+            width: 400px;
+            background: white;
+            border-right: 1px solid #ddd;
+            overflow-y: auto;
+        }
+        
+        .header {
+            padding: 20px;
+            border-bottom: 1px solid #ddd;
+            background: #f8f8f8;
+        }
+        
+        .header h1 {
+            font-size: 20px;
+            margin-bottom: 10px;
+        }
+        
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        
+        input[type="search"] {
+            flex: 1;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        button {
+            padding: 8px 16px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        button:hover {
+            background: #0056b3;
+        }
+        
+        button.danger {
+            background: #dc3545;
+        }
+        
+        button.danger:hover {
+            background: #c82333;
+        }
+        
+        .log-list {
+            list-style: none;
+        }
+        
+        .log-item {
+            padding: 15px 20px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        .log-item:hover {
+            background: #f8f8f8;
+        }
+        
+        .log-item.selected {
+            background: #e3f2fd;
+        }
+        
+        .log-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+        
+        .method {
+            font-weight: bold;
+            padding: 2px 8px;
+            border-radius: 3px;
+            font-size: 12px;
+            color: white;
+        }
+        
+        .method.GET { background: #28a745; }
+        .method.POST { background: #007bff; }
+        .method.PUT { background: #ffc107; color: #333; }
+        .method.DELETE { background: #dc3545; }
+        .method.PATCH { background: #17a2b8; }
+        
+        .status {
+            font-size: 12px;
+            padding: 2px 8px;
+            border-radius: 3px;
+        }
+        
+        .status.success { background: #d4edda; color: #155724; }
+        .status.error { background: #f8d7da; color: #721c24; }
+        
+        .url {
+            font-size: 13px;
+            color: #666;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        .timestamp {
+            font-size: 11px;
+            color: #999;
+        }
+        
+        .detail-view {
+            flex: 1;
+            background: white;
+            overflow-y: auto;
+            padding: 20px;
+        }
+        
+        .detail-section {
+            margin-bottom: 30px;
+        }
+        
+        .detail-section h2 {
+            font-size: 16px;
+            margin-bottom: 10px;
+            color: #333;
+        }
+        
+        .detail-section h3 {
+            font-size: 14px;
+            margin: 15px 0 10px;
+            color: #666;
+        }
+        
+        .headers-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        
+        .headers-table th,
+        .headers-table td {
+            text-align: left;
+            padding: 8px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .headers-table th {
+            font-weight: 600;
+            background: #f8f8f8;
+        }
+        
+        .json-viewer {
+            background: #f8f8f8;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 15px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 13px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        
+        .empty-state {
+            text-align: center;
+            color: #999;
+            padding: 40px;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="sidebar">
+            <div class="header">
+                <h1>HTTP Proxy Log Explorer</h1>
+                <div class="controls">
+                    <input type="search" id="searchInput" placeholder="Search requests...">
+                    <button onclick="refreshLogs()">Refresh</button>
+                    <button class="danger" onclick="clearLogs()">Clear All</button>
+                </div>
+            </div>
+            <ul class="log-list" id="logList">
+                <li class="loading">Loading...</li>
+            </ul>
+        </div>
+        <div class="detail-view" id="detailView">
+            <div class="empty-state">
+                <p>Select a request to view details</p>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        let currentLogs = [];
+        let selectedLogId = null;
+        
+        async function fetchLogs(search = '') {
+            try {
+                const response = await fetch(`/api/logs?limit=100&search=${encodeURIComponent(search)}`);
+                const data = await response.json();
+                currentLogs = data.logs;
+                renderLogList();
+            } catch (error) {
+                console.error('Failed to fetch logs:', error);
+            }
+        }
+        
+        function renderLogList() {
+            const logList = document.getElementById('logList');
+            
+            if (currentLogs.length === 0) {
+                logList.innerHTML = '<li class="empty-state">No requests logged yet</li>';
+                return;
+            }
+            
+            logList.innerHTML = currentLogs.map(log => `
+                <li class="log-item ${log.id === selectedLogId ? 'selected' : ''}" data-id="${log.id}">
+                    <div class="log-item-header">
+                        <span class="method ${log.method}">${log.method}</span>
+                        <span class="status ${log.response && log.response.status < 400 ? 'success' : 'error'}">
+                            ${log.response ? log.response.status : 'Pending'}
+                        </span>
+                    </div>
+                    <div class="url">${log.url}</div>
+                    <div class="timestamp">${new Date(log.timestamp).toLocaleString()}</div>
+                </li>
+            `).join('');
+            
+            document.querySelectorAll('.log-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    selectedLogId = item.dataset.id;
+                    showLogDetail(item.dataset.id);
+                    renderLogList();
+                });
+            });
+        }
+        
+        async function showLogDetail(logId) {
+            try {
+                const response = await fetch(`/api/logs/${logId}`);
+                const log = await response.json();
+                renderLogDetail(log);
+            } catch (error) {
+                console.error('Failed to fetch log detail:', error);
+            }
+        }
+        
+        function renderLogDetail(log) {
+            const detailView = document.getElementById('detailView');
+            
+            detailView.innerHTML = `
+                <div class="detail-section">
+                    <h2>Request Details</h2>
+                    <p><strong>Method:</strong> ${log.method}</p>
+                    <p><strong>URL:</strong> ${log.url}</p>
+                    <p><strong>Target:</strong> ${log.targetUrl}</p>
+                    <p><strong>Timestamp:</strong> ${new Date(log.timestamp).toLocaleString()}</p>
+                </div>
+                
+                <div class="detail-section">
+                    <h3>Request Headers</h3>
+                    <table class="headers-table">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Value</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${Object.entries(log.headers).map(([key, value]) => `
+                                <tr>
+                                    <td>${key}</td>
+                                    <td>${value}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+                
+                ${log.body ? `
+                    <div class="detail-section">
+                        <h3>Request Body</h3>
+                        <div class="json-viewer">${formatJSON(log.body)}</div>
+                    </div>
+                ` : ''}
+                
+                ${log.response ? `
+                    <div class="detail-section">
+                        <h2>Response Details</h2>
+                        <p><strong>Status:</strong> ${log.response.status} ${log.response.statusMessage}</p>
+                    </div>
+                    
+                    <div class="detail-section">
+                        <h3>Response Headers</h3>
+                        <table class="headers-table">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Value</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${Object.entries(log.response.headers).map(([key, value]) => `
+                                    <tr>
+                                        <td>${key}</td>
+                                        <td>${value}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    ${log.response.body ? `
+                        <div class="detail-section">
+                            <h3>Response Body</h3>
+                            <div class="json-viewer">${formatJSON(log.response.body)}</div>
+                        </div>
+                    ` : ''}
+                ` : '<div class="detail-section"><p>No response yet</p></div>'}
+            `;
+        }
+        
+        function formatJSON(data) {
+            if (typeof data === 'string') {
+                return data;
+            }
+            try {
+                return JSON.stringify(data, null, 2);
+            } catch (error) {
+                return String(data);
+            }
+        }
+        
+        function refreshLogs() {
+            const searchInput = document.getElementById('searchInput');
+            fetchLogs(searchInput.value);
+        }
+        
+        async function clearLogs() {
+            if (confirm('Are you sure you want to clear all logs?')) {
+                try {
+                    await fetch('/api/logs', { method: 'DELETE' });
+                    currentLogs = [];
+                    selectedLogId = null;
+                    renderLogList();
+                    document.getElementById('detailView').innerHTML = `
+                        <div class="empty-state">
+                            <p>Select a request to view details</p>
+                        </div>
+                    `;
+                } catch (error) {
+                    console.error('Failed to clear logs:', error);
+                }
+            }
+        }
+        
+        document.getElementById('searchInput').addEventListener('input', (e) => {
+            fetchLogs(e.target.value);
+        });
+        
+        fetchLogs();
+        setInterval(() => fetchLogs(document.getElementById('searchInput').value), 5000);
+    </script>
+</body>
+</html>
