@@ -206,8 +206,13 @@ main {
     gap: 0.5rem;
 }
 
+.project-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
 .add-note-to-project-btn {
-    align-self: flex-start;
     background: #3498db;
     color: white;
     border: none;
@@ -220,6 +225,118 @@ main {
 
 .add-note-to-project-btn:hover {
     background: #2980b9;
+}
+
+.edit-project-btn {
+    background: #f39c12;
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+.edit-project-btn:hover {
+    background: #e67e22;
+}
+
+.delete-project-btn {
+    background: #e74c3c;
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+.delete-project-btn:hover {
+    background: #c0392b;
+}
+
+/* Edit Project Form */
+.edit-project-form {
+    background: white;
+    border: 1px solid #e9ecef;
+    border-radius: 12px;
+    padding: 2rem;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.edit-project-form h3 {
+    margin-bottom: 1.5rem;
+    color: #2c3e50;
+    font-size: 1.5rem;
+}
+
+.form-group {
+    margin-bottom: 1.5rem;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+    color: #2c3e50;
+}
+
+.form-group input,
+.form-group textarea {
+    width: 100%;
+    padding: 0.75rem;
+    border: 2px solid #e9ecef;
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 1rem;
+    resize: vertical;
+    outline: none;
+    transition: border-color 0.3s;
+}
+
+.form-group input:focus,
+.form-group textarea:focus {
+    border-color: #3498db;
+}
+
+.form-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: flex-end;
+}
+
+.save-project-btn {
+    background: #27ae60;
+    color: white;
+    border: none;
+    padding: 0.75rem 1.5rem;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+.save-project-btn:hover {
+    background: #229954;
+}
+
+.cancel-edit-btn {
+    background: #95a5a6;
+    color: white;
+    border: none;
+    padding: 0.75rem 1.5rem;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+.cancel-edit-btn:hover {
+    background: #7f8c8d;
 }
 
 .project-title {
@@ -296,6 +413,30 @@ main {
     
     .project-title {
         font-size: 1.1rem;
+    }
+    
+    .project-actions {
+        gap: 0.25rem;
+    }
+    
+    .add-note-to-project-btn,
+    .edit-project-btn,
+    .delete-project-btn {
+        padding: 0.4rem 0.8rem;
+        font-size: 0.8rem;
+    }
+    
+    .edit-project-form {
+        padding: 1.5rem;
+    }
+    
+    .form-actions {
+        flex-direction: column;
+    }
+    
+    .save-project-btn,
+    .cancel-edit-btn {
+        width: 100%;
     }
 }
 

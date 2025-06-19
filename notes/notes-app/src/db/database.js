@@ -125,6 +125,39 @@ class Database {
         });
     }
 
+    async deleteProject(projectId) {
+        return new Promise((resolve, reject) => {
+            this.db.serialize(() => {
+                // Delete associations first
+                this.db.run('DELETE FROM note_project_associations WHERE project_id = ?', [projectId], (err) => {
+                    if (err) {
+                        reject(err);
+                        return;
+                    }
+                    
+                    // Delete all versions of the project
+                    this.db.run('DELETE FROM projects WHERE id = ? OR parent_version_id = ?', [projectId, projectId], function(err) {
+                        if (err) reject(err);
+                        else resolve(this.changes > 0);
+                    });
+                });
+            });
+        });
+    }
+
+    async editProject(projectId, name, description, content) {
+        return new Promise((resolve, reject) => {
+            const stmt = this.db.prepare(
+                'UPDATE projects SET name = ?, description = ?, content = ? WHERE id = ? AND is_current = 1'
+            );
+            stmt.run([name, description, content, projectId], function(err) {
+                if (err) reject(err);
+                else resolve(this.changes > 0);
+            });
+            stmt.finalize();
+        });
+    }
+
     async getDebugInfo() {
         return new Promise((resolve, reject) => {
             this.db.serialize(() => {

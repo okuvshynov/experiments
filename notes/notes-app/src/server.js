@@ -264,6 +264,50 @@ app.get('/api/debug', async (req, res) => {
     }
 });
 
+app.delete('/api/projects/:id', async (req, res) => {
+    try {
+        const projectId = parseInt(req.params.id);
+        if (isNaN(projectId)) {
+            return res.status(400).json({ error: 'Invalid project ID' });
+        }
+
+        const deleted = await db.deleteProject(projectId);
+        if (deleted) {
+            res.json({ success: true, message: 'Project deleted successfully' });
+        } else {
+            res.status(404).json({ error: 'Project not found' });
+        }
+    } catch (error) {
+        console.error('Error deleting project:', error);
+        res.status(500).json({ error: 'Failed to delete project' });
+    }
+});
+
+app.put('/api/projects/:id', async (req, res) => {
+    try {
+        const projectId = parseInt(req.params.id);
+        const { name, description, content } = req.body;
+        
+        if (isNaN(projectId)) {
+            return res.status(400).json({ error: 'Invalid project ID' });
+        }
+        
+        if (!name || !description || content === undefined) {
+            return res.status(400).json({ error: 'Name, description, and content are required' });
+        }
+
+        const updated = await db.editProject(projectId, name.trim(), description.trim(), content);
+        if (updated) {
+            res.json({ success: true, message: 'Project updated successfully' });
+        } else {
+            res.status(404).json({ error: 'Project not found' });
+        }
+    } catch (error) {
+        console.error('Error updating project:', error);
+        res.status(500).json({ error: 'Failed to update project' });
+    }
+});
+
 // Serve main page
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, '../public/index.html'));

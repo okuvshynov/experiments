@@ -130,16 +130,24 @@ class NotesApp {
                     <div class="project-header">
                         <h3 class="project-title">${this.escapeHtml(project.name)}</h3>
                         <p class="project-description">${this.escapeHtml(project.description)}</p>
-                        <button class="add-note-to-project-btn" data-project-id="${project.id}" data-project-name="${this.escapeHtml(project.name)}">
-                            + Add Note
-                        </button>
+                        <div class="project-actions">
+                            <button class="add-note-to-project-btn" data-project-id="${project.id}" data-project-name="${this.escapeHtml(project.name)}">
+                                + Add Note
+                            </button>
+                            <button class="edit-project-btn" data-project-id="${project.id}">
+                                ✏️ Edit
+                            </button>
+                            <button class="delete-project-btn" data-project-id="${project.id}" data-project-name="${this.escapeHtml(project.name)}">
+                                🗑️ Delete
+                            </button>
+                        </div>
                     </div>
                     <div class="project-content">${this.escapeHtml(project.content)}</div>
                 </div>
             `).join('');
             
             // Bind events for the new buttons
-            this.bindProjectNoteButtons();
+            this.bindProjectButtons();
 
         } catch (error) {
             console.error('Error loading projects:', error);
@@ -152,12 +160,30 @@ class NotesApp {
         }
     }
 
-    bindProjectNoteButtons() {
+    bindProjectButtons() {
+        // Add note buttons
         document.querySelectorAll('.add-note-to-project-btn').forEach(button => {
             button.addEventListener('click', (e) => {
                 const projectId = parseInt(e.target.dataset.projectId);
                 const projectName = e.target.dataset.projectName;
                 this.selectProject(projectId, projectName);
+            });
+        });
+
+        // Edit buttons
+        document.querySelectorAll('.edit-project-btn').forEach(button => {
+            button.addEventListener('click', (e) => {
+                const projectId = parseInt(e.target.dataset.projectId);
+                this.editProject(projectId);
+            });
+        });
+
+        // Delete buttons
+        document.querySelectorAll('.delete-project-btn').forEach(button => {
+            button.addEventListener('click', (e) => {
+                const projectId = parseInt(e.target.dataset.projectId);
+                const projectName = e.target.dataset.projectName;
+                this.deleteProject(projectId, projectName);
             });
         });
     }
@@ -192,6 +218,121 @@ class NotesApp {
             if (projectIndicator) {
                 projectIndicator.remove();
             }
+        }
+    }
+
+    async deleteProject(projectId, projectName) {
+        if (!confirm(`Are you sure you want to delete the project "${projectName}"? This action cannot be undone.`)) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/projects/${projectId}`, {
+                method: 'DELETE'
+            });
+
+            const result = await response.json();
+
+            if (response.ok) {
+                this.showStatus('Project deleted successfully!', 'success');
+                this.loadProjects(); // Refresh the list
+            } else {
+                this.showStatus(result.error || 'Failed to delete project', 'error');
+            }
+        } catch (error) {
+            console.error('Error deleting project:', error);
+            this.showStatus('Network error. Please try again.', 'error');
+        }
+    }
+
+    async editProject(projectId) {
+        try {
+            // Get current project data
+            const response = await fetch('/api/projects');
+            const projects = await response.json();
+            const project = projects.find(p => p.id === projectId);
+
+            if (!project) {
+                this.showStatus('Project not found', 'error');
+                return;
+            }
+
+            // Create edit form
+            this.showEditForm(project);
+        } catch (error) {
+            console.error('Error preparing edit:', error);
+            this.showStatus('Failed to load project for editing', 'error');
+        }
+    }
+
+    showEditForm(project) {
+        const projectsList = document.getElementById('projects-list');
+        
+        const editFormHtml = `
+            <div class="edit-project-form">
+                <h3>Edit Project</h3>
+                <div class="form-group">
+                    <label for="edit-project-name">Name:</label>
+                    <input type="text" id="edit-project-name" value="${this.escapeHtml(project.name)}">
+                </div>
+                <div class="form-group">
+                    <label for="edit-project-description">Description:</label>
+                    <textarea id="edit-project-description" rows="3">${this.escapeHtml(project.description)}</textarea>
+                </div>
+                <div class="form-group">
+                    <label for="edit-project-content">Content:</label>
+                    <textarea id="edit-project-content" rows="10">${this.escapeHtml(project.content)}</textarea>
+                </div>
+                <div class="form-actions">
+                    <button class="save-project-btn" data-project-id="${project.id}">Save Changes</button>
+                    <button class="cancel-edit-btn">Cancel</button>
+                </div>
+            </div>
+        `;
+
+        projectsList.innerHTML = editFormHtml;
+        
+        // Bind form events
+        document.querySelector('.save-project-btn').addEventListener('click', (e) => {
+            const projectId = parseInt(e.target.dataset.projectId);
+            this.saveProject(projectId);
+        });
+
+        document.querySelector('.cancel-edit-btn').addEventListener('click', () => {
+            this.loadProjects();
+        });
+    }
+
+    async saveProject(projectId) {
+        const name = document.getElementById('edit-project-name').value.trim();
+        const description = document.getElementById('edit-project-description').value.trim();
+        const content = document.getElementById('edit-project-content').value;
+
+        if (!name || !description) {
+            this.showStatus('Name and description are required', 'error');
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/projects/${projectId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ name, description, content })
+            });
+
+            const result = await response.json();
+
+            if (response.ok) {
+                this.showStatus('Project updated successfully!', 'success');
+                this.loadProjects(); // Refresh the list
+            } else {
+                this.showStatus(result.error || 'Failed to update project', 'error');
+            }
+        } catch (error) {
+            console.error('Error saving project:', error);
+            this.showStatus('Network error. Please try again.', 'error');
         }
     }
 
