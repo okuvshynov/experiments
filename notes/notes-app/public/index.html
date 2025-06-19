@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Notes App</title>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📝 Notes</h1>
+            <nav>
+                <button id="add-note-btn" class="nav-btn active">Add Note</button>
+                <button id="view-projects-btn" class="nav-btn">Projects</button>
+            </nav>
+        </header>
+
+        <main>
+            <!-- Add Note Section -->
+            <section id="add-note-section" class="section active">
+                <div class="note-form">
+                    <textarea 
+                        id="note-input" 
+                        placeholder="Write your note here..."
+                        rows="6"
+                    ></textarea>
+                    <button id="submit-note" class="submit-btn">Add Note</button>
+                    <div id="submit-status" class="status"></div>
+                </div>
+            </section>
+
+            <!-- Projects Section -->
+            <section id="projects-section" class="section">
+                <div id="projects-list" class="projects-list">
+                    <div class="loading">Loading projects...</div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="js/app.js"></script>
+</body>
+</html>
