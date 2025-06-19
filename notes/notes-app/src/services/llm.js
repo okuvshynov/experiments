@@ -17,7 +17,7 @@ class LLMService {
             model: this.model,
             messages: messages,
             temperature: 0.3,
-            max_tokens: 1000
+            max_tokens: 8192
         };
 
         const postData = JSON.stringify(requestBody);
@@ -168,9 +168,11 @@ Which project should this note belong to?`
                 role: 'system',
                 content: `You are updating a project with a new note. Create an updated version of the project content that incorporates the new note. Keep the content organized and maintain any existing structure like todo lists, notes, etc.
 
+The content field should be plain text (not JSON formatted) - organize it as you would a normal document with line breaks, bullet points, etc.
+
 Respond with a JSON object wrapped in <result></result> tags:
 <result>
-{"name": "Updated Project Name", "description": "Updated brief description", "content": "Updated full content"}
+{"name": "Updated Project Name", "description": "Updated brief description", "content": "Updated full content as plain text with proper formatting"}
 </result>`
             },
             {
@@ -217,9 +219,11 @@ Please update the project.`
                 role: 'system',
                 content: `Create initial content for a new project based on the first note. Structure it as a project with any relevant todos, goals, or organization.
 
+The content should be plain text (not JSON formatted) - organize it as you would a normal document with line breaks, bullet points, todo lists, etc.
+
 Respond with a JSON object wrapped in <result></result> tags:
 <result>
-{"content": "Full project content including the note and any derived structure"}
+{"content": "Full project content as plain text with proper formatting, line breaks, and structure"}
 </result>`
             },
             {
