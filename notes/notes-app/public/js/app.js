@@ -16,7 +16,7 @@ class NotesApp {
         });
 
         document.getElementById('view-projects-btn').addEventListener('click', () => {
-            this.showSection('projects');
+            this.showSection('view-projects');
             this.loadProjects();
         });
 
@@ -40,7 +40,10 @@ class NotesApp {
 
         // Update sections
         document.querySelectorAll('.section').forEach(section => section.classList.remove('active'));
-        document.getElementById(`${sectionName}-section`).classList.add('active');
+        
+        // Map section names to correct IDs
+        const sectionId = sectionName === 'view-projects' ? 'projects-section' : `${sectionName}-section`;
+        document.getElementById(sectionId).classList.add('active');
 
         this.currentSection = sectionName;
     }
@@ -82,7 +85,7 @@ class NotesApp {
                 
                 // Auto-switch to projects view after a delay
                 setTimeout(() => {
-                    this.showSection('projects');
+                    this.showSection('view-projects');
                     this.loadProjects();
                 }, 2000);
             } else {
