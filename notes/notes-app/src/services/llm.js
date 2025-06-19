@@ -112,7 +112,9 @@ class LLMService {
         const messages = [
             {
                 role: 'system',
-                content: `You are a project organizer. Given a new note and a list of existing projects, decide which project the note belongs to, or if a new project should be created.
+                content: `/no_think
+
+You are a project organizer. Given a new note and a list of existing projects, decide which project the note belongs to, or if a new project should be created.
 
 Respond with a JSON object wrapped in <result></result> tags in this format:
 <result>
@@ -166,7 +168,9 @@ Which project should this note belong to?`
         const messages = [
             {
                 role: 'system',
-                content: `You are updating a project with a new note. Create an updated version of the project content that incorporates the new note. Keep the content organized and maintain any existing structure like todo lists, notes, etc.
+                content: `/no_think
+
+You are updating a project with a new note. Create an updated version of the project content that incorporates the new note. Keep the content organized and maintain any existing structure like todo lists, notes, etc.
 
 The content field should be plain text (not JSON formatted) - organize it as you would a normal document with line breaks, bullet points, etc.
 
@@ -217,13 +221,17 @@ Please update the project.`
         const messages = [
             {
                 role: 'system',
-                content: `Create initial content for a new project based on the first note. Structure it as a project with any relevant todos, goals, or organization.
+                content: `/no_think
 
-The content should be plain text (not JSON formatted) - organize it as you would a normal document with line breaks, bullet points, todo lists, etc.
+Create initial content for a new project based ONLY on the information provided in the note. Do NOT add any information that isn't explicitly mentioned in the note.
+
+Simply include the note content and organize it clearly. You may add basic structure like headings or bullet points, but do not invent new tasks, goals, or details.
+
+The content should be plain text (not JSON formatted).
 
 Respond with a JSON object wrapped in <result></result> tags:
 <result>
-{"content": "Full project content as plain text with proper formatting, line breaks, and structure"}
+{"content": "Project content containing the note, organized simply without any added information"}
 </result>`
             },
             {
