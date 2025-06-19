@@ -1,6 +1,7 @@
 class NotesApp {
     constructor() {
         this.currentSection = 'add-note';
+        this.selectedProjectId = null;
         this.init();
     }
 
@@ -66,22 +67,29 @@ class NotesApp {
         this.showStatus('Processing note with AI...', 'info');
 
         try {
+            const requestBody = { content };
+            if (this.selectedProjectId) {
+                requestBody.project_id = this.selectedProjectId;
+            }
+            
             const response = await fetch('/api/notes', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ content })
+                body: JSON.stringify(requestBody)
             });
 
             const result = await response.json();
 
             if (response.ok) {
-                this.showStatus(
-                    `Note added successfully! ${result.action === 'new' ? 'Created new project.' : 'Updated existing project.'}`, 
-                    'success'
-                );
+                const statusMessage = this.selectedProjectId ? 
+                    'Note added to project successfully!' : 
+                    `Note added successfully! ${result.action === 'new' ? 'Created new project.' : 'Updated existing project.'}`;
+                
+                this.showStatus(statusMessage, 'success');
                 noteInput.value = '';
+                this.clearProjectSelection();
                 
                 // Auto-switch to projects view after a delay
                 setTimeout(() => {
@@ -122,10 +130,16 @@ class NotesApp {
                     <div class="project-header">
                         <h3 class="project-title">${this.escapeHtml(project.name)}</h3>
                         <p class="project-description">${this.escapeHtml(project.description)}</p>
+                        <button class="add-note-to-project-btn" data-project-id="${project.id}" data-project-name="${this.escapeHtml(project.name)}">
+                            + Add Note
+                        </button>
                     </div>
                     <div class="project-content">${this.escapeHtml(project.content)}</div>
                 </div>
             `).join('');
+            
+            // Bind events for the new buttons
+            this.bindProjectNoteButtons();
 
         } catch (error) {
             console.error('Error loading projects:', error);
@@ -135,6 +149,49 @@ class NotesApp {
                     <p>Please try refreshing the page.</p>
                 </div>
             `;
+        }
+    }
+
+    bindProjectNoteButtons() {
+        document.querySelectorAll('.add-note-to-project-btn').forEach(button => {
+            button.addEventListener('click', (e) => {
+                const projectId = parseInt(e.target.dataset.projectId);
+                const projectName = e.target.dataset.projectName;
+                this.selectProject(projectId, projectName);
+            });
+        });
+    }
+
+    selectProject(projectId, projectName) {
+        this.selectedProjectId = projectId;
+        this.showSection('add-note');
+        this.updateNoteFormForProject(projectName);
+    }
+
+    clearProjectSelection() {
+        this.selectedProjectId = null;
+        this.updateNoteFormForProject(null);
+    }
+
+    updateNoteFormForProject(projectName) {
+        const noteForm = document.querySelector('.note-form');
+        let projectIndicator = document.getElementById('project-indicator');
+        
+        if (projectName) {
+            if (!projectIndicator) {
+                projectIndicator = document.createElement('div');
+                projectIndicator.id = 'project-indicator';
+                projectIndicator.className = 'project-indicator';
+                noteForm.insertBefore(projectIndicator, noteForm.firstChild);
+            }
+            projectIndicator.innerHTML = `
+                <span class="project-label">Adding note to: <strong>${projectName}</strong></span>
+                <button type="button" class="clear-project-btn" onclick="app.clearProjectSelection()">×</button>
+            `;
+        } else {
+            if (projectIndicator) {
+                projectIndicator.remove();
+            }
         }
     }
 
@@ -169,6 +226,7 @@ class NotesApp {
 }
 
 // Initialize app when DOM is ready
+let app;
 document.addEventListener('DOMContentLoaded', () => {
-    new NotesApp();
+    app = new NotesApp();
 });

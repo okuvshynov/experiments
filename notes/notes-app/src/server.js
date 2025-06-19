@@ -24,7 +24,7 @@ app.use(express.static(path.join(__dirname, '../public')));
 // API Routes
 app.post('/api/notes', async (req, res) => {
     try {
-        const { content } = req.body;
+        const { content, project_id } = req.body;
         if (!content || content.trim() === '') {
             return res.status(400).json({ error: 'Content is required' });
         }
@@ -32,15 +32,54 @@ app.post('/api/notes', async (req, res) => {
         // Step 1: Save the note
         const noteId = await db.addNote(content.trim());
 
-        // Step 2: Get existing projects summary
-        const existingProjects = await db.getProjectsSummary();
-
-        // Step 3: Ask LLM to select/create project
-        const projectDecision = await llm.selectProject(content, existingProjects);
-
         let projectId;
+        let action = 'explicit';
+
+        if (project_id) {
+            // Explicit project selection - skip LLM detection
+            const projects = await db.getCurrentProjects();
+            const project = projects.find(p => p.id === project_id);
+            
+            if (project) {
+                const updatedProject = await llm.updateProjectContent(
+                    content, 
+                    project.name, 
+                    project.description, 
+                    project.content
+                );
+                
+                console.log('Updated project content from LLM:', updatedProject);
+                
+                // Ensure content is a string
+                let contentStr = updatedProject.content;
+                if (typeof contentStr !== 'string') {
+                    if (contentStr === null || contentStr === undefined) {
+                        contentStr = '';
+                    } else {
+                        contentStr = typeof contentStr === 'object' ? JSON.stringify(contentStr, null, 2) : String(contentStr);
+                    }
+                }
+                
+                projectId = await db.updateProject(
+                    project.id,
+                    updatedProject.name,
+                    updatedProject.description,
+                    contentStr
+                );
+            } else {
+                throw new Error('Selected project not found');
+            }
+        } else {
+            // Auto-detection mode - use LLM to select/create project
+            
+            // Step 2: Get existing projects summary
+            const existingProjects = await db.getProjectsSummary();
+
+            // Step 3: Ask LLM to select/create project
+            const projectDecision = await llm.selectProject(content, existingProjects);
+            action = projectDecision.action;
         
-        if (projectDecision.action === 'existing') {
+            if (projectDecision.action === 'existing') {
             // Update existing project
             const projects = await db.getCurrentProjects();
             const project = projects.find(p => p.id === projectDecision.project_id);
@@ -99,6 +138,7 @@ app.post('/api/notes', async (req, res) => {
                 projectDecision.description,
                 contentStr
             );
+            }
         }
 
         // Step 4: Associate note with project
@@ -110,7 +150,7 @@ app.post('/api/notes', async (req, res) => {
             success: true, 
             noteId, 
             projectId,
-            action: projectDecision.action 
+            action: action 
         });
     } catch (error) {
         console.error('Error processing note:', error);
