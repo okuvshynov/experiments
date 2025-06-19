@@ -153,6 +153,15 @@ class NotesApp {
     }
 
     escapeHtml(text) {
+        // Handle non-string inputs
+        if (typeof text !== 'string') {
+            if (text === null || text === undefined) {
+                return '';
+            }
+            // Convert to string if it's an object or other type
+            text = typeof text === 'object' ? JSON.stringify(text, null, 2) : String(text);
+        }
+        
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;

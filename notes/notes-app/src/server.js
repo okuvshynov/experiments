@@ -53,11 +53,23 @@ app.post('/api/notes', async (req, res) => {
                     project.content
                 );
                 
+                console.log('Updated project content from LLM:', updatedProject);
+                
+                // Ensure content is a string
+                let contentStr = updatedProject.content;
+                if (typeof contentStr !== 'string') {
+                    if (contentStr === null || contentStr === undefined) {
+                        contentStr = '';
+                    } else {
+                        contentStr = typeof contentStr === 'object' ? JSON.stringify(contentStr, null, 2) : String(contentStr);
+                    }
+                }
+                
                 projectId = await db.updateProject(
                     project.id,
                     updatedProject.name,
                     updatedProject.description,
-                    updatedProject.content
+                    contentStr
                 );
             } else {
                 throw new Error('Selected project not found');
@@ -70,10 +82,22 @@ app.post('/api/notes', async (req, res) => {
                 projectDecision.description
             );
             
+            console.log('New project content from LLM:', newProjectContent);
+            
+            // Ensure content is a string
+            let contentStr = newProjectContent.content;
+            if (typeof contentStr !== 'string') {
+                if (contentStr === null || contentStr === undefined) {
+                    contentStr = '';
+                } else {
+                    contentStr = typeof contentStr === 'object' ? JSON.stringify(contentStr, null, 2) : String(contentStr);
+                }
+            }
+            
             projectId = await db.createProject(
                 projectDecision.name,
                 projectDecision.description,
-                newProjectContent.content
+                contentStr
             );
         }
 
