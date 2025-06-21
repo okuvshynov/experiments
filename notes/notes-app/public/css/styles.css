@@ -352,14 +352,53 @@ main {
     margin-bottom: 1rem;
 }
 
+.project-details {
+    margin-top: 1rem;
+}
+
+.project-summary {
+    cursor: pointer;
+    padding: 0.75rem 1rem;
+    background: #f8f9fa;
+    border-radius: 8px;
+    border-left: 4px solid #3498db;
+    font-weight: 500;
+    color: #2c3e50;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    user-select: none;
+    transition: background-color 0.2s;
+}
+
+.project-summary::-webkit-details-marker {
+    display: none;
+}
+
+.project-summary:hover {
+    background: #e9ecef;
+}
+
+.project-summary::before {
+    content: '▶';
+    margin-right: 0.5rem;
+    transition: transform 0.2s;
+    display: inline-block;
+}
+
+.project-details[open] .project-summary::before {
+    transform: rotate(90deg);
+}
+
 .project-content {
     background: #f8f9fa;
     padding: 1rem;
-    border-radius: 8px;
+    border-radius: 0 0 8px 8px;
     border-left: 4px solid #3498db;
     white-space: pre-wrap;
     font-size: 0.9rem;
     line-height: 1.5;
+    margin-top: -4px;
 }
 
 .loading {

@@ -142,7 +142,10 @@ class NotesApp {
                             </button>
                         </div>
                     </div>
-                    <div class="project-content">${this.escapeHtml(project.content)}</div>
+                    <details class="project-details">
+                        <summary class="project-summary">Show full description</summary>
+                        <div class="project-content">${this.escapeHtml(project.content)}</div>
+                    </details>
                 </div>
             `).join('');
             
