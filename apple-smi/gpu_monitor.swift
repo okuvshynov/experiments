@@ -58,6 +58,13 @@ class GPUMonitor {
                 continue
             }
             
+            // Debug: Print all available stats
+            print("=== Debug: All Performance Statistics ===")
+            for (key, value) in stats.sorted(by: { $0.key < $1.key }) {
+                print("  \(key): \(value)")
+            }
+            print("==========================================\n")
+            
             // Get GPU name and type
             let ioClassLower = ioClass.lowercased()
             var gpuName = "Unknown GPU"
