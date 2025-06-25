@@ -133,8 +133,6 @@ class GPUMonitor {
         print("Starting GPU monitoring (press Ctrl+C, Q, or Esc to stop)...")
         print("Update interval: \(interval) seconds\n")
         
-        let shouldStop = false
-        
         // Set up signal handlers
         signal(SIGINT) { _ in
             print("\nReceived interrupt signal. Stopping...")
@@ -151,27 +149,11 @@ class GPUMonitor {
             print("\u{001B}[2J\u{001B}[H", terminator: "")
             self.displayGPUInfo()
             print("\nLast updated: \(Date())")
-            print("Press Ctrl+C, Q, or Esc to stop...")
         }
         
         // Initial display
         displayGPUInfo()
         print("\nLast updated: \(Date())")
-        print("Press Ctrl+C, Q, or Esc to stop...")
-        
-        // Set up keyboard input handling in a separate thread
-        DispatchQueue.global(qos: .background).async {
-            while !shouldStop {
-                if let input = readLine() {
-                    let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-                    if trimmed == "q" || trimmed == "quit" || trimmed == "exit" || trimmed == "\u{1B}" {
-                        print("\nStopping...")
-                        timer.invalidate()
-                        exit(0)
-                    }
-                }
-            }
-        }
         
         // Keep the program running with proper signal handling
         RunLoop.current.run()
