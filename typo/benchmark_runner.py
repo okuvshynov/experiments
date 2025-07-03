@@ -9,7 +9,7 @@ import sys
 import json
 from pathlib import Path
 from typing import List, Dict, Any, Optional
-from verify_diff import verify_diff
+from verify_diff import verify_diff, verify_diff_detailed
 
 # Default sampling parameters
 DEFAULT_TEMP = 0.6
@@ -118,7 +118,9 @@ def process_single_file(typo_file: str, model_path: str, backend: str = "llama.c
             return result
         
         # Verify result
-        result["success"] = verify_diff(diff_output, llm_output)
+        verification = verify_diff_detailed(diff_output, llm_output)
+        result["success"] = verification["success"]
+        result["verification_details"] = verification
         
     except Exception as e:
         result["error"] = str(e)
@@ -137,7 +139,7 @@ def main():
     parser.add_argument("--input", "-i", help="Single input file to process (if not specified, runs all typo files)")
     parser.add_argument("--repeat", "-r", type=int, default=1, help="Number of times to repeat each test")
     parser.add_argument("--base-file", "-b", default="argh/argh.h", help="Base file to diff against")
-    parser.add_argument("--output-json", "-o", help="Output results to JSON file")
+    parser.add_argument("--output-json", "-o", help="Output results to JSON file (default: auto-generated temp file)")
     parser.add_argument("--max-tokens", type=int, default=8192, help="Maximum tokens for MLX generation (default: 8192)")
     parser.add_argument("--temp", type=float, default=DEFAULT_TEMP, help="Sampling temperature")
     parser.add_argument("--top-p", type=float, default=DEFAULT_TOP_P, help="Sampling top-p")
@@ -164,65 +166,74 @@ def main():
         print("Error: No input files found")
         sys.exit(1)
     
-    print(f"Running benchmark with backend: {args.backend}")
-    print(f"Model: {model_path}")
-    print(f"Processing {len(input_files)} file(s), {args.repeat} repetition(s) each")
-    print(f"Sampling: temp={args.temp}, top-p={args.top_p}, min-p={args.min_p}, top-k={args.top_k}")
-    if args.backend == "mlx":
-        print(f"Max tokens: {args.max_tokens}")
-    print("-" * 80)
+    # Set up JSON output file
+    if args.output_json:
+        json_output_file = args.output_json
+    else:
+        # Create temp file for JSON output
+        import datetime
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        json_output_file = f"benchmark_results_{timestamp}.json"
+    
+    print(f"Backend: {args.backend} | Model: {os.path.basename(model_path)}")
+    print(f"Files: {len(input_files)} | Repeats: {args.repeat} | Output: {json_output_file}")
+    print("-" * 60)
     
     all_results = []
     total_runs = 0
     successful_runs = 0
     
     for input_file in input_files:
-        print(f"\nProcessing: {input_file}")
+        file_results = []
+        file_successes = 0
+        
+        print(f"\n{os.path.basename(input_file)}:", end='')
         
         for run_num in range(args.repeat):
-            if args.repeat > 1:
-                print(f"  Run {run_num + 1}/{args.repeat}...", end=' ')
-            
             result = process_single_file(input_file, model_path, args.backend, args.base_file, 
                                        args.max_tokens, args.temp, args.top_p, args.min_p, args.top_k)
             result["run"] = run_num + 1
             all_results.append(result)
+            file_results.append(result)
             
             total_runs += 1
             if result["success"]:
                 successful_runs += 1
-                print("PASSED" if args.repeat > 1 else "  Result: PASSED")
+                file_successes += 1
+                print(" ✓", end='', flush=True)
             else:
-                print("FAILED" if args.repeat > 1 else "  Result: FAILED")
-                if result["error"]:
-                    print(f"    Error: {result['error']}")
+                print(" ✗", end='', flush=True)
+        
+        # Show per-file stats
+        success_rate = file_successes / args.repeat * 100
+        print(f" → {file_successes}/{args.repeat} ({success_rate:.0f}%)")
     
     # Summary
-    print("\n" + "=" * 80)
-    print(f"SUMMARY: {successful_runs}/{total_runs} tests passed ({successful_runs/total_runs*100:.1f}%)")
+    print("\n" + "=" * 60)
+    print(f"Overall: {successful_runs}/{total_runs} tests passed ({successful_runs/total_runs*100:.1f}%)")
     
-    # Save results to JSON if requested
-    if args.output_json:
-        results_data = {
-            "backend": args.backend,
-            "model": model_path,
-            "sampling": {
-                "temp": args.temp,
-                "top_p": args.top_p,
-                "min_p": args.min_p,
-                "top_k": args.top_k
-            },
-            "total_runs": total_runs,
-            "successful_runs": successful_runs,
-            "success_rate": successful_runs / total_runs if total_runs > 0 else 0,
-            "results": all_results
-        }
-        if args.backend == "mlx":
-            results_data["max_tokens"] = args.max_tokens
-        
-        with open(args.output_json, 'w') as f:
-            json.dump(results_data, f, indent=2)
-        print(f"\nResults saved to: {args.output_json}")
+    # Always save results to JSON
+    results_data = {
+        "backend": args.backend,
+        "model": model_path,
+        "base_file": args.base_file,
+        "sampling": {
+            "temp": args.temp,
+            "top_p": args.top_p,
+            "min_p": args.min_p,
+            "top_k": args.top_k
+        },
+        "total_runs": total_runs,
+        "successful_runs": successful_runs,
+        "success_rate": successful_runs / total_runs if total_runs > 0 else 0,
+        "results": all_results
+    }
+    if args.backend == "mlx":
+        results_data["max_tokens"] = args.max_tokens
+    
+    with open(json_output_file, 'w') as f:
+        json.dump(results_data, f, indent=2)
+    print(f"Detailed results saved to: {json_output_file}")
 
 if __name__ == "__main__":
     main()

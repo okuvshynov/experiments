@@ -2,7 +2,7 @@
 
 import sys
 import re
-from typing import Tuple, Optional
+from typing import Tuple, Optional, Dict, Any
 
 def parse_diff(diff_content: str) -> Tuple[Optional[str], Optional[str], Optional[str]]:
     """Parse diff output to extract change line and old/new content."""
@@ -40,6 +40,84 @@ def extract_tags(text_content: str) -> Tuple[Optional[str], Optional[str]]:
     fixed = fixed_match.group(1).strip() if fixed_match else None
     
     return current, fixed
+
+def verify_diff_detailed(diff_file: str, text_file: str) -> Dict[str, Any]:
+    """Verify if diff output matches the expected changes in text file and return detailed results."""
+    result = {
+        "success": False,
+        "error": None,
+        "diff_analysis": {},
+        "llm_analysis": {},
+        "mismatches": []
+    }
+    
+    # Read diff file
+    try:
+        with open(diff_file, 'r') as f:
+            diff_content = f.read()
+    except Exception as e:
+        result["error"] = f"Failed to read diff file: {e}"
+        return result
+    
+    # Read text file
+    try:
+        with open(text_file, 'r') as f:
+            text_content = f.read()
+    except Exception as e:
+        result["error"] = f"Failed to read text file: {e}"
+        return result
+    
+    # Parse diff
+    change_line, old_line, new_line = parse_diff(diff_content)
+    
+    if not change_line:
+        result["error"] = "No change line found in diff"
+        return result
+    
+    if old_line is None or new_line is None:
+        result["error"] = "Could not extract old/new lines from diff"
+        return result
+    
+    # Extract tags from text file
+    current, fixed = extract_tags(text_content)
+    
+    if current is None or fixed is None:
+        result["error"] = "Could not extract <current> or <fixed> tags from text file"
+        return result
+    
+    # Store analysis details
+    result["diff_analysis"] = {
+        "change_line": change_line,
+        "old_line": old_line,
+        "new_line": new_line
+    }
+    
+    result["llm_analysis"] = {
+        "current": current,
+        "fixed": fixed
+    }
+    
+    # Verification
+    matches = True
+    
+    if old_line != current:
+        result["mismatches"].append({
+            "type": "old_line_mismatch",
+            "diff_old": old_line,
+            "llm_current": current
+        })
+        matches = False
+    
+    if new_line != fixed:
+        result["mismatches"].append({
+            "type": "new_line_mismatch",
+            "diff_new": new_line,
+            "llm_fixed": fixed
+        })
+        matches = False
+    
+    result["success"] = matches
+    return result
 
 def verify_diff(diff_file: str, text_file: str) -> bool:
     """Verify if diff output matches the expected changes in text file."""
