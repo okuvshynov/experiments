@@ -8,7 +8,7 @@ import os
 import sys
 import json
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from verify_diff import verify_diff
 
 def run_llama_cpp(model_path: str, prompt_file: str, output_file: str) -> bool:
@@ -34,12 +34,30 @@ def run_llama_cpp(model_path: str, prompt_file: str, output_file: str) -> bool:
         print(f"Error running llama.cpp: {e}")
         return False
 
-def process_single_file(typo_file: str, model_path: str, base_file: str = "argh/argh.h") -> Dict[str, Any]:
+def run_mlx(model_path: str, prompt_content: str, output_file: str, max_tokens: int = 8192) -> bool:
+    """Run MLX with the given model and prompt."""
+    cmd = [
+        "mlx_lm.generate",
+        "--model", model_path,
+        "-m", str(max_tokens),
+        "-p", "-"
+    ]
+    
+    try:
+        with open(output_file, 'w') as out:
+            result = subprocess.run(cmd, input=prompt_content, stdout=out, stderr=subprocess.PIPE, text=True)
+        return result.returncode == 0
+    except Exception as e:
+        print(f"Error running MLX: {e}")
+        return False
+
+def process_single_file(typo_file: str, model_path: str, backend: str = "llama.cpp", base_file: str = "argh/argh.h", max_tokens: int = 8192) -> Dict[str, Any]:
     """Process a single typo file and return results."""
     result = {
         "file": typo_file,
         "success": False,
-        "error": None
+        "error": None,
+        "backend": backend
     }
     
     try:
@@ -65,12 +83,20 @@ def process_single_file(typo_file: str, model_path: str, base_file: str = "argh/
         with open(typo_file, 'r') as typo:
             prompt_content += typo.read()
         
-        with open(prompt_path, 'w') as prompt:
-            prompt.write(prompt_content)
-        
-        # Run llama.cpp
-        if not run_llama_cpp(model_path, prompt_path, llm_output):
-            result["error"] = "Failed to run llama.cpp"
+        # Run the appropriate backend
+        if backend == "llama.cpp":
+            with open(prompt_path, 'w') as prompt:
+                prompt.write(prompt_content)
+            
+            if not run_llama_cpp(model_path, prompt_path, llm_output):
+                result["error"] = "Failed to run llama.cpp"
+                return result
+        elif backend == "mlx":
+            if not run_mlx(model_path, prompt_content, llm_output, max_tokens):
+                result["error"] = "Failed to run MLX"
+                return result
+        else:
+            result["error"] = f"Unknown backend: {backend}"
             return result
         
         # Verify result
@@ -88,19 +114,23 @@ def process_single_file(typo_file: str, model_path: str, base_file: str = "argh/
 
 def main():
     parser = argparse.ArgumentParser(description="Generalized benchmark runner for typo detection")
-    parser.add_argument("--model", "-m", required=True, help="Path to the model file")
+    parser.add_argument("--model", "-m", required=True, help="Path to the model file or model name for MLX")
+    parser.add_argument("--backend", choices=["llama.cpp", "mlx"], default="llama.cpp", help="Backend to use (default: llama.cpp)")
     parser.add_argument("--input", "-i", help="Single input file to process (if not specified, runs all typo files)")
     parser.add_argument("--repeat", "-r", type=int, default=1, help="Number of times to repeat each test")
     parser.add_argument("--base-file", "-b", default="argh/argh.h", help="Base file to diff against")
     parser.add_argument("--output-json", "-o", help="Output results to JSON file")
+    parser.add_argument("--max-tokens", type=int, default=8192, help="Maximum tokens for MLX generation (default: 8192)")
     
     args = parser.parse_args()
     
-    # Expand model path
-    model_path = os.path.expanduser(args.model)
-    if not os.path.exists(model_path):
-        print(f"Error: Model file not found: {model_path}")
-        sys.exit(1)
+    # Handle model path based on backend
+    model_path = args.model
+    if args.backend == "llama.cpp":
+        model_path = os.path.expanduser(model_path)
+        if not os.path.exists(model_path):
+            print(f"Error: Model file not found: {model_path}")
+            sys.exit(1)
     
     # Determine input files
     if args.input:
@@ -112,8 +142,11 @@ def main():
         print("Error: No input files found")
         sys.exit(1)
     
-    print(f"Running benchmark with model: {model_path}")
+    print(f"Running benchmark with backend: {args.backend}")
+    print(f"Model: {model_path}")
     print(f"Processing {len(input_files)} file(s), {args.repeat} repetition(s) each")
+    if args.backend == "mlx":
+        print(f"Max tokens: {args.max_tokens}")
     print("-" * 80)
     
     all_results = []
@@ -127,7 +160,7 @@ def main():
             if args.repeat > 1:
                 print(f"  Run {run_num + 1}/{args.repeat}...", end=' ')
             
-            result = process_single_file(input_file, model_path, args.base_file)
+            result = process_single_file(input_file, model_path, args.backend, args.base_file, args.max_tokens)
             result["run"] = run_num + 1
             all_results.append(result)
             
@@ -147,12 +180,15 @@ def main():
     # Save results to JSON if requested
     if args.output_json:
         results_data = {
+            "backend": args.backend,
             "model": model_path,
             "total_runs": total_runs,
             "successful_runs": successful_runs,
             "success_rate": successful_runs / total_runs if total_runs > 0 else 0,
             "results": all_results
         }
+        if args.backend == "mlx":
+            results_data["max_tokens"] = args.max_tokens
         
         with open(args.output_json, 'w') as f:
             json.dump(results_data, f, indent=2)
