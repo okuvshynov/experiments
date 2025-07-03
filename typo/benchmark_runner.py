@@ -11,16 +11,24 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional
 from verify_diff import verify_diff
 
-def run_llama_cpp(model_path: str, prompt_file: str, output_file: str) -> bool:
+# Default sampling parameters
+DEFAULT_TEMP = 0.6
+DEFAULT_TOP_P = 0.95
+DEFAULT_MIN_P = 0.0
+DEFAULT_TOP_K = 20
+
+def run_llama_cpp(model_path: str, prompt_file: str, output_file: str, 
+                  temp: float = DEFAULT_TEMP, top_p: float = DEFAULT_TOP_P,
+                  min_p: float = DEFAULT_MIN_P, top_k: int = DEFAULT_TOP_K) -> bool:
     """Run llama.cpp with the given model and prompt."""
     cmd = [
         os.path.expanduser("~/projects/llama.cpp/build/bin/llama-cli"),
         "-m", model_path,
         "-f", prompt_file,
-        "--temp", "0.6",
-        "--min-p", "0.0",
-        "--top-k", "20",
-        "--top-p", "0.95",
+        "--temp", str(temp),
+        "--min-p", str(min_p),
+        "--top-k", str(top_k),
+        "--top-p", str(top_p),
         "-c", "65536",
         "--no-display-prompt",
         "--single-turn"
@@ -34,12 +42,19 @@ def run_llama_cpp(model_path: str, prompt_file: str, output_file: str) -> bool:
         print(f"Error running llama.cpp: {e}")
         return False
 
-def run_mlx(model_path: str, prompt_content: str, output_file: str, max_tokens: int = 8192) -> bool:
+def run_mlx(model_path: str, prompt_content: str, output_file: str, 
+            max_tokens: int = 8192, temp: float = DEFAULT_TEMP, 
+            top_p: float = DEFAULT_TOP_P, min_p: float = DEFAULT_MIN_P,
+            top_k: int = DEFAULT_TOP_K) -> bool:
     """Run MLX with the given model and prompt."""
     cmd = [
         "mlx_lm.generate",
         "--model", model_path,
         "-m", str(max_tokens),
+        "--temp", str(temp),
+        "--top-p", str(top_p),
+        "--min-p", str(min_p),
+        "--top-k", str(top_k),
         "-p", "-"
     ]
     
@@ -51,7 +66,10 @@ def run_mlx(model_path: str, prompt_content: str, output_file: str, max_tokens: 
         print(f"Error running MLX: {e}")
         return False
 
-def process_single_file(typo_file: str, model_path: str, backend: str = "llama.cpp", base_file: str = "argh/argh.h", max_tokens: int = 8192) -> Dict[str, Any]:
+def process_single_file(typo_file: str, model_path: str, backend: str = "llama.cpp", 
+                       base_file: str = "argh/argh.h", max_tokens: int = 8192,
+                       temp: float = DEFAULT_TEMP, top_p: float = DEFAULT_TOP_P,
+                       min_p: float = DEFAULT_MIN_P, top_k: int = DEFAULT_TOP_K) -> Dict[str, Any]:
     """Process a single typo file and return results."""
     result = {
         "file": typo_file,
@@ -88,11 +106,11 @@ def process_single_file(typo_file: str, model_path: str, backend: str = "llama.c
             with open(prompt_path, 'w') as prompt:
                 prompt.write(prompt_content)
             
-            if not run_llama_cpp(model_path, prompt_path, llm_output):
+            if not run_llama_cpp(model_path, prompt_path, llm_output, temp, top_p, min_p, top_k):
                 result["error"] = "Failed to run llama.cpp"
                 return result
         elif backend == "mlx":
-            if not run_mlx(model_path, prompt_content, llm_output, max_tokens):
+            if not run_mlx(model_path, prompt_content, llm_output, max_tokens, temp, top_p, min_p, top_k):
                 result["error"] = "Failed to run MLX"
                 return result
         else:
@@ -121,6 +139,10 @@ def main():
     parser.add_argument("--base-file", "-b", default="argh/argh.h", help="Base file to diff against")
     parser.add_argument("--output-json", "-o", help="Output results to JSON file")
     parser.add_argument("--max-tokens", type=int, default=8192, help="Maximum tokens for MLX generation (default: 8192)")
+    parser.add_argument("--temp", type=float, default=DEFAULT_TEMP, help="Sampling temperature")
+    parser.add_argument("--top-p", type=float, default=DEFAULT_TOP_P, help="Sampling top-p")
+    parser.add_argument("--min-p", type=float, default=DEFAULT_MIN_P, help="Sampling min-p")
+    parser.add_argument("--top-k", type=int, default=DEFAULT_TOP_K, help="Sampling top-k")
     
     args = parser.parse_args()
     
@@ -145,6 +167,7 @@ def main():
     print(f"Running benchmark with backend: {args.backend}")
     print(f"Model: {model_path}")
     print(f"Processing {len(input_files)} file(s), {args.repeat} repetition(s) each")
+    print(f"Sampling: temp={args.temp}, top-p={args.top_p}, min-p={args.min_p}, top-k={args.top_k}")
     if args.backend == "mlx":
         print(f"Max tokens: {args.max_tokens}")
     print("-" * 80)
@@ -160,7 +183,8 @@ def main():
             if args.repeat > 1:
                 print(f"  Run {run_num + 1}/{args.repeat}...", end=' ')
             
-            result = process_single_file(input_file, model_path, args.backend, args.base_file, args.max_tokens)
+            result = process_single_file(input_file, model_path, args.backend, args.base_file, 
+                                       args.max_tokens, args.temp, args.top_p, args.min_p, args.top_k)
             result["run"] = run_num + 1
             all_results.append(result)
             
@@ -182,6 +206,12 @@ def main():
         results_data = {
             "backend": args.backend,
             "model": model_path,
+            "sampling": {
+                "temp": args.temp,
+                "top_p": args.top_p,
+                "min_p": args.min_p,
+                "top_k": args.top_k
+            },
             "total_runs": total_runs,
             "successful_runs": successful_runs,
             "success_rate": successful_runs / total_runs if total_runs > 0 else 0,
