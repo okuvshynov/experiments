@@ -69,7 +69,8 @@ def run_mlx(model_path: str, prompt_content: str, output_file: str,
 def process_single_file(typo_file: str, model_path: str, backend: str = "llama.cpp", 
                        base_file: str = "argh/argh.h", max_tokens: int = 8192,
                        temp: float = DEFAULT_TEMP, top_p: float = DEFAULT_TOP_P,
-                       min_p: float = DEFAULT_MIN_P, top_k: int = DEFAULT_TOP_K) -> Dict[str, Any]:
+                       min_p: float = DEFAULT_MIN_P, top_k: int = DEFAULT_TOP_K,
+                       preserve_outputs: bool = True) -> Dict[str, Any]:
     """Process a single typo file and return results."""
     result = {
         "file": typo_file,
@@ -79,14 +80,18 @@ def process_single_file(typo_file: str, model_path: str, backend: str = "llama.c
     }
     
     try:
-        # Create temporary files
-        with tempfile.NamedTemporaryFile(mode='w', suffix='_diff.txt', delete=False) as diff_file:
+        # Create temporary files with descriptive names
+        import datetime
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        base_name = os.path.splitext(os.path.basename(typo_file))[0]
+        
+        with tempfile.NamedTemporaryFile(mode='w', prefix=f"{base_name}_{timestamp}_", suffix='_diff.txt', delete=False) as diff_file:
             diff_output = diff_file.name
         
-        with tempfile.NamedTemporaryFile(mode='w', suffix='_prompt.txt', delete=False) as prompt_file:
+        with tempfile.NamedTemporaryFile(mode='w', prefix=f"{base_name}_{timestamp}_", suffix='_prompt.txt', delete=False) as prompt_file:
             prompt_path = prompt_file.name
         
-        with tempfile.NamedTemporaryFile(mode='w', suffix='_output.txt', delete=False) as output_file:
+        with tempfile.NamedTemporaryFile(mode='w', prefix=f"{base_name}_{timestamp}_", suffix='_llm_output.txt', delete=False) as output_file:
             llm_output = output_file.name
         
         # Generate diff
@@ -122,15 +127,27 @@ def process_single_file(typo_file: str, model_path: str, backend: str = "llama.c
         result["success"] = verification["success"]
         result["verification_details"] = verification
         
+        # Add output file path to result
+        result["llm_output_file"] = llm_output
+        
     except Exception as e:
         result["error"] = str(e)
     finally:
-        # Clean up temp files
-        for temp_file in [diff_output, prompt_path, llm_output]:
+        # Clean up temp files (except llm_output if preserve_outputs is True)
+        for temp_file in [diff_output, prompt_path]:
             if os.path.exists(temp_file):
                 os.unlink(temp_file)
+        
+        # Only clean up llm_output if not preserving
+        if not preserve_outputs and os.path.exists(llm_output):
+            os.unlink(llm_output)
     
     return result
+
+def write_results_to_json(json_file: str, results_data: Dict[str, Any]) -> None:
+    """Write current results to JSON file (overwrites existing file)."""
+    with open(json_file, 'w') as f:
+        json.dump(results_data, f, indent=2)
 
 def main():
     parser = argparse.ArgumentParser(description="Generalized benchmark runner for typo detection")
@@ -145,6 +162,7 @@ def main():
     parser.add_argument("--top-p", type=float, default=DEFAULT_TOP_P, help="Sampling top-p")
     parser.add_argument("--min-p", type=float, default=DEFAULT_MIN_P, help="Sampling min-p")
     parser.add_argument("--top-k", type=int, default=DEFAULT_TOP_K, help="Sampling top-k")
+    parser.add_argument("--no-preserve-outputs", action="store_true", help="Do not preserve LLM output files (default: preserve)")
     
     args = parser.parse_args()
     
@@ -183,6 +201,28 @@ def main():
     total_runs = 0
     successful_runs = 0
     
+    # Initialize results data structure
+    results_data = {
+        "backend": args.backend,
+        "model": model_path,
+        "base_file": args.base_file,
+        "sampling": {
+            "temp": args.temp,
+            "top_p": args.top_p,
+            "min_p": args.min_p,
+            "top_k": args.top_k
+        },
+        "total_runs": 0,
+        "successful_runs": 0,
+        "success_rate": 0.0,
+        "results": []
+    }
+    if args.backend == "mlx":
+        results_data["max_tokens"] = args.max_tokens
+    
+    # Write initial empty results file
+    write_results_to_json(json_output_file, results_data)
+    
     for input_file in input_files:
         file_results = []
         file_successes = 0
@@ -191,7 +231,8 @@ def main():
         
         for run_num in range(args.repeat):
             result = process_single_file(input_file, model_path, args.backend, args.base_file, 
-                                       args.max_tokens, args.temp, args.top_p, args.min_p, args.top_k)
+                                       args.max_tokens, args.temp, args.top_p, args.min_p, args.top_k,
+                                       preserve_outputs=not args.no_preserve_outputs)
             result["run"] = run_num + 1
             all_results.append(result)
             file_results.append(result)
@@ -207,33 +248,21 @@ def main():
         # Show per-file stats
         success_rate = file_successes / args.repeat * 100
         print(f" → {file_successes}/{args.repeat} ({success_rate:.0f}%)")
+        
+        # Update results data and save incrementally
+        results_data["total_runs"] = total_runs
+        results_data["successful_runs"] = successful_runs
+        results_data["success_rate"] = successful_runs / total_runs if total_runs > 0 else 0
+        results_data["results"] = all_results
+        write_results_to_json(json_output_file, results_data)
     
     # Summary
     print("\n" + "=" * 60)
     print(f"Overall: {successful_runs}/{total_runs} tests passed ({successful_runs/total_runs*100:.1f}%)")
-    
-    # Always save results to JSON
-    results_data = {
-        "backend": args.backend,
-        "model": model_path,
-        "base_file": args.base_file,
-        "sampling": {
-            "temp": args.temp,
-            "top_p": args.top_p,
-            "min_p": args.min_p,
-            "top_k": args.top_k
-        },
-        "total_runs": total_runs,
-        "successful_runs": successful_runs,
-        "success_rate": successful_runs / total_runs if total_runs > 0 else 0,
-        "results": all_results
-    }
-    if args.backend == "mlx":
-        results_data["max_tokens"] = args.max_tokens
-    
-    with open(json_output_file, 'w') as f:
-        json.dump(results_data, f, indent=2)
     print(f"Detailed results saved to: {json_output_file}")
+    
+    if not args.no_preserve_outputs:
+        print(f"LLM output files preserved in temp directory for inspection")
 
 if __name__ == "__main__":
     main()
