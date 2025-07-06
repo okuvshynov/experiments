@@ -1,4 +1,4 @@
-diff "$1" argh/argh.h > /tmp/diff_output_cc
+diff "$1" data/argh/argh.h > /tmp/diff_output_cc
 
 cat "$1" | claude -p "$(cat prompt_header.txt)" > /tmp/llm_output_cc
 

@@ -67,7 +67,7 @@ def run_mlx(model_path: str, prompt_content: str, output_file: str,
         return False
 
 def process_single_file(typo_file: str, model_path: str, backend: str = "llama.cpp", 
-                       base_file: str = "argh/argh.h", max_tokens: int = 8192,
+                       base_file: str = "data/argh/argh.h", max_tokens: int = 8192,
                        temp: float = DEFAULT_TEMP, top_p: float = DEFAULT_TOP_P,
                        min_p: float = DEFAULT_MIN_P, top_k: int = DEFAULT_TOP_K,
                        preserve_outputs: bool = True) -> Dict[str, Any]:
@@ -155,7 +155,7 @@ def main():
     parser.add_argument("--backend", choices=["llama.cpp", "mlx"], default="llama.cpp", help="Backend to use (default: llama.cpp)")
     parser.add_argument("--input", "-i", help="Single input file to process (if not specified, runs all typo files)")
     parser.add_argument("--repeat", "-r", type=int, default=1, help="Number of times to repeat each test")
-    parser.add_argument("--base-file", "-b", default="argh/argh.h", help="Base file to diff against")
+    parser.add_argument("--base-file", "-b", default="data/argh/argh.h", help="Base file to diff against")
     parser.add_argument("--output-json", "-o", help="Output results to JSON file (default: auto-generated temp file)")
     parser.add_argument("--max-tokens", type=int, default=8192, help="Maximum tokens for MLX generation (default: 8192)")
     parser.add_argument("--temp", type=float, default=DEFAULT_TEMP, help="Sampling temperature")
@@ -178,7 +178,7 @@ def main():
     if args.input:
         input_files = [args.input]
     else:
-        input_files = sorted(glob.glob("argh/typos/*.h"))
+        input_files = sorted(glob.glob("data/argh/typos/*.h"))
     
     if not input_files:
         print("Error: No input files found")
