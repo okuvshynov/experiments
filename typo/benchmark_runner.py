@@ -67,7 +67,7 @@ def run_mlx(model_path: str, prompt_content: str, output_file: str,
         return False
 
 def process_single_file(typo_file: str, model_path: str, backend: str = "llama.cpp", 
-                       base_file: str = "data/argh/argh.h", max_tokens: int = 8192,
+                       base_file: str = None, max_tokens: int = 8192,
                        temp: float = DEFAULT_TEMP, top_p: float = DEFAULT_TOP_P,
                        min_p: float = DEFAULT_MIN_P, top_k: int = DEFAULT_TOP_K,
                        preserve_outputs: bool = True) -> Dict[str, Any]:
@@ -155,7 +155,8 @@ def main():
     parser.add_argument("--backend", choices=["llama.cpp", "mlx"], default="llama.cpp", help="Backend to use (default: llama.cpp)")
     parser.add_argument("--input", "-i", help="Single input file to process (if not specified, runs all typo files)")
     parser.add_argument("--repeat", "-r", type=int, default=1, help="Number of times to repeat each test")
-    parser.add_argument("--base-file", "-b", default="data/argh/argh.h", help="Base file to diff against")
+    parser.add_argument("--base-file", "-b", help="Base file to diff against (auto-detected if not specified)")
+    parser.add_argument("--project", "-p", help="Project directory name under data/ (e.g., 'argh', 'nlohmann_json')")
     parser.add_argument("--output-json", "-o", help="Output results to JSON file (default: auto-generated temp file)")
     parser.add_argument("--max-tokens", type=int, default=8192, help="Maximum tokens for MLX generation (default: 8192)")
     parser.add_argument("--temp", type=float, default=DEFAULT_TEMP, help="Sampling temperature")
@@ -174,11 +175,50 @@ def main():
             print(f"Error: Model file not found: {model_path}")
             sys.exit(1)
     
+    # Auto-detect project and base file if needed
+    if args.project:
+        project_dir = f"data/{args.project}"
+    elif args.input:
+        # Try to extract project from input path
+        parts = Path(args.input).parts
+        if len(parts) >= 2 and parts[0] == "data":
+            project_dir = f"data/{parts[1]}"
+        else:
+            print("Error: Cannot determine project directory. Use --project option.")
+            sys.exit(1)
+    else:
+        # Default to argh for backward compatibility
+        project_dir = "data/argh"
+        print(f"Warning: No project specified, defaulting to 'argh'")
+    
+    # Auto-detect base file if not specified
+    if not args.base_file:
+        # Look for common file patterns in project directory
+        possible_bases = []
+        for pattern in ["*.h", "*.hpp", "*.hh", "*.H"]:
+            files = glob.glob(os.path.join(project_dir, pattern))
+            # Exclude typos directory
+            possible_bases.extend([f for f in files if "typos" not in f])
+        
+        if len(possible_bases) == 1:
+            args.base_file = possible_bases[0]
+        elif len(possible_bases) > 1:
+            print(f"Error: Multiple possible base files found: {possible_bases}")
+            print("Please specify base file with --base-file")
+            sys.exit(1)
+        else:
+            print(f"Error: No base file found in {project_dir}")
+            sys.exit(1)
+    
     # Determine input files
     if args.input:
         input_files = [args.input]
     else:
-        input_files = sorted(glob.glob("data/argh/typos/*.h"))
+        # Look for typo files in the project's typos directory
+        typos_patterns = ["*.h", "*.hpp", "*.hh", "*.H"]
+        input_files = []
+        for pattern in typos_patterns:
+            input_files.extend(sorted(glob.glob(os.path.join(project_dir, "typos", pattern))))
     
     if not input_files:
         print("Error: No input files found")
