@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """
-Braille horizontal bar chart visualization.
-Uses 8-dot Braille Unicode characters to display horizontal bar charts.
-Each character represents 4 horizontal lines.
+Braille bar chart visualization.
+Uses 8-dot Braille Unicode characters to display horizontal or vertical bar charts.
+- Horizontal mode: Each character represents 4 horizontal lines
+- Vertical mode: Each character represents 2 vertical bars with 0-4 dots height
 """
 
 import sys
@@ -10,7 +11,63 @@ import argparse
 from typing import List
 
 
-def create_braille_chart(values: List[float], width: int) -> List[str]:
+def create_vertical_braille_chart(values: List[float]) -> str:
+    """
+    Create a vertical bar chart using Braille characters.
+    
+    Args:
+        values: List of values between 0.0 and 1.0
+        
+    Returns:
+        String representing vertical bars, 2 values per character
+    """
+    # Braille pattern base (8-dot)
+    # The dots are numbered:
+    # 1 4
+    # 2 5
+    # 3 6
+    # 7 8
+    
+    # For vertical bars, we use:
+    # Left column: dots 1,2,3,7 (bottom to top)
+    # Right column: dots 4,5,6,8 (bottom to top)
+    
+    BRAILLE_BASE = 0x2800
+    
+    # Dot patterns for vertical bars (bottom to top)
+    LEFT_COLUMN_DOTS = [0x40, 0x04, 0x02, 0x01]  # dots 7,3,2,1
+    RIGHT_COLUMN_DOTS = [0x80, 0x20, 0x10, 0x08]  # dots 8,6,5,4
+    
+    chars = []
+    
+    # Process values in pairs
+    for i in range(0, len(values), 2):
+        dots = 0
+        
+        # Left bar
+        if i < len(values):
+            # Convert value to number of dots (0-4)
+            left_dots = round(values[i] * 4)
+            # Add dots from bottom to top
+            for j in range(left_dots):
+                dots |= LEFT_COLUMN_DOTS[j]
+        
+        # Right bar
+        if i + 1 < len(values):
+            # Convert value to number of dots (0-4)
+            right_dots = round(values[i + 1] * 4)
+            # Add dots from bottom to top
+            for j in range(right_dots):
+                dots |= RIGHT_COLUMN_DOTS[j]
+        
+        # Convert to Unicode character
+        char = chr(BRAILLE_BASE + dots)
+        chars.append(char)
+    
+    return ''.join(chars)
+
+
+def create_horizontal_braille_chart(values: List[float], width: int) -> List[str]:
     """
     Create a horizontal bar chart using Braille characters.
     
@@ -85,7 +142,7 @@ def create_braille_chart(values: List[float], width: int) -> List[str]:
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Create horizontal bar charts using Braille characters'
+        description='Create bar charts using Braille characters'
     )
     parser.add_argument(
         'values',
@@ -97,7 +154,13 @@ def main():
         '-w', '--width',
         type=int,
         default=40,
-        help='Width of the chart in characters (default: 40)'
+        help='Width of the chart in characters (default: 40, horizontal mode only)'
+    )
+    parser.add_argument(
+        '-m', '--mode',
+        choices=['horizontal', 'vertical'],
+        default='horizontal',
+        help='Chart mode: horizontal or vertical (default: horizontal)'
     )
     
     args = parser.parse_args()
@@ -109,9 +172,13 @@ def main():
             sys.exit(1)
     
     # Create and display the chart
-    chart = create_braille_chart(args.values, args.width)
-    for line in chart:
-        print(line)
+    if args.mode == 'horizontal':
+        chart = create_horizontal_braille_chart(args.values, args.width)
+        for line in chart:
+            print(line)
+    else:
+        chart = create_vertical_braille_chart(args.values)
+        print(chart)
 
 
 if __name__ == '__main__':
