@@ -37,12 +37,19 @@ def create_braille_chart(values: List[float], width: int) -> List[str]:
     # Base offset for 8-dot Braille
     BRAILLE_BASE = 0x2800
     
-    # Dot patterns for each horizontal line
-    LINE_DOTS = {
-        0: 0x09,  # dots 1,4 (binary: 00001001)
-        1: 0x12,  # dots 2,5 (binary: 00010010)
-        2: 0x24,  # dots 3,6 (binary: 00100100)
-        3: 0xC0,  # dots 7,8 (binary: 11000000)
+    # Individual dot patterns for each line
+    LINE_LEFT_DOTS = {
+        0: 0x01,  # dot 1 (binary: 00000001)
+        1: 0x02,  # dot 2 (binary: 00000010)
+        2: 0x04,  # dot 3 (binary: 00000100)
+        3: 0x40,  # dot 7 (binary: 01000000)
+    }
+    
+    LINE_RIGHT_DOTS = {
+        0: 0x08,  # dot 4 (binary: 00001000)
+        1: 0x10,  # dot 5 (binary: 00010000)
+        2: 0x20,  # dot 6 (binary: 00100000)
+        3: 0x80,  # dot 8 (binary: 10000000)
     }
     
     # Process values in groups of 4
@@ -52,14 +59,20 @@ def create_braille_chart(values: List[float], width: int) -> List[str]:
         line_chars = []
         
         for char_pos in range(width):
-            # Calculate position in value range (0.0 to 1.0)
-            pos = char_pos / (width - 1) if width > 1 else 0
+            # Calculate two positions within this character
+            # Left position for left dot, right position for right dot
+            left_pos = (char_pos * 2) / (width * 2 - 1) if width > 1 else 0
+            right_pos = (char_pos * 2 + 1) / (width * 2 - 1) if width > 1 else 0
             
             # Build the Braille character
             dots = 0
             for j, value in enumerate(group):
-                if value >= pos:
-                    dots |= LINE_DOTS[j]
+                # Check if we should show the left dot
+                if value >= left_pos:
+                    dots |= LINE_LEFT_DOTS[j]
+                # Check if we should show the right dot
+                if value >= right_pos:
+                    dots |= LINE_RIGHT_DOTS[j]
             
             # Convert to Unicode character
             char = chr(BRAILLE_BASE + dots)
