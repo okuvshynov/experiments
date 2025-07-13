@@ -463,5 +463,5 @@ if let memory = memoryInfo {
 }
 
 // Create and print Braille chart (5 characters wide)
-let chart = createHorizontalBrailleChart(metrics, width: 5)
+let chart = createHorizontalBrailleChart(metrics, width: 10)
 print(chart)
