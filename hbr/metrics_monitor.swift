@@ -319,10 +319,48 @@ class GPUMonitor {
     }
 }
 
+// MARK: - Memory Monitoring
+
+class MemoryMonitor {
+    func readMemoryInfo() -> (total: UInt64, used: UInt64, wired: UInt64)? {
+        // Get total physical memory
+        var totalMemory: UInt64 = 0
+        var size = MemoryLayout<UInt64>.size
+        sysctlbyname("hw.memsize", &totalMemory, &size, nil, 0)
+        
+        // Get VM statistics
+        var vmInfo = vm_statistics64()
+        var vmInfoSize = mach_msg_type_number_t(MemoryLayout<vm_statistics64>.size / MemoryLayout<integer_t>.size)
+        
+        let result = withUnsafeMutablePointer(to: &vmInfo) {
+            $0.withMemoryRebound(to: integer_t.self, capacity: Int(vmInfoSize)) {
+                host_statistics64(mach_host_self(), HOST_VM_INFO64, $0, &vmInfoSize)
+            }
+        }
+        
+        if result != KERN_SUCCESS {
+            return nil
+        }
+        
+        // Calculate memory values in bytes
+        let pageSize = UInt64(vm_page_size)
+        let wiredMemory = UInt64(vmInfo.wire_count) * pageSize
+        let activeMemory = UInt64(vmInfo.active_count) * pageSize
+        let compressedMemory = UInt64(vmInfo.compressor_page_count) * pageSize
+        
+        // Calculate used memory (active + wired + compressed)
+        // This approximates what Activity Monitor shows as "Memory Used"
+        let usedMemory = activeMemory + wiredMemory + compressedMemory
+        
+        return (total: totalMemory, used: usedMemory, wired: wiredMemory)
+    }
+}
+
 // MARK: - Main Program
 
 let cpuMonitor = CPUMonitor()
 let gpuMonitor = GPUMonitor()
+let memoryMonitor = MemoryMonitor()
 
 // Initial read to establish baseline for CPU
 _ = cpuMonitor.readCPULoad()
@@ -334,8 +372,33 @@ let cpuLoad = cpuMonitor.readCPULoad()
 // Get GPU utilization
 let gpuUtilization = gpuMonitor.readGPUUtilization() ?? 0.0
 
+// Get memory info
+let memoryInfo = memoryMonitor.readMemoryInfo()
+
 // Print GPU utilization
 print("gpu_util=\(String(format: "%.3f", gpuUtilization))")
+
+// Print memory utilization
+if let memory = memoryInfo {
+    // Convert to GB for readability
+    let totalGB = Double(memory.total) / (1024 * 1024 * 1024)
+    let usedGB = Double(memory.used) / (1024 * 1024 * 1024)
+    let wiredGB = Double(memory.wired) / (1024 * 1024 * 1024)
+    
+    // Calculate utilization ratios
+    let usedRatio = usedGB / totalGB
+    let wiredRatio = wiredGB / totalGB
+    
+    print("memory.total_gb=\(String(format: "%.3f", totalGB))")
+    print("memory.used_gb=\(String(format: "%.3f", usedGB))")
+    print("memory.wired_gb=\(String(format: "%.3f", wiredGB))")
+    print("memory.used_ratio=\(String(format: "%.3f", usedRatio))")
+    print("memory.wired_ratio=\(String(format: "%.3f", wiredRatio))")
+    
+    // Also provide raw bytes for compatibility
+    print("memory.used_bytes=\(memory.used)")
+    print("memory.wired_bytes=\(memory.wired)")
+}
 
 // Print CPU utilization per core with cluster info
 if let cpuLoad = cpuLoad {
