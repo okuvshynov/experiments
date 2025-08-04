@@ -1,13 +1,15 @@
 filename=$1
 content=$(cat "$filename")
 
+echo "Working on $filename"
+
 curl -s http://localhost:8088/v1/chat/completions \
 -H "Content-Type: application/json" \
 -H "Authorization: Bearer no-key" \
 -d "$(jq -n --arg content "$content" '{
-  model: "UD-IQ1_M",
+  model: "local_model",
   messages: [{
     role: "user",
-    content: ("Find potential compile error in this file. Show both the line with error and how it should be fixed\n" + $content)
+    content: ("Explain what this library is doing and show some usage examples:\n" + $content)
   }]
 }')" | jq -r '.timings'
