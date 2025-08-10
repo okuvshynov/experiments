@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Qwen Image Generator</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+        textarea, input[type="number"], input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-size: 14px;
+        }
+        textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 10px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        .nav-links {
+            margin-bottom: 20px;
+        }
+        .nav-links a {
+            margin-right: 20px;
+            color: #4CAF50;
+            text-decoration: none;
+            font-weight: bold;
+        }
+        .nav-links a:hover {
+            text-decoration: underline;
+        }
+        #status {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 4px;
+            display: none;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="nav-links">
+            <a href="/">Generate Image</a>
+            <a href="/jobs">View Jobs</a>
+        </div>
+        
+        <h1>Qwen Image Generator</h1>
+        
+        <form id="generateForm">
+            <div class="form-group">
+                <label for="prompt">Prompt:</label>
+                <textarea id="prompt" name="prompt" required placeholder="Enter your image description..."></textarea>
+            </div>
+            
+            <div class="form-group">
+                <label for="negative_prompt">Negative Prompt (optional):</label>
+                <textarea id="negative_prompt" name="negative_prompt" placeholder="What to avoid in the image..."></textarea>
+            </div>
+            
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="width">Width:</label>
+                    <input type="number" id="width" name="width" value="320" min="64" max="2048" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="height">Height:</label>
+                    <input type="number" id="height" name="height" value="240" min="64" max="2048" required>
+                </div>
+            </div>
+            
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="steps">Inference Steps:</label>
+                    <input type="number" id="steps" name="steps" value="50" min="1" max="200" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="cfg_scale">CFG Scale:</label>
+                    <input type="number" id="cfg_scale" name="cfg_scale" value="4.0" min="1" max="20" step="0.1" required>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label for="seed">Seed (for reproducibility):</label>
+                <input type="number" id="seed" name="seed" value="42" min="0" required>
+            </div>
+            
+            <button type="submit" id="submitBtn">Generate Image</button>
+        </form>
+        
+        <div id="status"></div>
+    </div>
+    
+    <script>
+        document.getElementById('generateForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const submitBtn = document.getElementById('submitBtn');
+            const statusDiv = document.getElementById('status');
+            
+            // Disable submit button
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Submitting...';
+            
+            // Get form data
+            const formData = {
+                prompt: document.getElementById('prompt').value,
+                negative_prompt: document.getElementById('negative_prompt').value || '',
+                width: parseInt(document.getElementById('width').value),
+                height: parseInt(document.getElementById('height').value),
+                steps: parseInt(document.getElementById('steps').value),
+                cfg_scale: parseFloat(document.getElementById('cfg_scale').value),
+                seed: parseInt(document.getElementById('seed').value)
+            };
+            
+            try {
+                // Submit job
+                const response = await fetch('/api/submit_job', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(formData)
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    // Show success message
+                    statusDiv.className = 'success';
+                    statusDiv.innerHTML = `Job submitted successfully! Job ID: ${data.job_id}<br>
+                        <a href="/jobs">View job status</a>`;
+                    statusDiv.style.display = 'block';
+                    
+                    // Reset form
+                    document.getElementById('generateForm').reset();
+                    document.getElementById('width').value = '320';
+                    document.getElementById('height').value = '240';
+                    document.getElementById('steps').value = '50';
+                    document.getElementById('cfg_scale').value = '4.0';
+                    document.getElementById('seed').value = '42';
+                } else {
+                    throw new Error(data.error || 'Failed to submit job');
+                }
+            } catch (error) {
+                // Show error message
+                statusDiv.className = 'error';
+                statusDiv.textContent = `Error: ${error.message}`;
+                statusDiv.style.display = 'block';
+            } finally {
+                // Re-enable submit button
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Generate Image';
+            }
+        });
+    </script>
+</body>
+</html>

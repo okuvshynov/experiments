@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jobs - Qwen Image Generator</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+        }
+        .nav-links {
+            margin-bottom: 20px;
+        }
+        .nav-links a {
+            margin-right: 20px;
+            color: #4CAF50;
+            text-decoration: none;
+            font-weight: bold;
+        }
+        .nav-links a:hover {
+            text-decoration: underline;
+        }
+        .jobs-grid {
+            display: grid;
+            gap: 20px;
+        }
+        .job-card {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            background-color: #fafafa;
+        }
+        .job-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .job-id {
+            font-family: monospace;
+            font-size: 12px;
+            color: #666;
+        }
+        .job-status {
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        .status-pending {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+        .status-processing {
+            background-color: #cfe2ff;
+            color: #084298;
+        }
+        .status-completed {
+            background-color: #d1e7dd;
+            color: #0f5132;
+        }
+        .status-failed {
+            background-color: #f8d7da;
+            color: #842029;
+        }
+        .job-details {
+            margin-bottom: 15px;
+        }
+        .job-prompt {
+            background-color: #e9ecef;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+            font-style: italic;
+        }
+        .job-params {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+            font-size: 14px;
+            color: #666;
+        }
+        .job-actions {
+            margin-top: 15px;
+        }
+        .job-actions a {
+            display: inline-block;
+            padding: 8px 16px;
+            background-color: #4CAF50;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            margin-right: 10px;
+        }
+        .job-actions a:hover {
+            background-color: #45a049;
+        }
+        .job-actions a.disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        .job-image {
+            margin-top: 15px;
+            text-align: center;
+        }
+        .job-image img {
+            max-width: 100%;
+            max-height: 300px;
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .refresh-btn {
+            background-color: #2196F3;
+            color: white;
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .refresh-btn:hover {
+            background-color: #1976D2;
+        }
+        .error-message {
+            background-color: #f8d7da;
+            color: #842029;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="nav-links">
+            <a href="/">Generate Image</a>
+            <a href="/jobs">View Jobs</a>
+            <button class="refresh-btn" onclick="loadJobs()">Refresh</button>
+        </div>
+        
+        <h1>Jobs</h1>
+        
+        <div id="jobsList" class="jobs-grid">
+            <div class="empty-state">Loading jobs...</div>
+        </div>
+    </div>
+    
+    <script>
+        async function loadJobs() {
+            try {
+                const response = await fetch('/api/jobs');
+                const jobs = await response.json();
+                
+                const jobsList = document.getElementById('jobsList');
+                
+                if (jobs.length === 0) {
+                    jobsList.innerHTML = '<div class="empty-state">No jobs yet. <a href="/">Generate your first image!</a></div>';
+                    return;
+                }
+                
+                jobsList.innerHTML = jobs.map(job => {
+                    const statusClass = `status-${job.status}`;
+                    const createdDate = new Date(job.created_at).toLocaleString();
+                    const completedDate = job.completed_at ? new Date(job.completed_at).toLocaleString() : 'N/A';
+                    
+                    let actionsHtml = '';
+                    let imageHtml = '';
+                    
+                    if (job.status === 'completed' && job.image_path) {
+                        actionsHtml = `
+                            <a href="/view/${job.id}" target="_blank">View Image</a>
+                            <a href="/download/${job.id}">Download</a>
+                        `;
+                        imageHtml = `
+                            <div class="job-image">
+                                <img src="/view/${job.id}" alt="Generated image" loading="lazy">
+                            </div>
+                        `;
+                    } else if (job.status === 'failed') {
+                        actionsHtml = '<span class="disabled">Failed</span>';
+                    } else {
+                        actionsHtml = '<span class="disabled">Processing...</span>';
+                    }
+                    
+                    let errorHtml = '';
+                    if (job.error) {
+                        errorHtml = `<div class="error-message">Error: ${job.error}</div>`;
+                    }
+                    
+                    return `
+                        <div class="job-card">
+                            <div class="job-header">
+                                <span class="job-id">${job.id}</span>
+                                <span class="job-status ${statusClass}">${job.status.toUpperCase()}</span>
+                            </div>
+                            
+                            <div class="job-details">
+                                <div class="job-prompt">${job.prompt}</div>
+                                
+                                <div class="job-params">
+                                    <div><strong>Size:</strong> ${job.width}x${job.height}</div>
+                                    <div><strong>Steps:</strong> ${job.steps}</div>
+                                    <div><strong>CFG Scale:</strong> ${job.cfg_scale}</div>
+                                    <div><strong>Seed:</strong> ${job.seed}</div>
+                                </div>
+                                
+                                <div class="job-params" style="margin-top: 10px;">
+                                    <div><strong>Created:</strong> ${createdDate}</div>
+                                    <div><strong>Completed:</strong> ${completedDate}</div>
+                                </div>
+                                
+                                ${errorHtml}
+                            </div>
+                            
+                            <div class="job-actions">
+                                ${actionsHtml}
+                            </div>
+                            
+                            ${imageHtml}
+                        </div>
+                    `;
+                }).join('');
+            } catch (error) {
+                document.getElementById('jobsList').innerHTML = `
+                    <div class="error-message">Error loading jobs: ${error.message}</div>
+                `;
+            }
+        }
+        
+        // Load jobs on page load
+        loadJobs();
+        
+        // Auto-refresh every 5 seconds
+        setInterval(loadJobs, 5000);
+    </script>
+</body>
+</html>
