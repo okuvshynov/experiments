@@ -102,6 +102,7 @@ Point your LLM client/UI to `http://localhost:8081` and send messages with prefi
 - `-port` - Proxy server port (default: `8081`)
 - `-config` - Config file path (default: `config.json`)
 - `-placeholder` - Template placeholder (default: `__the__user__message__`)
+- `-warmup-interval` - Interval between warmup checks (default: `30s`, set to `0` to disable)
 
 ### Example
 
@@ -162,6 +163,61 @@ Question: __the__user__message__
 ```
 
 All file paths are read fresh on every request, so external processes can update them without restarting the proxy.
+
+### Automatic Warmup
+
+BioProxy can automatically send warmup requests when template files change, keeping the LLM's KV cache primed with fresh context.
+
+**How it works:**
+1. After you use a template (e.g., `/context`), the proxy tracks that template and all its included files
+2. Every `-warmup-interval` (default 30s), checks if any files have changed (using SHA256 hashes)
+3. If changed, sends a warmup request with:
+   - Template with all includes processed
+   - `__the__user__message__` replaced with empty string
+   - `n_predict=0` parameter (just process prompt, no generation)
+4. Warmup only happens when no other requests are active
+5. **Smart queueing**: If files change while warmup is in progress, the update is queued and processed immediately after the current warmup completes (queue size: 1, always uses latest version)
+
+**Benefits:**
+- First real query after context update is faster (prompt already in KV cache)
+- Useful for frequently-updated dynamic contexts
+- No manual intervention needed
+
+**Example:**
+```bash
+# Enable with 30s interval (default)
+bin/bioproxy-darwin-arm64 -backend http://localhost:8080 -port 8081
+
+# Custom interval
+bin/bioproxy-darwin-arm64 -warmup-interval 1m
+
+# Disable warmup
+bin/bioproxy-darwin-arm64 -warmup-interval 0
+```
+
+**When warmup triggers:**
+```
+# User sends: /context What is Go?
+# Proxy tracks: context.txt + /tmp/dynamic.txt (if included)
+#
+# 30s later, if /tmp/dynamic.txt changed:
+# Proxy sends warmup: processed template with empty user message, n_predict=0
+#
+# Next user query is faster - context already in cache
+```
+
+**Smart queueing example:**
+```
+T=0:  User sends /context question
+T=5:  /tmp/dynamic.txt changes (update #1)
+T=30: Ticker fires → detects change → starts warmup #1 (takes 25s)
+T=35: /tmp/dynamic.txt changes again (update #2)
+T=55: Warmup #1 completes
+      → Detects pending update
+      → Immediately starts warmup #2 with latest content
+T=60: Warmup #2 completes
+      → Cache now has latest version
+```
 
 ## Compatible LLM Servers
 

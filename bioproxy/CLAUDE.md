@@ -150,6 +150,75 @@ Question: __the__user__message__
 
 **Solution:** Parse into `map[string]interface{}`, extract messages separately, then merge back
 
+## Warmup Feature Implementation
+
+**Purpose:** Keep LLM's KV cache primed with latest context without manual intervention.
+
+**Key Components:**
+
+1. **Change Detection (SHA256 hashing)**
+   - Track all files: template + any `<{included}>` files
+   - Calculate SHA256 hash of each file's content
+   - Compare hashes periodically to detect changes
+
+2. **Smart Queueing (Queue Size: 1)**
+   - Problem: If files change while warmup is in progress, we could miss the latest update
+   - Solution: Use `warmupPending` flag + immediate processing
+   - Only one warmup queued at a time (always uses latest version)
+
+3. **Thread Safety**
+   - `sync.Mutex` protects warmup state
+   - `activeRequest` prevents warmup during main requests
+   - `warmupInProgress` tracks current warmup
+   - `warmupPending` tracks if another warmup needed
+
+**Flow:**
+
+```go
+// Ticker fires every 30s
+performWarmupIfNeeded() {
+    for {
+        // Always check if files changed
+        changed := checkHashes()
+
+        if warmupInProgress {
+            if changed {
+                pending = true      // Queue it
+                updateHashes()      // Use latest
+            }
+            return
+        }
+
+        if changed || pending {
+            startWarmup()
+            pending = false
+
+            if stillPending {
+                continue  // Loop immediately
+            }
+        }
+        return
+    }
+}
+```
+
+**Scenario Handling:**
+
+```
+Files change twice while warmup in progress:
+1. T=30s: Detect change #1 → start warmup
+2. T=35s: Change #2 occurs
+3. T=60s: Ticker detects change #2 → set pending=true, update hashes
+4. T=55s: Warmup #1 completes → check pending → loop → start warmup #2 immediately
+5. Warmup #2 has latest content from step 3
+```
+
+**Why This Works:**
+- Never miss updates (always check files on ticker)
+- Never queue stale versions (pending flag + latest hashes)
+- No unnecessary warmups (queue size 1)
+- Immediate processing (loop on pending, don't wait for next tick)
+
 ## Future Enhancement Ideas
 
 - [ ] Configuration hot-reload (watch config.json for changes)
@@ -160,6 +229,7 @@ Question: __the__user__message__
 - [ ] Multiple message modification (not just first user message)
 - [ ] Template composition/inheritance
 - [ ] WebSocket support for streaming
+- [x] Warmup with smart queueing (implemented!)
 
 ## Files Overview
 
