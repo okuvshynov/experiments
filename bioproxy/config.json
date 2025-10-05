@@ -1,0 +1,7 @@
+{
+  "prefixes": {
+    "/context ": "context.txt",
+    "/mini "   : "mini.txt",
+    "/sb "     : "sb.txt"
+  }
+}

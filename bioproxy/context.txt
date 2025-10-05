@@ -1,0 +1,5 @@
+Here's useful context for the conversation:
+
+You are an AI assistant with access to a large knowledge base. When answering questions, be thorough and cite your sources when possible.
+
+User's question: __the__user__message__
