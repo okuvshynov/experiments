@@ -31,7 +31,16 @@ When you send a message starting with a configured prefix (e.g., `/context hello
 ### 1. Build
 
 ```bash
-go build -o bioproxy
+make
+```
+
+This builds binaries for macOS and Linux ARM64 in the `bin/` directory.
+
+For other platforms:
+```bash
+make all-platforms  # Build for all supported platforms
+make linux-amd64    # Linux x86_64
+make help           # Show all options
 ```
 
 ### 2. Configure
@@ -68,8 +77,14 @@ Answer concisely: __the__user__message__
 ### 4. Run
 
 ```bash
-./bioproxy -backend http://localhost:8080 -port 8081
+# macOS
+bin/bioproxy-darwin-arm64 -backend http://localhost:8080 -port 8081
+
+# Linux (Raspberry Pi)
+bin/bioproxy-linux-arm64 -backend http://192.168.1.X:8080 -port 8081
 ```
+
+**Note:** If using `.local` hostnames on Linux, see troubleshooting section below.
 
 ### 5. Use
 
@@ -236,6 +251,55 @@ Since templates reload on every request, you can use external tools to update th
 # Next request automatically uses new content
 ```
 
+## Troubleshooting
+
+### mDNS `.local` Hostname Resolution on Linux
+
+**Problem:** `dial tcp: lookup studio.local: no such host`
+
+**Cause:** Go's HTTP client doesn't resolve `.local` mDNS hostnames by default
+
+**Solutions:**
+
+1. **Use IP address (simplest):**
+   ```bash
+   # Find the IP
+   ping -c 1 studio.local
+
+   # Use IP instead
+   ./bioproxy -backend http://192.168.1.X:8081 -port 8080
+   ```
+
+2. **Add to /etc/hosts:**
+   ```bash
+   echo "192.168.1.X studio.local" | sudo tee -a /etc/hosts
+   ```
+
+3. **Install mDNS support (Raspberry Pi/Debian):**
+   ```bash
+   sudo apt-get install libnss-mdns
+   sudo systemctl restart avahi-daemon
+   ```
+
+### Template File Not Found
+
+**Problem:** `Warning: Failed to read template context.txt`
+
+**Solutions:**
+- Check file paths in `config.json` are correct (relative to where you run the binary)
+- Use absolute paths if needed: `"/home/user/templates/context.txt"`
+
+### Included File Errors
+
+**Problem:** `[Error reading /tmp/context.txt: no such file]` appears in prompt
+
+**Cause:** Template references `<{/tmp/context.txt}>` but file doesn't exist
+
+**Solutions:**
+- Create the file before sending requests
+- Use absolute paths that exist
+- Template will continue working, just shows error message
+
 ## License
 
 MIT
@@ -243,3 +307,5 @@ MIT
 ## Contributing
 
 This is a simple learning project. Feel free to fork and customize for your needs!
+
+See [CLAUDE.md](CLAUDE.md) for development notes and implementation details.
