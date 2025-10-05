@@ -1,5 +1,7 @@
+# Build output
+bin/
+
 # Binaries
-bioproxy
 *.exe
 *.exe~
 *.dll

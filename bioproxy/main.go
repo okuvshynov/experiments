@@ -11,6 +11,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"regexp"
 	"strings"
 )
 
@@ -91,6 +92,39 @@ func loadConfig(filename string) error {
 	return json.Unmarshal(data, &config)
 }
 
+// processTemplateIncludes replaces <{filepath}> placeholders with file contents
+func processTemplateIncludes(template string) (string, error) {
+	// Match <{filepath}> pattern
+	re := regexp.MustCompile(`<\{([^}]+)\}>`)
+
+	result := template
+	matches := re.FindAllStringSubmatch(template, -1)
+
+	for _, match := range matches {
+		if len(match) < 2 {
+			continue
+		}
+
+		placeholder := match[0] // Full match: <{filepath}>
+		filepath := strings.TrimSpace(match[1]) // Just the filepath
+
+		// Read the file
+		content, err := os.ReadFile(filepath)
+		if err != nil {
+			log.Printf("Warning: Failed to read included file %s: %v\n", filepath, err)
+			// Replace with error message instead of failing
+			result = strings.ReplaceAll(result, placeholder, fmt.Sprintf("[Error reading %s: %v]", filepath, err))
+			continue
+		}
+
+		// Replace placeholder with file content
+		result = strings.ReplaceAll(result, placeholder, string(content))
+		log.Printf("Included file %s into template\n", filepath)
+	}
+
+	return result, nil
+}
+
 func handleChatCompletions(w http.ResponseWriter, r *http.Request, target *url.URL) {
 	// Read request body
 	body, err := io.ReadAll(r.Body)
@@ -144,12 +178,19 @@ func handleChatCompletions(w http.ResponseWriter, r *http.Request, target *url.U
 					continue
 				}
 
+				// Process any <{filepath}> includes in the template
+				processedTemplate, err := processTemplateIncludes(string(template))
+				if err != nil {
+					log.Printf("Warning: Failed to process includes in template %s: %v\n", templateFile, err)
+					processedTemplate = string(template) // Fall back to original
+				}
+
 				// Strip prefix from message
 				actualMessage := strings.TrimPrefix(content, prefix)
 				actualMessage = strings.TrimSpace(actualMessage)
 
 				// Replace placeholder with actual message
-				injectedContent := strings.ReplaceAll(string(template), placeholder, actualMessage)
+				injectedContent := strings.ReplaceAll(processedTemplate, placeholder, actualMessage)
 
 				// Update message content
 				messages[i].Content = injectedContent

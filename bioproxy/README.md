@@ -113,6 +113,41 @@ User query: __the__user__message__
 Please answer based on the documentation above.
 ```
 
+### Dynamic File Inclusion
+
+Templates can include content from other files using `<{filepath}>` syntax. This is useful for injecting dynamic context that's updated by external processes.
+
+**Example template with dynamic includes:**
+```
+Here's the latest context:
+
+<{/tmp/context_dynamic.txt}>
+
+User's question: __the__user__message__
+```
+
+**How it works:**
+1. Template files are read on each request
+2. Any `<{filepath}>` placeholders are replaced with the content of that file (also read fresh)
+3. Then `__the__user__message__` is replaced with the actual user message
+
+**Use cases:**
+- Background job writes latest git commits to `/tmp/recent_commits.txt`
+- Cron job exports database state to `/tmp/db_state.txt`
+- File watcher updates `/tmp/codebase_index.txt` when code changes
+- Template includes these files to provide fresh context
+
+**Multiple includes:**
+```
+Project status: <{/tmp/status.txt}>
+Recent commits: <{/tmp/commits.txt}>
+Open issues: <{/tmp/issues.txt}>
+
+Question: __the__user__message__
+```
+
+All file paths are read fresh on every request, so external processes can update them without restarting the proxy.
+
 ## Compatible LLM Servers
 
 Works with any server implementing OpenAI's `/v1/chat/completions` endpoint:
