@@ -170,13 +170,13 @@ BioProxy can automatically send warmup requests when template files change, keep
 
 **How it works:**
 1. After you use a template (e.g., `/context`), the proxy tracks that template and all its included files
-2. Every `-warmup-interval` (default 30s), checks if any files have changed (using SHA256 hashes)
-3. If changed, sends a warmup request with:
-   - Template with all includes processed
-   - `__the__user__message__` replaced with empty string
-   - `n_predict=0` parameter (just process prompt, no generation)
-4. Warmup only happens when no other requests are active
-5. **Smart queueing**: If files change while warmup is in progress, the update is queued and processed immediately after the current warmup completes (queue size: 1, always uses latest version)
+2. Every `-warmup-interval` (default 30s), the warmup loop:
+   - Checks if any files have changed (using SHA256 hashes)
+   - If changed AND no main request is active → sends warmup request with:
+     - Template with all includes processed
+     - `__the__user__message__` replaced with empty string
+     - `n_predict=0` parameter (just process prompt, no generation)
+3. Simple and predictable: only the warmup loop and main requests, never two warmups running
 
 **Benefits:**
 - First real query after context update is faster (prompt already in KV cache)
@@ -195,28 +195,35 @@ bin/bioproxy-darwin-arm64 -warmup-interval 1m
 bin/bioproxy-darwin-arm64 -warmup-interval 0
 ```
 
-**When warmup triggers:**
+**Example:**
 ```
-# User sends: /context What is Go?
-# Proxy tracks: context.txt + /tmp/dynamic.txt (if included)
-#
-# 30s later, if /tmp/dynamic.txt changed:
-# Proxy sends warmup: processed template with empty user message, n_predict=0
-#
-# Next user query is faster - context already in cache
-```
+T=0:   User sends: /context What is Go?
+       → Proxy tracks: context.txt + /tmp/dynamic.txt
+       → Stores SHA256 hashes
 
-**Smart queueing example:**
-```
-T=0:  User sends /context question
-T=5:  /tmp/dynamic.txt changes (update #1)
-T=30: Ticker fires → detects change → starts warmup #1 (takes 25s)
-T=35: /tmp/dynamic.txt changes again (update #2)
-T=55: Warmup #1 completes
-      → Detects pending update
-      → Immediately starts warmup #2 with latest content
-T=60: Warmup #2 completes
-      → Cache now has latest version
+T=5:   /tmp/dynamic.txt changes
+
+T=30:  Warmup loop checks
+       → Files changed: yes
+       → Main request active: no
+       → Sends warmup with latest content
+       → Updates stored hashes
+
+T=60:  Warmup loop checks
+       → Files changed: no
+       → Skips warmup
+
+# If file changes during main request:
+T=90:  User sends another question (takes 20s to process)
+T=95:  /tmp/dynamic.txt changes
+T=100: Warmup loop checks
+       → Files changed: yes
+       → Main request active: yes
+       → Skips warmup (will catch it on next tick)
+T=120: Warmup loop checks
+       → Files changed: yes (from T=95)
+       → Main request active: no
+       → Sends warmup
 ```
 
 ## Compatible LLM Servers

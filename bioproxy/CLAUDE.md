@@ -154,6 +154,8 @@ Question: __the__user__message__
 
 **Purpose:** Keep LLM's KV cache primed with latest context without manual intervention.
 
+**Design Philosophy:** Keep it simple - single warmup loop, no queueing complexity.
+
 **Key Components:**
 
 1. **Change Detection (SHA256 hashing)**
@@ -161,63 +163,57 @@ Question: __the__user__message__
    - Calculate SHA256 hash of each file's content
    - Compare hashes periodically to detect changes
 
-2. **Smart Queueing (Queue Size: 1)**
-   - Problem: If files change while warmup is in progress, we could miss the latest update
-   - Solution: Use `warmupPending` flag + immediate processing
-   - Only one warmup queued at a time (always uses latest version)
+2. **Simple Loop Logic**
+   - Ticker fires every interval (default 30s)
+   - Check if files changed
+   - If changed AND no main request active → send warmup
+   - That's it!
 
 3. **Thread Safety**
    - `sync.Mutex` protects warmup state
-   - `activeRequest` prevents warmup during main requests
-   - `warmupInProgress` tracks current warmup
-   - `warmupPending` tracks if another warmup needed
+   - `activeRequest` flag prevents warmup during main requests
+   - No complex queueing or pending flags needed
 
 **Flow:**
 
 ```go
 // Ticker fires every 30s
-performWarmupIfNeeded() {
-    for {
-        // Always check if files changed
-        changed := checkHashes()
+for range ticker.C {
+    lock()
 
-        if warmupInProgress {
-            if changed {
-                pending = true      // Queue it
-                updateHashes()      // Use latest
-            }
-            return
-        }
+    if noTemplateYet || mainRequestActive {
+        unlock()
+        continue
+    }
 
-        if changed || pending {
-            startWarmup()
-            pending = false
+    changed := checkHashes()
 
-            if stillPending {
-                continue  // Loop immediately
-            }
-        }
-        return
+    if changed {
+        updateHashes()
+        unlock()
+        sendWarmup()
+    } else {
+        unlock()
     }
 }
 ```
 
-**Scenario Handling:**
+**Behavior:**
 
 ```
-Files change twice while warmup in progress:
-1. T=30s: Detect change #1 → start warmup
-2. T=35s: Change #2 occurs
-3. T=60s: Ticker detects change #2 → set pending=true, update hashes
-4. T=55s: Warmup #1 completes → check pending → loop → start warmup #2 immediately
-5. Warmup #2 has latest content from step 3
+Simple and predictable:
+- Warmup loop runs on schedule
+- Checks files, sends warmup if changed and safe
+- If main request is active, waits for next tick
+- If files change multiple times, warmup on next available tick
+- Never two warmups running
 ```
 
 **Why This Works:**
-- Never miss updates (always check files on ticker)
-- Never queue stale versions (pending flag + latest hashes)
-- No unnecessary warmups (queue size 1)
-- Immediate processing (loop on pending, don't wait for next tick)
+- Single source of warmup requests (the loop)
+- Natural conflict resolution (skip if main request active)
+- Latest version always used (hashes updated before sending)
+- No race conditions (mutex protects shared state)
 
 ## Future Enhancement Ideas
 
@@ -229,13 +225,13 @@ Files change twice while warmup in progress:
 - [ ] Multiple message modification (not just first user message)
 - [ ] Template composition/inheritance
 - [ ] WebSocket support for streaming
-- [x] Warmup with smart queueing (implemented!)
+- [x] Automatic warmup with simple loop (implemented!)
 
 ## Files Overview
 
 ```
 bioproxy/
-├── main.go           # Core proxy implementation (~270 lines)
+├── main.go           # Core proxy + warmup implementation (~508 lines)
 ├── config.json       # Prefix → template mappings
 ├── Makefile          # Cross-platform build targets
 ├── .gitignore        # Excludes bin/ and build artifacts

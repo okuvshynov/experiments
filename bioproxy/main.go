@@ -37,12 +37,10 @@ type ChatRequest struct {
 
 // WarmupState tracks warmup status and file changes
 type WarmupState struct {
-	mu               sync.Mutex
-	lastPrefix       string            // Last used template prefix
-	fileHashes       map[string]string // filepath -> content hash
-	activeRequest    bool              // True if main request is active
-	warmupInProgress bool              // True if warmup is running
-	warmupPending    bool              // True if another warmup needed after current
+	mu            sync.Mutex
+	lastPrefix    string            // Last used template prefix
+	fileHashes    map[string]string // filepath -> content hash
+	activeRequest bool              // True if main request is active
 }
 
 var (
@@ -251,32 +249,25 @@ func warmupChecker(target *url.URL) {
 	defer ticker.Stop()
 
 	for range ticker.C {
-		performWarmupIfNeeded(target)
-	}
-}
-
-// performWarmupIfNeeded checks for changes and sends warmup, handling pending warmups
-func performWarmupIfNeeded(target *url.URL) {
-	for {
 		warmupState.mu.Lock()
 
 		// Skip if no template has been used yet
 		if warmupState.lastPrefix == "" {
 			warmupState.mu.Unlock()
-			return
+			continue
 		}
 
 		// Skip if main request is active
 		if warmupState.activeRequest {
 			warmupState.mu.Unlock()
-			return
+			continue
 		}
 
 		// Get template file for last used prefix
 		templateFile, exists := config.Prefixes[warmupState.lastPrefix]
 		if !exists {
 			warmupState.mu.Unlock()
-			return
+			continue
 		}
 
 		// Get all files (template + includes)
@@ -284,62 +275,27 @@ func performWarmupIfNeeded(target *url.URL) {
 		if err != nil {
 			log.Printf("Warning: Could not get template files for warmup: %v\n", err)
 			warmupState.mu.Unlock()
-			return
+			continue
 		}
 
-		// Always check if files changed (even if warmup in progress)
+		// Check if files changed
 		changed, newHashes := filesChanged(files, warmupState.fileHashes)
 
-		if warmupState.warmupInProgress {
-			// Warmup already running
-			if changed {
-				// Mark pending and update hashes for next warmup
-				warmupState.warmupPending = true
-				warmupState.fileHashes = newHashes
-				log.Printf("Warmup in progress, files changed - marking pending for prefix %s\n", warmupState.lastPrefix)
-			}
-			warmupState.mu.Unlock()
-			return
-		}
-
-		// No warmup in progress - check if we should start one
-		if changed || warmupState.warmupPending {
-			// Start warmup
-			warmupState.warmupInProgress = true
-			warmupState.warmupPending = false
+		if changed {
+			// Update hashes and prepare for warmup
 			warmupState.fileHashes = newHashes
 			prefix := warmupState.lastPrefix
 			warmupState.mu.Unlock()
 
 			// Send warmup (outside lock to avoid blocking)
-			if changed {
-				log.Printf("Files changed, sending warmup for prefix %s\n", prefix)
-			} else {
-				log.Printf("Processing pending warmup for prefix %s\n", prefix)
-			}
-
+			log.Printf("Files changed, sending warmup for prefix %s\n", prefix)
 			err := sendWarmupRequest(prefix, templateFile, target)
 			if err != nil {
 				log.Printf("Warning: Warmup failed: %v\n", err)
 			}
-
-			// Clear in-progress flag and check if another warmup is pending
-			warmupState.mu.Lock()
-			warmupState.warmupInProgress = false
-			stillPending := warmupState.warmupPending
-			warmupState.mu.Unlock()
-
-			// If another warmup is pending, loop immediately
-			if stillPending {
-				log.Printf("Another warmup pending, processing immediately\n")
-				continue
-			}
 		} else {
 			warmupState.mu.Unlock()
 		}
-
-		// No more warmups needed
-		return
 	}
 }
 
