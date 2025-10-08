@@ -51,6 +51,7 @@ var (
 	configFile     string
 	placeholder    string
 	warmupInterval time.Duration
+	logRequests    bool
 )
 
 func init() {
@@ -59,6 +60,7 @@ func init() {
 	flag.StringVar(&configFile, "config", "config.json", "Config file with prefix mappings")
 	flag.StringVar(&placeholder, "placeholder", "__the__user__message__", "Placeholder in template files")
 	flag.DurationVar(&warmupInterval, "warmup-interval", 30*time.Second, "Interval between warmup checks (0 to disable)")
+	flag.BoolVar(&logRequests, "log-requests", false, "Log full requests to temp files")
 }
 
 func main() {
@@ -117,6 +119,28 @@ func loadConfig(filename string) error {
 		return err
 	}
 	return json.Unmarshal(data, &config)
+}
+
+// logRequestToFile writes the request body to a temp file and logs the filename
+func logRequestToFile(body []byte) {
+	// Create temp file
+	tmpFile, err := os.CreateTemp("", "bioproxy-request-*.json")
+	if err != nil {
+		log.Printf("Warning: Failed to create temp file for request logging: %v\n", err)
+		return
+	}
+	defer tmpFile.Close()
+
+	// Pretty-print JSON
+	var prettyJSON bytes.Buffer
+	if err := json.Indent(&prettyJSON, body, "", "  "); err != nil {
+		// If pretty-print fails, write raw JSON
+		tmpFile.Write(body)
+	} else {
+		tmpFile.Write(prettyJSON.Bytes())
+	}
+
+	log.Printf("Request logged to: %s\n", tmpFile.Name())
 }
 
 // calculateFileHash computes SHA256 hash of file content
@@ -464,6 +488,11 @@ func handleChatCompletions(w http.ResponseWriter, r *http.Request, target *url.U
 	if modified {
 		backendReq.ContentLength = int64(len(body))
 		backendReq.Header.Set("Content-Length", fmt.Sprintf("%d", len(body)))
+	}
+
+	// Log request if enabled
+	if logRequests {
+		logRequestToFile(body)
 	}
 
 	// Forward request

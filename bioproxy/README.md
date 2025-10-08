@@ -103,6 +103,7 @@ Point your LLM client/UI to `http://localhost:8081` and send messages with prefi
 - `-config` - Config file path (default: `config.json`)
 - `-placeholder` - Template placeholder (default: `__the__user__message__`)
 - `-warmup-interval` - Interval between warmup checks (default: `30s`, set to `0` to disable)
+- `-log-requests` - Log full requests to temp files for debugging (default: `false`)
 
 ### Example
 
@@ -313,6 +314,41 @@ Since templates reload on every request, you can use external tools to update th
 
 # Next request automatically uses new content
 ```
+
+### Request Debugging
+
+Enable full request logging to see exactly what's being sent to the LLM after all template processing:
+
+```bash
+bin/bioproxy-darwin-arm64 -log-requests -backend http://localhost:8080 -port 8081
+```
+
+**Output:**
+```
+2025/10/05 12:34:56 Injected template context.txt for prefix /context
+2025/10/05 12:34:56 Request logged to: /tmp/bioproxy-request-1234567890.json
+```
+
+**The temp file contains the full request with:**
+- All template processing applied
+- File includes resolved
+- Pretty-printed JSON for easy reading
+
+**Example logged request:**
+```json
+{
+  "messages": [
+    {
+      "role": "user",
+      "content": "Here's useful context...\n\n[large context]\n\nUser's question: What is Go?"
+    }
+  ],
+  "n_predict": 0,
+  "temperature": 0.7
+}
+```
+
+**Tip:** Temp files are created in your system's temp directory (usually `/tmp` on Unix, `%TEMP%` on Windows) and are not automatically deleted, so you can inspect them after the request completes.
 
 ## Troubleshooting
 
