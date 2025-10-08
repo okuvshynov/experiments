@@ -43,13 +43,17 @@ type WarmupState struct {
 	activeRequest bool              // True if main request is active
 }
 
+const (
+	// messagePlaceholder is the keyword for user message in templates: <{message}>
+	messagePlaceholder = "message"
+)
+
 var (
 	config         Config
 	warmupState    *WarmupState
 	proxyPort      string
 	backendURL     string
 	configFile     string
-	placeholder    string
 	warmupInterval time.Duration
 	logRequests    bool
 )
@@ -58,7 +62,6 @@ func init() {
 	flag.StringVar(&proxyPort, "port", "8081", "Proxy server port")
 	flag.StringVar(&backendURL, "backend", "http://localhost:8080", "Backend LLM server URL")
 	flag.StringVar(&configFile, "config", "config.json", "Config file with prefix mappings")
-	flag.StringVar(&placeholder, "placeholder", "__the__user__message__", "Placeholder in template files")
 	flag.DurationVar(&warmupInterval, "warmup-interval", 30*time.Second, "Interval between warmup checks (0 to disable)")
 	flag.BoolVar(&logRequests, "log-requests", false, "Log full requests to temp files")
 }
@@ -154,6 +157,7 @@ func calculateFileHash(filepath string) (string, error) {
 }
 
 // extractIncludedFiles finds all <{filepath}> references in template
+// Excludes <{message}> since that's not a file
 func extractIncludedFiles(template string) []string {
 	re := regexp.MustCompile(`<\{([^}]+)\}>`)
 	matches := re.FindAllStringSubmatch(template, -1)
@@ -161,7 +165,11 @@ func extractIncludedFiles(template string) []string {
 	files := make([]string, 0, len(matches))
 	for _, match := range matches {
 		if len(match) >= 2 {
-			files = append(files, strings.TrimSpace(match[1]))
+			placeholder := strings.TrimSpace(match[1])
+			// Skip message placeholder - it's not a file
+			if placeholder != messagePlaceholder {
+				files = append(files, placeholder)
+			}
 		}
 	}
 	return files
@@ -218,20 +226,18 @@ func filesChanged(files []string, oldHashes map[string]string) (bool, map[string
 
 // sendWarmupRequest sends a warmup call with n_predict=0
 func sendWarmupRequest(prefix, templateFile string, target *url.URL) error {
-	// Read and process template
+	// Read and process template with empty message
 	template, err := os.ReadFile(templateFile)
 	if err != nil {
 		return fmt.Errorf("failed to read template: %w", err)
 	}
 
-	processedTemplate, err := processTemplateIncludes(string(template))
+	// Process template with empty user message
+	content, err := processTemplate(string(template), "")
 	if err != nil {
-		log.Printf("Warning: Failed to process includes in warmup template: %v\n", err)
-		processedTemplate = string(template)
+		log.Printf("Warning: Failed to process template in warmup: %v\n", err)
+		content = string(template)
 	}
-
-	// Replace placeholder with empty string
-	content := strings.ReplaceAll(processedTemplate, placeholder, "")
 
 	// Build warmup request
 	requestBody := map[string]interface{}{
@@ -323,35 +329,35 @@ func warmupChecker(target *url.URL) {
 	}
 }
 
-// processTemplateIncludes replaces <{filepath}> placeholders with file contents
-func processTemplateIncludes(template string) (string, error) {
-	// Match <{filepath}> pattern
+// processTemplate replaces all <{...}> placeholders with appropriate content.
+// Patterns are ONLY detected and replaced in the original template, not in substituted content.
+// - <{message}> → replaced with userMessage (or empty string if userMessage is "")
+// - <{filepath}> → replaced with content of the file
+func processTemplate(template string, userMessage string) (string, error) {
+	// Match <{...}> pattern
 	re := regexp.MustCompile(`<\{([^}]+)\}>`)
 
-	result := template
-	matches := re.FindAllStringSubmatch(template, -1)
+	// Replace all matches using callback function
+	// Since regex only matches against original template, replacements are not recursive
+	result := re.ReplaceAllStringFunc(template, func(match string) string {
+		// Extract content between <{ and }>
+		placeholder := strings.TrimSpace(match[2 : len(match)-2])
 
-	for _, match := range matches {
-		if len(match) < 2 {
-			continue
+		if placeholder == messagePlaceholder {
+			// Replace with user message
+			return userMessage
 		}
 
-		placeholder := match[0] // Full match: <{filepath}>
-		filepath := strings.TrimSpace(match[1]) // Just the filepath
-
-		// Read the file
-		content, err := os.ReadFile(filepath)
+		// Treat as file path
+		content, err := os.ReadFile(placeholder)
 		if err != nil {
-			log.Printf("Warning: Failed to read included file %s: %v\n", filepath, err)
-			// Replace with error message instead of failing
-			result = strings.ReplaceAll(result, placeholder, fmt.Sprintf("[Error reading %s: %v]", filepath, err))
-			continue
+			log.Printf("Warning: Failed to read included file %s: %v\n", placeholder, err)
+			return fmt.Sprintf("[Error reading %s: %v]", placeholder, err)
 		}
 
-		// Replace placeholder with file content
-		result = strings.ReplaceAll(result, placeholder, string(content))
-		log.Printf("Included file %s into template\n", filepath)
-	}
+		log.Printf("Included file %s into template\n", placeholder)
+		return string(content)
+	})
 
 	return result, nil
 }
@@ -421,19 +427,16 @@ func handleChatCompletions(w http.ResponseWriter, r *http.Request, target *url.U
 					continue
 				}
 
-				// Process any <{filepath}> includes in the template
-				processedTemplate, err := processTemplateIncludes(string(template))
-				if err != nil {
-					log.Printf("Warning: Failed to process includes in template %s: %v\n", templateFile, err)
-					processedTemplate = string(template) // Fall back to original
-				}
-
 				// Strip prefix from message
 				actualMessage := strings.TrimPrefix(content, prefix)
 				actualMessage = strings.TrimSpace(actualMessage)
 
-				// Replace placeholder with actual message
-				injectedContent := strings.ReplaceAll(processedTemplate, placeholder, actualMessage)
+				// Process template with user message
+				injectedContent, err := processTemplate(string(template), actualMessage)
+				if err != nil {
+					log.Printf("Warning: Failed to process template %s: %v\n", templateFile, err)
+					injectedContent = string(template) // Fall back to original
+				}
 
 				// Update message content
 				messages[i].Content = injectedContent

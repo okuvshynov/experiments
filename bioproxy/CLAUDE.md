@@ -42,9 +42,10 @@ When using llama.cpp server with its web UI:
 Browser → Proxy (intercept /v1/chat/completions) → LLM Server
            ↓
        1. Read template
-       2. Process <{file}> includes
-       3. Replace __the__user__message__
-       4. Forward modified request
+       2. Process all <{...}> patterns:
+          - <{message}> → user's message
+          - <{filepath}> → file content
+       3. Forward modified request
 ```
 
 **Why intercept only `/v1/chat/completions`:**
@@ -57,22 +58,35 @@ Browser → Proxy (intercept /v1/chat/completions) → LLM Server
 - Allows external processes to update files without proxy restart
 - Slight performance cost acceptable for flexibility
 
-### Dynamic File Inclusion Feature
+### Unified Template Pattern Feature
 
-**Syntax:** `<{filepath}>`
+**Syntax:** `<{...}>` for all dynamic content
 
 **Why this syntax:**
 - Unlikely to conflict with actual message content
 - Easy to regex match: `<\{([^}]+)\}>`
 - Visually distinct from markdown/code syntax
 - Similar to template languages
+- **Unified**: same syntax for message and file includes
+
+**Supported patterns:**
+- `<{message}>` - Replaced with user's message
+- `<{filepath}>` - Replaced with content of the file
 
 **Implementation:**
 1. Read template file
-2. Find all `<{filepath}>` patterns
-3. Replace each with content of the file (read fresh)
-4. Then replace `__the__user__message__` with actual user message
+2. Find all `<{...}>` patterns **in original template only**
+3. Use `ReplaceAllStringFunc` with callback:
+   - If pattern is "message" → replace with user message
+   - Otherwise → treat as filepath and replace with file content
+4. Regex only matches original template, preventing recursive expansion
 5. Send to LLM
+
+**Key design decision - No recursion:**
+- Patterns are only detected in the original template
+- If a file contains `<{message}>`, it stays literal
+- If user message contains `<{/tmp/file}>`, it stays literal
+- This prevents security issues and unexpected behavior
 
 **Error handling:**
 - If included file doesn't exist, insert error message instead of failing
@@ -103,7 +117,7 @@ Uses Makefile with Go's built-in cross-compilation:
 
 **Simple templates (no includes):**
 ```
-Answer concisely: __the__user__message__
+Answer concisely: <{message}>
 ```
 
 **With dynamic includes:**
@@ -111,14 +125,14 @@ Answer concisely: __the__user__message__
 Latest git commits:
 <{/tmp/recent_commits.txt}>
 
-Question: __the__user__message__
+Question: <{message}>
 ```
 
 **Multiple includes:**
 ```
 Project: <{/tmp/project.txt}>
 Commits: <{/tmp/commits.txt}>
-Question: __the__user__message__
+Question: <{message}>
 ```
 
 ## What Went Well

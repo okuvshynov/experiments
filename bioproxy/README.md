@@ -58,7 +58,7 @@ Edit `config.json` to map prefixes to template files:
 
 ### 3. Create Templates
 
-Create template files with `__the__user__message__` placeholder:
+Create template files with `<{message}>` placeholder for user input:
 
 **context.txt:**
 ```
@@ -66,12 +66,12 @@ Here's useful context for the conversation:
 
 [Your large context here]
 
-User's question: __the__user__message__
+User's question: <{message}>
 ```
 
 **mini.txt:**
 ```
-Answer concisely: __the__user__message__
+Answer concisely: <{message}>
 ```
 
 ### 4. Run
@@ -101,7 +101,6 @@ Point your LLM client/UI to `http://localhost:8081` and send messages with prefi
 - `-backend` - Backend LLM server URL (default: `http://localhost:8080`)
 - `-port` - Proxy server port (default: `8081`)
 - `-config` - Config file path (default: `config.json`)
-- `-placeholder` - Template placeholder (default: `__the__user__message__`)
 - `-warmup-interval` - Interval between warmup checks (default: `30s`, set to `0` to disable)
 - `-log-requests` - Log full requests to temp files for debugging (default: `false`)
 
@@ -111,13 +110,16 @@ Point your LLM client/UI to `http://localhost:8081` and send messages with prefi
 ./bioproxy \
   -backend http://localhost:11434 \
   -port 9000 \
-  -config my-config.json \
-  -placeholder "{USER_MESSAGE}"
+  -config my-config.json
 ```
 
 ## Template Files
 
-Templates are plain text files with a placeholder for the user's message. They reload on every request, so you can edit them without restarting the proxy.
+Templates use the unified `<{...}>` syntax for all dynamic content:
+- `<{message}>` - Replaced with the user's message
+- `<{filepath}>` - Replaced with content from the specified file
+
+Templates reload on every request, so you can edit them without restarting the proxy.
 
 **Example template with context:**
 ```
@@ -125,7 +127,7 @@ System: You are a helpful coding assistant with access to the following codebase
 
 [Large documentation here...]
 
-User query: __the__user__message__
+User query: <{message}>
 
 Please answer based on the documentation above.
 ```
@@ -140,13 +142,18 @@ Here's the latest context:
 
 <{/tmp/context_dynamic.txt}>
 
-User's question: __the__user__message__
+User's question: <{message}>
 ```
 
 **How it works:**
 1. Template files are read on each request
-2. Any `<{filepath}>` placeholders are replaced with the content of that file (also read fresh)
-3. Then `__the__user__message__` is replaced with the actual user message
+2. All `<{...}>` patterns in the **original template** are processed:
+   - `<{message}>` is replaced with the user's message
+   - `<{filepath}>` is replaced with the content of that file (read fresh)
+3. **Important**: Patterns are only detected in the original template, not in substituted content
+   - This prevents recursive expansion
+   - If a file contains `<{message}>`, it won't be replaced
+   - If the user message contains `<{/tmp/file}>`, it won't be replaced
 
 **Use cases:**
 - Background job writes latest git commits to `/tmp/recent_commits.txt`
@@ -160,7 +167,7 @@ Project status: <{/tmp/status.txt}>
 Recent commits: <{/tmp/commits.txt}>
 Open issues: <{/tmp/issues.txt}>
 
-Question: __the__user__message__
+Question: <{message}>
 ```
 
 All file paths are read fresh on every request, so external processes can update them without restarting the proxy.
@@ -175,7 +182,7 @@ BioProxy can automatically send warmup requests when template files change, keep
    - Checks if any files have changed (using SHA256 hashes)
    - If changed AND no main request is active → sends warmup request with:
      - Template with all includes processed
-     - `__the__user__message__` replaced with empty string
+     - `<{message}>` replaced with empty string
      - `n_predict=0` parameter (just process prompt, no generation)
 3. Simple and predictable: only the warmup loop and main requests, never two warmups running
 
@@ -278,19 +285,6 @@ The proxy is intentionally simple and hackable:
 - Easy to extend (add logging, metrics, auth, etc.)
 
 ## Advanced Usage
-
-### Custom Placeholder
-
-Use a different placeholder pattern:
-
-```bash
-./bioproxy -placeholder "{{MESSAGE}}"
-```
-
-Then in templates:
-```
-Your context here... {{MESSAGE}}
-```
 
 ### Multiple Backends
 
