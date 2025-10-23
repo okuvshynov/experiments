@@ -171,7 +171,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Create menu bar
         setupMenuBar()
 
+        // Show and activate window
         window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
 
         // Create PDF view
         pdfView = PDFView(frame: windowRect)
@@ -229,25 +231,40 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func setupMenuBar() {
         let mainMenu = NSMenu()
 
-        // Application menu
+        // Application menu (pdfq)
         let appMenuItem = NSMenuItem()
         mainMenu.addItem(appMenuItem)
-        let appMenu = NSMenu()
+        let appMenu = NSMenu(title: "pdfq")
         appMenuItem.submenu = appMenu
-        appMenu.addItem(withTitle: "Quit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+
+        appMenu.addItem(withTitle: "About pdfq", action: nil, keyEquivalent: "")
+        appMenu.addItem(NSMenuItem.separator())
+        appMenu.addItem(withTitle: "Quit pdfq", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+
+        // File menu
+        let fileMenuItem = NSMenuItem()
+        mainMenu.addItem(fileMenuItem)
+        let fileMenu = NSMenu(title: "File")
+        fileMenuItem.submenu = fileMenu
+        fileMenu.addItem(withTitle: "Close Window", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
 
         // Annotations menu
         let annotationsMenuItem = NSMenuItem()
-        annotationsMenuItem.title = "Annotations"
         mainMenu.addItem(annotationsMenuItem)
-
         let annotationsMenu = NSMenu(title: "Annotations")
         annotationsMenuItem.submenu = annotationsMenu
 
-        annotationsMenu.addItem(withTitle: "Add Text Annotation", action: #selector(addTextAnnotation(_:)), keyEquivalent: "t")
-        annotationsMenu.addItem(withTitle: "Add Note", action: #selector(addNoteAnnotation(_:)), keyEquivalent: "n")
-        annotationsMenu.addItem(withTitle: "Add Highlight", action: #selector(addHighlightAnnotation(_:)), keyEquivalent: "h")
-        annotationsMenu.addItem(withTitle: "Add Circle", action: #selector(addCircleAnnotation(_:)), keyEquivalent: "r")
+        let textItem = annotationsMenu.addItem(withTitle: "Add Text Annotation", action: #selector(addTextAnnotation(_:)), keyEquivalent: "t")
+        textItem.target = self
+
+        let noteItem = annotationsMenu.addItem(withTitle: "Add Note", action: #selector(addNoteAnnotation(_:)), keyEquivalent: "n")
+        noteItem.target = self
+
+        let highlightItem = annotationsMenu.addItem(withTitle: "Add Highlight", action: #selector(addHighlightAnnotation(_:)), keyEquivalent: "h")
+        highlightItem.target = self
+
+        let circleItem = annotationsMenu.addItem(withTitle: "Add Circle", action: #selector(addCircleAnnotation(_:)), keyEquivalent: "r")
+        circleItem.target = self
 
         NSApp.mainMenu = mainMenu
     }
@@ -259,6 +276,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
 // Main entry point
 let app = NSApplication.shared
+
+// Set activation policy to regular app (shows in dock, has menu bar)
+app.setActivationPolicy(.regular)
+
 let delegate = AppDelegate()
 app.delegate = delegate
+
+// Activate the app and bring to front
+app.activate(ignoringOtherApps: true)
+
 app.run()
