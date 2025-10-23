@@ -8,3 +8,4 @@ split_model/data/**
 .vscode/**
 **/*.swp
 tags
+pdfq/pdfq
