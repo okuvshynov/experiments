@@ -165,25 +165,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Create menu bar
         setupMenuBar()
 
-        // Show and activate window
-        window.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
-
-        // Create PDF view
-        pdfView = PDFView(frame: windowRect)
+        // Create PDF view that fills the window and resizes with it
+        pdfView = PDFView()
         pdfView.document = pdfDocument
         pdfView.autoScales = true
         pdfView.displayMode = .singlePageContinuous
         pdfView.displayDirection = .vertical
 
-        // Set up scrolling
-        let scrollView = NSScrollView(frame: windowRect)
-        scrollView.documentView = pdfView
-        scrollView.hasVerticalScroller = true
-        scrollView.hasHorizontalScroller = true
-        scrollView.autoresizingMask = [.width, .height]
+        // PDFView has built-in scrolling, just set it as content view
+        window.contentView = pdfView
 
-        window.contentView = scrollView
+        // Show and activate window
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
 
         // Set up observer for text selection
         selectionObserver = PDFSelectionObserver()
