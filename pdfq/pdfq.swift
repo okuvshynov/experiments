@@ -48,76 +48,60 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var pdfView: PDFView!
     var selectionObserver: PDFSelectionObserver!
     var annotationObserver: AnnotationObserver!
-    var toolbar: NSToolbar!
-
-    @objc func addTextAnnotation(_ sender: Any) {
-        guard let currentPage = pdfView.currentPage else { return }
-
-        // Create annotation at center of visible area
-        let bounds = NSRect(x: 100, y: 100, width: 200, height: 100)
-        let annotation = PDFAnnotation(bounds: bounds, forType: .freeText, withProperties: nil)
-        annotation.contents = "Double-click to edit"
-        annotation.color = NSColor.yellow.withAlphaComponent(0.3)
-
-        currentPage.addAnnotation(annotation)
-        logAnnotation(annotation)
-    }
-
-    @objc func addNoteAnnotation(_ sender: Any) {
-        guard let currentPage = pdfView.currentPage else { return }
-
-        let bounds = NSRect(x: 150, y: 150, width: 20, height: 20)
-        let annotation = PDFAnnotation(bounds: bounds, forType: .text, withProperties: nil)
-        annotation.contents = "Note annotation"
-        annotation.color = NSColor.systemYellow
-
-        currentPage.addAnnotation(annotation)
-        logAnnotation(annotation)
-    }
-
-    @objc func addHighlightAnnotation(_ sender: Any) {
-        // Create highlight from current selection
+    @objc func addComment(_ sender: Any) {
+        // Must have a text selection
         guard let selection = pdfView.currentSelection,
-              let page = selection.pages.first else {
-            print("INFO: Select text first to create a highlight annotation")
+              let page = selection.pages.first,
+              let selectedText = selection.string else {
+            print("INFO: Select text first to add a comment")
             fflush(stdout)
             return
         }
 
-        let selections = selection.selectionsByLine()
-        guard let firstSelection = selections.first else { return }
+        // Show input dialog for comment
+        let alert = NSAlert()
+        alert.messageText = "Add Comment"
+        alert.informativeText = "Enter your comment for the selected text:"
+        alert.addButton(withTitle: "Add")
+        alert.addButton(withTitle: "Cancel")
 
-        let bounds = firstSelection.bounds(for: page)
-        let annotation = PDFAnnotation(bounds: bounds, forType: .highlight, withProperties: nil)
-        annotation.color = NSColor.yellow.withAlphaComponent(0.5)
+        let inputTextField = NSTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
+        inputTextField.placeholderString = "Your comment here..."
+        alert.accessoryView = inputTextField
 
-        page.addAnnotation(annotation)
-        logAnnotation(annotation)
-    }
+        alert.window.initialFirstResponder = inputTextField
 
-    @objc func addCircleAnnotation(_ sender: Any) {
-        guard let currentPage = pdfView.currentPage else { return }
+        let response = alert.runModal()
+        if response == .alertFirstButtonReturn {
+            let commentText = inputTextField.stringValue
+            guard !commentText.isEmpty else { return }
 
-        let bounds = NSRect(x: 200, y: 200, width: 100, height: 100)
-        let annotation = PDFAnnotation(bounds: bounds, forType: .circle, withProperties: nil)
-        annotation.color = NSColor.red.withAlphaComponent(0.3)
+            // Create highlight annotation with the comment
+            let selections = selection.selectionsByLine()
+            guard let firstSelection = selections.first else { return }
 
-        currentPage.addAnnotation(annotation)
-        logAnnotation(annotation)
-    }
+            let bounds = firstSelection.bounds(for: page)
+            let annotation = PDFAnnotation(bounds: bounds, forType: .highlight, withProperties: nil)
+            annotation.color = NSColor.yellow.withAlphaComponent(0.5)
+            annotation.contents = commentText
 
-    func logAnnotation(_ annotation: PDFAnnotation) {
-        var annotationInfo = "ANNOTATION_CREATED: Type=\(annotation.type ?? "unknown")"
-
-        if let contents = annotation.contents, !contents.isEmpty {
-            annotationInfo += ", Contents=\"\(contents)\""
+            page.addAnnotation(annotation)
+            logAnnotation(annotation, selectedText: selectedText)
         }
+    }
+
+    func logAnnotation(_ annotation: PDFAnnotation, selectedText: String) {
+        var annotationInfo = "ANNOTATION_CREATED:"
 
         if let page = annotation.page {
-            annotationInfo += ", Page=\(page.label ?? "unknown")"
+            annotationInfo += " Page=\(page.label ?? "unknown"),"
         }
 
-        annotationInfo += ", Bounds=\(annotation.bounds)"
+        annotationInfo += " SelectedText=\"\(selectedText)\","
+
+        if let contents = annotation.contents, !contents.isEmpty {
+            annotationInfo += " Comment=\"\(contents)\""
+        }
 
         print(annotationInfo)
         fflush(stdout)
@@ -152,11 +136,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         print("Loaded PDF: \(pdfPath)")
         print("Pages: \(pdfDocument.pageCount)")
-        print("Annotation Controls:")
-        print("  Cmd+T - Add Text Annotation")
-        print("  Cmd+N - Add Note Annotation")
-        print("  Cmd+H - Add Highlight (select text first)")
-        print("  Cmd+R - Add Circle Annotation")
+        print("How to use:")
+        print("  - Select text to see it logged")
+        print("  - Press Cmd+K to add a comment to selected text")
         print("---")
         fflush(stdout)
 
@@ -248,23 +230,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         fileMenuItem.submenu = fileMenu
         fileMenu.addItem(withTitle: "Close Window", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
 
-        // Annotations menu
-        let annotationsMenuItem = NSMenuItem()
-        mainMenu.addItem(annotationsMenuItem)
-        let annotationsMenu = NSMenu(title: "Annotations")
-        annotationsMenuItem.submenu = annotationsMenu
+        // Comment menu
+        let commentMenuItem = NSMenuItem()
+        mainMenu.addItem(commentMenuItem)
+        let commentMenu = NSMenu(title: "Comment")
+        commentMenuItem.submenu = commentMenu
 
-        let textItem = annotationsMenu.addItem(withTitle: "Add Text Annotation", action: #selector(addTextAnnotation(_:)), keyEquivalent: "t")
-        textItem.target = self
-
-        let noteItem = annotationsMenu.addItem(withTitle: "Add Note", action: #selector(addNoteAnnotation(_:)), keyEquivalent: "n")
-        noteItem.target = self
-
-        let highlightItem = annotationsMenu.addItem(withTitle: "Add Highlight", action: #selector(addHighlightAnnotation(_:)), keyEquivalent: "h")
-        highlightItem.target = self
-
-        let circleItem = annotationsMenu.addItem(withTitle: "Add Circle", action: #selector(addCircleAnnotation(_:)), keyEquivalent: "r")
-        circleItem.target = self
+        let addCommentItem = commentMenu.addItem(withTitle: "Add Comment to Selection", action: #selector(addComment(_:)), keyEquivalent: "k")
+        addCommentItem.target = self
 
         NSApp.mainMenu = mainMenu
     }

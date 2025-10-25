@@ -54,9 +54,9 @@ The application logs the following events to stdout:
 TEXT_SELECTION: <selected text>
 ```
 
-**Annotation Creation:**
+**Comment Added:**
 ```
-ANNOTATION_CREATED: Type=<type>, Contents="<contents>", Page=<page>, Bounds=<bounds>
+ANNOTATION_CREATED: Page=<page>, SelectedText="<text>", Comment="<your comment>"
 ```
 
 ## Examples
@@ -81,34 +81,32 @@ make uninstall
 make clean
 ```
 
-## Adding Annotations
+## Adding Comments to Selected Text
 
-The viewer includes several ways to add annotations:
+The viewer allows you to add comments to any selected text:
 
-### Keyboard Shortcuts
-- **Cmd+T** - Add Text Annotation (yellow text box)
-- **Cmd+N** - Add Note Annotation (sticky note icon)
-- **Cmd+H** - Add Highlight (select text first, then press Cmd+H)
-- **Cmd+R** - Add Circle Annotation (red circle shape)
+1. **Select text** in the PDF with your mouse
+2. **Press Cmd+K** (or use menu: Comment → Add Comment to Selection)
+3. **Enter your comment** in the dialog that appears
+4. The selected text will be highlighted and your comment will be attached
 
-### Menu Bar
-Use the "Annotations" menu to access all annotation tools.
-
-### Tips
-- For highlights: First select text with your mouse, then press Cmd+H
-- Text annotations can be edited by double-clicking them
-- All annotations are logged to stdout immediately when created
+All comments are logged to stdout immediately when created, showing:
+- The page number
+- The selected text
+- Your comment
 
 ## How It Works
 
 The application:
 1. Loads the specified PDF file using PDFKit
 2. Creates a native macOS window with a PDF viewer
-3. Sets up a menu bar with annotation tools and keyboard shortcuts
-4. Registers notification observers for:
-   - Text selection changes (`PDFViewSelectionChanged`)
-   - Annotation modifications
-5. Logs events to stdout as they occur
+3. Sets up a menu bar with a simple comment tool (Cmd+K)
+4. Registers notification observers for text selection changes
+5. When you add a comment:
+   - Creates a highlight annotation at the selected text position
+   - Attaches your comment to that annotation
+   - Logs the event to stdout with page, selected text, and comment
+6. All events are logged to stdout in real-time
 
 ## License
 
