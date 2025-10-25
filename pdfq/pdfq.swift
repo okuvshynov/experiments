@@ -76,17 +76,28 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let commentText = inputTextField.stringValue
             guard !commentText.isEmpty else { return }
 
-            // Create highlight annotation with the comment
+            // Create highlight annotation
             let selections = selection.selectionsByLine()
             guard let firstSelection = selections.first else { return }
 
             let bounds = firstSelection.bounds(for: page)
-            let annotation = PDFAnnotation(bounds: bounds, forType: .highlight, withProperties: nil)
-            annotation.color = NSColor.yellow.withAlphaComponent(0.5)
-            annotation.contents = commentText
+            let highlight = PDFAnnotation(bounds: bounds, forType: .highlight, withProperties: nil)
+            highlight.color = NSColor.yellow.withAlphaComponent(0.5)
+            page.addAnnotation(highlight)
 
-            page.addAnnotation(annotation)
-            logAnnotation(annotation, selectedText: selectedText)
+            // Create a sticky note icon at the end of the selection to show the comment
+            let noteSize: CGFloat = 20
+            let noteX = bounds.maxX - noteSize
+            let noteY = bounds.minY
+            let noteBounds = NSRect(x: noteX, y: noteY, width: noteSize, height: noteSize)
+
+            let note = PDFAnnotation(bounds: noteBounds, forType: .text, withProperties: nil)
+            note.contents = commentText
+            note.color = NSColor.systemYellow
+            note.iconType = PDFTextAnnotationIconType.comment
+
+            page.addAnnotation(note)
+            logAnnotation(note, selectedText: selectedText)
         }
     }
 
@@ -139,6 +150,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         print("How to use:")
         print("  - Select text to see it logged")
         print("  - Press Cmd+K to add a comment to selected text")
+        print("  - Click the note icon to view comments")
         print("---")
         fflush(stdout)
 
