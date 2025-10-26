@@ -68,7 +68,14 @@ To see total performance when both GPUs work simultaneously:
 
 - **TFLOPS**: Tera floating-point operations per second (higher is better)
 - **FP32**: Single-precision (32-bit) floating point
-- **FP16**: Half-precision (16-bit) floating point
-- **FP16/FP32 Ratio**: Speedup factor (Vega II should be ~2x in theory)
-- **Combined Performance**: Sum of all GPU performances
+- **Average time**: Mean execution time across benchmark runs
+- **Combined Performance**: Sum of all GPU performances (when running multiple GPUs)
 - **Scaling Efficiency**: How well multiple GPUs work together
+
+## About the Benchmark
+
+The benchmark tests FP32 (single-precision) floating-point performance using fused multiply-add (FMA) operations:
+- 32 FMA operations per iteration = 64 FLOPs per iteration
+- Each thread runs 2,000,000 iterations
+- Uses 262,144 threads total
+- Total workload: ~33.6 trillion FLOPs per run

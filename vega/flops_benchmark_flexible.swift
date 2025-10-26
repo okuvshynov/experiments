@@ -7,7 +7,6 @@ class FLOPSBenchmark {
     let deviceIndex: Int
     let commandQueue: MTLCommandQueue
     let fp32Pipeline: MTLComputePipelineState
-    let fp16Pipeline: MTLComputePipelineState
 
     init?(device: MTLDevice, index: Int, libraryPath: String) {
         self.device = device
@@ -30,28 +29,25 @@ class FLOPSBenchmark {
             return nil
         }
 
-        // Create compute pipelines
-        guard let fp32Function = library.makeFunction(name: "benchmark_fp32_heavy"),
-              let fp16Function = library.makeFunction(name: "benchmark_fp16_heavy") else {
-            print("  Failed to load shader functions")
+        // Create FP32 compute pipeline
+        guard let fp32Function = library.makeFunction(name: "benchmark_fp32_heavy") else {
+            print("  Failed to load FP32 shader function")
             return nil
         }
 
-        guard let fp32 = try? device.makeComputePipelineState(function: fp32Function),
-              let fp16 = try? device.makeComputePipelineState(function: fp16Function) else {
-            print("  Failed to create compute pipeline states")
+        guard let fp32 = try? device.makeComputePipelineState(function: fp32Function) else {
+            print("  Failed to create FP32 compute pipeline state")
             return nil
         }
 
         self.fp32Pipeline = fp32
-        self.fp16Pipeline = fp16
     }
 
-    func runBenchmark(precision: String, pipeline: MTLComputePipelineState, elementSize: Int, numThreads: Int, iterations: UInt32, numRuns: Int = 3) -> (tflops: Double, time: Double)? {
+    func runBenchmark(numThreads: Int, iterations: UInt32, numRuns: Int = 3) -> (tflops: Double, time: Double)? {
         let flopsPerIteration = 64  // 32 FMA operations × 2 FLOPs each
 
         // Create output buffer
-        guard let outputBuffer = device.makeBuffer(length: numThreads * elementSize, options: .storageModeShared) else {
+        guard let outputBuffer = device.makeBuffer(length: numThreads * MemoryLayout<Float>.size, options: .storageModeShared) else {
             print("  Failed to create output buffer")
             return nil
         }
@@ -64,7 +60,7 @@ class FLOPSBenchmark {
         }
 
         // Calculate thread group configuration
-        let threadGroupSize = MTLSize(width: min(pipeline.maxTotalThreadsPerThreadgroup, 256), height: 1, depth: 1)
+        let threadGroupSize = MTLSize(width: min(fp32Pipeline.maxTotalThreadsPerThreadgroup, 256), height: 1, depth: 1)
         let threadGroups = MTLSize(width: (numThreads + threadGroupSize.width - 1) / threadGroupSize.width, height: 1, depth: 1)
 
         print("  GPU \(deviceIndex): Warming up...")
@@ -76,7 +72,7 @@ class FLOPSBenchmark {
                 return nil
             }
 
-            encoder.setComputePipelineState(pipeline)
+            encoder.setComputePipelineState(fp32Pipeline)
             encoder.setBuffer(outputBuffer, offset: 0, index: 0)
             encoder.setBuffer(iterBuffer, offset: 0, index: 1)
             encoder.dispatchThreadgroups(threadGroups, threadsPerThreadgroup: threadGroupSize)
@@ -85,7 +81,7 @@ class FLOPSBenchmark {
             commandBuffer.waitUntilCompleted()
         }
 
-        print("  GPU \(deviceIndex): Running \(precision) benchmark (\(numRuns) runs)...")
+        print("  GPU \(deviceIndex): Running FP32 benchmark (\(numRuns) runs)...")
 
         // Actual timed runs
         var times: [Double] = []
@@ -96,7 +92,7 @@ class FLOPSBenchmark {
                 return nil
             }
 
-            encoder.setComputePipelineState(pipeline)
+            encoder.setComputePipelineState(fp32Pipeline)
             encoder.setBuffer(outputBuffer, offset: 0, index: 0)
             encoder.setBuffer(iterBuffer, offset: 0, index: 1)
             encoder.dispatchThreadgroups(threadGroups, threadsPerThreadgroup: threadGroupSize)
@@ -113,8 +109,6 @@ class FLOPSBenchmark {
         }
 
         let avgTime = times.reduce(0, +) / Double(numRuns)
-        let minTime = times.min()!
-        let maxTime = times.max()!
 
         let totalFLOPs = Double(numThreads) * Double(iterations) * Double(flopsPerIteration)
         let avgTflops = (totalFLOPs / avgTime) / 1e12
@@ -183,115 +177,81 @@ func parseArguments() -> RunMode? {
 }
 
 // Run benchmarks on selected devices in parallel
-func runParallel(benchmarks: [FLOPSBenchmark], numThreads: Int, iterations: UInt32) -> (fp32: [(tflops: Double, time: Double)], fp16: [(tflops: Double, time: Double)]) {
+func runParallel(benchmarks: [FLOPSBenchmark], numThreads: Int, iterations: UInt32) -> [(tflops: Double, time: Double)] {
     print("\n=== Running in PARALLEL mode ===\n")
+    print("--- FP32 Benchmark ---\n")
 
-    func runParallelBenchmarks(precision: String, getPipeline: @escaping (FLOPSBenchmark) -> MTLComputePipelineState, elementSize: Int) -> [(tflops: Double, time: Double)] {
-        print("--- \(precision) Benchmark ---\n")
+    let group = DispatchGroup()
+    let lock = NSLock()
+    var results: [(tflops: Double, time: Double)?] = Array(repeating: nil, count: benchmarks.count)
 
-        let group = DispatchGroup()
-        let lock = NSLock()
-        var results: [(tflops: Double, time: Double)?] = Array(repeating: nil, count: benchmarks.count)
+    let overallStart = CACurrentMediaTime()
 
-        let overallStart = CACurrentMediaTime()
-
-        for (index, benchmark) in benchmarks.enumerated() {
-            group.enter()
-            DispatchQueue.global(qos: .userInteractive).async {
-                let result = benchmark.runBenchmark(
-                    precision: precision,
-                    pipeline: getPipeline(benchmark),
-                    elementSize: elementSize,
-                    numThreads: numThreads,
-                    iterations: iterations
-                )
-                lock.lock()
-                results[index] = result
-                lock.unlock()
-                group.leave()
-            }
+    for (index, benchmark) in benchmarks.enumerated() {
+        group.enter()
+        DispatchQueue.global(qos: .userInteractive).async {
+            let result = benchmark.runBenchmark(
+                numThreads: numThreads,
+                iterations: iterations
+            )
+            lock.lock()
+            results[index] = result
+            lock.unlock()
+            group.leave()
         }
-
-        group.wait()
-        let overallEnd = CACurrentMediaTime()
-
-        print("\n  Total parallel execution time: \(String(format: "%.3f", overallEnd - overallStart))s\n")
-
-        return results.compactMap { $0 }
     }
 
-    let fp32Results = runParallelBenchmarks(precision: "FP32", getPipeline: { $0.fp32Pipeline }, elementSize: MemoryLayout<Float>.size)
-    let fp16Results = runParallelBenchmarks(precision: "FP16", getPipeline: { $0.fp16Pipeline }, elementSize: 2)
+    group.wait()
+    let overallEnd = CACurrentMediaTime()
 
-    return (fp32Results, fp16Results)
+    print("\n  Total parallel execution time: \(String(format: "%.3f", overallEnd - overallStart))s\n")
+
+    return results.compactMap { $0 }
 }
 
 // Run benchmarks on selected devices sequentially
-func runSequential(benchmarks: [FLOPSBenchmark], numThreads: Int, iterations: UInt32) -> (fp32: [(tflops: Double, time: Double)], fp16: [(tflops: Double, time: Double)]) {
+func runSequential(benchmarks: [FLOPSBenchmark], numThreads: Int, iterations: UInt32) -> [(tflops: Double, time: Double)] {
     print("\n=== Running in SEQUENTIAL mode ===\n")
 
-    var fp32Results: [(tflops: Double, time: Double)] = []
-    var fp16Results: [(tflops: Double, time: Double)] = []
+    var results: [(tflops: Double, time: Double)] = []
 
     for (index, benchmark) in benchmarks.enumerated() {
         print("--- GPU \(index): \(benchmark.device.name) ---\n")
 
-        print("Running FP32...")
         if let result = benchmark.runBenchmark(
-            precision: "FP32",
-            pipeline: benchmark.fp32Pipeline,
-            elementSize: MemoryLayout<Float>.size,
             numThreads: numThreads,
             iterations: iterations
         ) {
-            fp32Results.append(result)
-        }
-
-        print("\nRunning FP16...")
-        if let result = benchmark.runBenchmark(
-            precision: "FP16",
-            pipeline: benchmark.fp16Pipeline,
-            elementSize: 2,
-            numThreads: numThreads,
-            iterations: iterations
-        ) {
-            fp16Results.append(result)
+            results.append(result)
         }
 
         print()
     }
 
-    return (fp32Results, fp16Results)
+    return results
 }
 
 // Print summary
-func printSummary(benchmarks: [FLOPSBenchmark], fp32Results: [(tflops: Double, time: Double)], fp16Results: [(tflops: Double, time: Double)]) {
+func printSummary(benchmarks: [FLOPSBenchmark], results: [(tflops: Double, time: Double)]) {
     print("=== Summary ===\n")
     print("Per-GPU Performance:")
     for (index, benchmark) in benchmarks.enumerated() {
         print("\nGPU \(index): \(benchmark.device.name)")
-        if index < fp32Results.count {
-            print("  FP32: \(String(format: "%.3f", fp32Results[index].tflops)) TFLOPS (avg time: \(String(format: "%.3f", fp32Results[index].time))s)")
-        }
-        if index < fp16Results.count {
-            print("  FP16: \(String(format: "%.3f", fp16Results[index].tflops)) TFLOPS (avg time: \(String(format: "%.3f", fp16Results[index].time))s)")
-        }
-        if index < fp32Results.count && index < fp16Results.count {
-            print("  FP16/FP32 Ratio: \(String(format: "%.2f", fp16Results[index].tflops/fp32Results[index].tflops))x")
+        if index < results.count {
+            print("  FP32: \(String(format: "%.3f", results[index].tflops)) TFLOPS")
+            print("  Average time: \(String(format: "%.3f", results[index].time))s")
         }
     }
 
     if benchmarks.count > 1 {
+        let totalTFLOPS = results.map { $0.tflops }.reduce(0, +)
+
         print("\nCombined Performance:")
-        let totalFP32 = fp32Results.map { $0.tflops }.reduce(0, +)
-        let totalFP16 = fp16Results.map { $0.tflops }.reduce(0, +)
-        print("  FP32: \(String(format: "%.3f", totalFP32)) TFLOPS")
-        print("  FP16: \(String(format: "%.3f", totalFP16)) TFLOPS")
+        print("  Total FP32: \(String(format: "%.3f", totalTFLOPS)) TFLOPS")
 
         print("\nScaling Efficiency:")
         print("  Number of GPUs: \(benchmarks.count)")
-        print("  FP32 per GPU avg: \(String(format: "%.3f", totalFP32/Double(benchmarks.count))) TFLOPS")
-        print("  FP16 per GPU avg: \(String(format: "%.3f", totalFP16/Double(benchmarks.count))) TFLOPS")
+        print("  Average per GPU: \(String(format: "%.3f", totalTFLOPS/Double(benchmarks.count))) TFLOPS")
     }
 }
 
@@ -362,14 +322,14 @@ let totalFlopsPerRun = Double(numThreads) * Double(iterations) * 64.0
 print("  Total FLOPs per run: \(String(format: "%.2e", totalFlopsPerRun))")
 
 // Run benchmarks based on mode
-let (fp32Results, fp16Results): ([(tflops: Double, time: Double)], [(tflops: Double, time: Double)])
+let results: [(tflops: Double, time: Double)]
 
 switch mode {
 case .parallel:
-    (fp32Results, fp16Results) = runParallel(benchmarks: benchmarks, numThreads: numThreads, iterations: iterations)
+    results = runParallel(benchmarks: benchmarks, numThreads: numThreads, iterations: iterations)
 case .sequential, .single:
-    (fp32Results, fp16Results) = runSequential(benchmarks: benchmarks, numThreads: numThreads, iterations: iterations)
+    results = runSequential(benchmarks: benchmarks, numThreads: numThreads, iterations: iterations)
 }
 
 // Print summary
-printSummary(benchmarks: benchmarks, fp32Results: fp32Results, fp16Results: fp16Results)
+printSummary(benchmarks: benchmarks, results: results)
