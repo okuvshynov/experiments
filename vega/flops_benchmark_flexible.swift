@@ -43,7 +43,7 @@ class FLOPSBenchmark {
         self.fp32Pipeline = fp32
     }
 
-    func runBenchmark(numThreads: Int, iterations: UInt32, numRuns: Int = 3) -> (tflops: Double, time: Double)? {
+    func runBenchmark(numThreads: Int, iterations: UInt32, numRuns: Int = 10) -> (tflops: Double, time: Double)? {
         let flopsPerIteration = 64  // 32 FMA operations × 2 FLOPs each
 
         // Create output buffer
@@ -109,12 +109,20 @@ class FLOPSBenchmark {
         }
 
         let avgTime = times.reduce(0, +) / Double(numRuns)
+        let minTime = times.min()!
+        let maxTime = times.max()!
+
+        // Calculate standard deviation
+        let variance = times.map { pow($0 - avgTime, 2) }.reduce(0, +) / Double(numRuns)
+        let stdDev = sqrt(variance)
 
         let totalFLOPs = Double(numThreads) * Double(iterations) * Double(flopsPerIteration)
         let avgTflops = (totalFLOPs / avgTime) / 1e12
+        let minTflops = (totalFLOPs / maxTime) / 1e12  // min time = max TFLOPS
+        let maxTflops = (totalFLOPs / minTime) / 1e12  // max time = min TFLOPS
 
-        print("    Average time: \(String(format: "%.4f", avgTime))s")
-        print("    Performance: \(String(format: "%.3f", avgTflops)) TFLOPS")
+        print("    Time   - Avg: \(String(format: "%.4f", avgTime))s, Min: \(String(format: "%.4f", minTime))s, Max: \(String(format: "%.4f", maxTime))s, StdDev: \(String(format: "%.4f", stdDev))s")
+        print("    TFLOPS - Avg: \(String(format: "%.3f", avgTflops)), Min: \(String(format: "%.3f", minTflops)), Max: \(String(format: "%.3f", maxTflops))")
 
         return (avgTflops, avgTime)
     }
