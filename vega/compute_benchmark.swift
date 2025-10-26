@@ -30,7 +30,7 @@ class FLOPSBenchmark {
         }
 
         // Create FP32 compute pipeline
-        guard let fp32Function = library.makeFunction(name: "benchmark_fp32_heavy") else {
+        guard let fp32Function = library.makeFunction(name: "compute_fp32") else {
             print("  Failed to load FP32 shader function")
             return nil
         }
@@ -290,7 +290,7 @@ let mode = parseArguments() ?? .parallel
 print("Found \(devices.count) Metal device(s)\n")
 
 // Configuration
-let libraryPath = "build/flops_benchmark_heavy.metallib"
+let libraryPath = "build/compute_benchmark.metallib"
 let numThreads = 262144
 let iterations: UInt32 = 2000000
 

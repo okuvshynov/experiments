@@ -291,7 +291,7 @@ if CommandLine.arguments.contains("--list") {
     exit(0)
 }
 
-let libraryPath = "build/memory_bandwidth.metallib"
+let libraryPath = "build/bandwidth_benchmark.metallib"
 
 // Parse device selection
 var deviceIndex = 0

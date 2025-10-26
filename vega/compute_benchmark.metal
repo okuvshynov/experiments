@@ -1,10 +1,10 @@
 #include <metal_stdlib>
 using namespace metal;
 
-// FP32 heavy benchmark kernel - more accumulators and operations
-kernel void benchmark_fp32_heavy(device float* output [[buffer(0)]],
-                                 constant uint& iterations [[buffer(1)]],
-                                 uint gid [[thread_position_in_grid]])
+// FP32 compute benchmark kernel - uses multiple accumulators for high compute intensity
+kernel void compute_fp32(device float* output [[buffer(0)]],
+                         constant uint& iterations [[buffer(1)]],
+                         uint gid [[thread_position_in_grid]])
 {
     // Initialize 8 accumulators for more instruction-level parallelism
     float acc0 = 1.0f + float(gid) * 0.001f;
@@ -74,10 +74,10 @@ kernel void benchmark_fp32_heavy(device float* output [[buffer(0)]],
     output[gid] = acc0 + acc1 + acc2 + acc3 + acc4 + acc5 + acc6 + acc7;
 }
 
-// FP16 heavy benchmark kernel - same logic but using half precision
-kernel void benchmark_fp16_heavy(device half* output [[buffer(0)]],
-                                 constant uint& iterations [[buffer(1)]],
-                                 uint gid [[thread_position_in_grid]])
+// FP16 compute benchmark kernel - same logic but using half precision (currently unused)
+kernel void compute_fp16(device half* output [[buffer(0)]],
+                         constant uint& iterations [[buffer(1)]],
+                         uint gid [[thread_position_in_grid]])
 {
     half acc0 = half(1.0f + float(gid) * 0.001f);
     half acc1 = half(1.0f + float(gid) * 0.002f);
