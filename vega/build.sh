@@ -17,10 +17,8 @@ xcrun -sdk macosx metallib build/flops_benchmark_heavy.air -o build/flops_benchm
 
 # Compile Swift programs
 echo "Compiling Swift programs..."
-swiftc -O -o build/flops_benchmark flops_benchmark.swift -framework Metal -framework Foundation -framework QuartzCore
-swiftc -O -o build/flops_benchmark_dual_final flops_benchmark_dual_final.swift -framework Metal -framework Foundation -framework QuartzCore
+swiftc -O -o build/flops_benchmark flops_benchmark_flexible.swift -framework Metal -framework Foundation -framework QuartzCore
 
 echo "Build complete!"
 echo ""
-echo "Run single GPU benchmark: build/flops_benchmark"
-echo "Run dual GPU benchmark:   build/flops_benchmark_dual_final"
+echo "Run benchmark: build/flops_benchmark [--device N | --sequential | --parallel | --list]"
