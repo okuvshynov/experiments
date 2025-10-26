@@ -63,6 +63,83 @@ class MemoryBandwidthBenchmark {
         self.randomPipeline = random
     }
 
+    func runConcurrentCopyBenchmark(arraySize: Int, numConcurrent: Int = 4, numRuns: Int = 5) -> (bandwidth: Double, time: Double)? {
+        let bufferSize = arraySize * MemoryLayout<Float>.size
+
+        // Create multiple buffer pairs for concurrent operations
+        var inputBuffers: [MTLBuffer] = []
+        var outputBuffers: [MTLBuffer] = []
+
+        for _ in 0..<numConcurrent {
+            guard let inputBuffer = device.makeBuffer(length: bufferSize, options: .storageModePrivate),
+                  let outputBuffer = device.makeBuffer(length: bufferSize, options: .storageModePrivate) else {
+                print("  Failed to create concurrent buffers")
+                return nil
+            }
+            inputBuffers.append(inputBuffer)
+            outputBuffers.append(outputBuffer)
+        }
+
+        var arrayLength = UInt32(arraySize)
+        guard let lengthBuffer = device.makeBuffer(bytes: &arrayLength, length: MemoryLayout<UInt32>.size, options: .storageModeShared) else {
+            return nil
+        }
+
+        let threadGroupSize = MTLSize(width: min(copyPipeline.maxTotalThreadsPerThreadgroup, 256), height: 1, depth: 1)
+        let threadGroups = MTLSize(width: (arraySize + threadGroupSize.width - 1) / threadGroupSize.width, height: 1, depth: 1)
+
+        // Warm-up
+        for _ in 0..<2 {
+            guard let commandBuffer = commandQueue.makeCommandBuffer() else { return nil }
+
+            for i in 0..<numConcurrent {
+                guard let encoder = commandBuffer.makeComputeCommandEncoder() else { return nil }
+                encoder.setComputePipelineState(copyPipeline)
+                encoder.setBuffer(inputBuffers[i], offset: 0, index: 0)
+                encoder.setBuffer(outputBuffers[i], offset: 0, index: 1)
+                encoder.setBuffer(lengthBuffer, offset: 0, index: 2)
+                encoder.dispatchThreadgroups(threadGroups, threadsPerThreadgroup: threadGroupSize)
+                encoder.endEncoding()
+            }
+
+            commandBuffer.commit()
+            commandBuffer.waitUntilCompleted()
+        }
+
+        // Timed runs
+        var times: [Double] = []
+        for _ in 0..<numRuns {
+            guard let commandBuffer = commandQueue.makeCommandBuffer() else { return nil }
+
+            // Encode multiple copy operations in the same command buffer
+            for i in 0..<numConcurrent {
+                guard let encoder = commandBuffer.makeComputeCommandEncoder() else { return nil }
+                encoder.setComputePipelineState(copyPipeline)
+                encoder.setBuffer(inputBuffers[i], offset: 0, index: 0)
+                encoder.setBuffer(outputBuffers[i], offset: 0, index: 1)
+                encoder.setBuffer(lengthBuffer, offset: 0, index: 2)
+                encoder.dispatchThreadgroups(threadGroups, threadsPerThreadgroup: threadGroupSize)
+                encoder.endEncoding()
+            }
+
+            let startTime = CACurrentMediaTime()
+            commandBuffer.commit()
+            commandBuffer.waitUntilCompleted()
+            let endTime = CACurrentMediaTime()
+
+            times.append(endTime - startTime)
+        }
+
+        let avgTime = times.reduce(0, +) / Double(numRuns)
+        let minTime = times.min()!
+
+        // Total bytes transferred: numConcurrent operations, each doing read + write
+        let totalBytes = Double(bufferSize * 2 * numConcurrent)
+        let avgBandwidth = totalBytes / avgTime / 1e9  // GB/s
+
+        return (avgBandwidth, avgTime)
+    }
+
     func runCopyBenchmark(arraySize: Int, numRuns: Int = 5) -> (bandwidth: Double, time: Double)? {
         let bufferSize = arraySize * MemoryLayout<Float>.size
 
@@ -316,9 +393,10 @@ guard let benchmark = MemoryBandwidthBenchmark(device: devices[deviceIndex], ind
 // Test with different array sizes to see how bandwidth scales
 // Using large arrays to fill HBM and avoid cache effects
 let arraySizes = [
-    (name: "64 MB", size: 16 * 1024 * 1024),    // 64 MB (16M floats)
-    (name: "256 MB", size: 64 * 1024 * 1024),   // 256 MB (64M floats)
-    (name: "1 GB", size: 256 * 1024 * 1024),    // 1 GB (256M floats)
+    (name: "256 MB", size: 64 * 1024 * 1024),     // 256 MB (64M floats)
+    (name: "1 GB", size: 256 * 1024 * 1024),      // 1 GB (256M floats)
+    (name: "2 GB", size: 512 * 1024 * 1024),      // 2 GB (512M floats)
+    (name: "4 GB", size: 1024 * 1024 * 1024),     // 4 GB (1024M floats)
 ]
 
 print("\nConfiguration:")
@@ -331,6 +409,12 @@ for test in arraySizes {
 
     print("Copy (Read + Write):")
     if let result = benchmark.runCopyBenchmark(arraySize: test.size, numRuns: 5) {
+        print("  Bandwidth: \(String(format: "%.2f", result.bandwidth)) GB/s")
+        print("  Time: \(String(format: "%.4f", result.time))s")
+    }
+
+    print("\nConcurrent Copy (4x operations):")
+    if let result = benchmark.runConcurrentCopyBenchmark(arraySize: test.size, numConcurrent: 4, numRuns: 5) {
         print("  Bandwidth: \(String(format: "%.2f", result.bandwidth)) GB/s")
         print("  Time: \(String(format: "%.4f", result.time))s")
     }
