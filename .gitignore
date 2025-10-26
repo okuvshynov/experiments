@@ -9,3 +9,4 @@ split_model/data/**
 **/*.swp
 tags
 pdfq/pdfq
+vega/build/**

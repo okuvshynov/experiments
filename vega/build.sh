@@ -2,17 +2,25 @@
 
 set -e
 
-echo "Building Metal FLOPS Benchmark..."
+echo "Building Metal FLOPS Benchmarks..."
 
-# Compile Metal shader
-echo "Compiling Metal shader..."
-xcrun -sdk macosx metal -c flops_benchmark.metal -o flops_benchmark.air
-xcrun -sdk macosx metallib flops_benchmark.air -o flops_benchmark.metallib
+# Create build directory
+mkdir -p build
 
-# Compile Swift program
-echo "Compiling Swift program..."
-swiftc -o flops_benchmark flops_benchmark.swift -framework Metal -framework Foundation
+# Compile Metal shaders
+echo "Compiling Metal shaders..."
+xcrun -sdk macosx metal -c flops_benchmark.metal -o build/flops_benchmark.air
+xcrun -sdk macosx metallib build/flops_benchmark.air -o build/flops_benchmark.metallib
+
+xcrun -sdk macosx metal -c flops_benchmark_heavy.metal -o build/flops_benchmark_heavy.air
+xcrun -sdk macosx metallib build/flops_benchmark_heavy.air -o build/flops_benchmark_heavy.metallib
+
+# Compile Swift programs
+echo "Compiling Swift programs..."
+swiftc -O -o build/flops_benchmark flops_benchmark.swift -framework Metal -framework Foundation -framework QuartzCore
+swiftc -O -o build/flops_benchmark_dual_final flops_benchmark_dual_final.swift -framework Metal -framework Foundation -framework QuartzCore
 
 echo "Build complete!"
 echo ""
-echo "Run with: ./flops_benchmark"
+echo "Run single GPU benchmark: build/flops_benchmark"
+echo "Run dual GPU benchmark:   build/flops_benchmark_dual_final"
