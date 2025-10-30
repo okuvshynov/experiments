@@ -10,3 +10,4 @@ split_model/data/**
 tags
 pdfq/pdfq
 vega/build/**
+udp/build/**
