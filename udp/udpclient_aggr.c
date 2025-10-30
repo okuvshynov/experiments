@@ -286,15 +286,6 @@ int main(int argc, char *argv[]) {
             stats_print("Overall", &overall_stats);
             stats_print("Link 0 ", &link_stats[0]);
             stats_print("Link 1 ", &link_stats[1]);
-
-            // Calculate bandwidth
-            double elapsed = (t2 - last_print_time) / 1000000.0;  // seconds
-            double total_bytes = 0;
-            for (int i = 0; i < NUM_LINKS; i++) {
-                total_bytes += links[i].bytes_sent + links[i].bytes_received;
-            }
-            double bandwidth_mbps = (total_bytes * 8) / (elapsed * 1000000.0);
-            printf("Bandwidth: %.2f Mbps (%.2f MB/s)\n", bandwidth_mbps, bandwidth_mbps / 8.0);
             printf("\n");
 
             // Reset stats and counters

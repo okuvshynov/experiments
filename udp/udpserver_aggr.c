@@ -37,8 +37,6 @@ typedef struct {
     int port;
     unsigned long packets_received;
     unsigned long packets_sent;
-    unsigned long bytes_received;
-    unsigned long bytes_sent;
 } link_t;
 
 void signal_handler(int sig) {
@@ -68,8 +66,6 @@ int init_server_link(link_t *link, int link_id) {
     link->port = SERVER_PORT_BASE + link_id;
     link->packets_received = 0;
     link->packets_sent = 0;
-    link->bytes_received = 0;
-    link->bytes_sent = 0;
 
     // Create UDP socket
     link->sockfd = socket(AF_INET, SOCK_DGRAM, 0);
@@ -169,27 +165,11 @@ int main(int argc, char *argv[]) {
                 if (total_packets > 0) {
                     printf("[*] Link stats:\n");
                     for (int i = 0; i < NUM_LINKS; i++) {
-                        printf("    Link %d (port %d): rx=%lu tx=%lu bytes_rx=%lu bytes_tx=%lu\n",
+                        printf("    Link %d (port %d): rx=%lu tx=%lu\n",
                                i, links[i].port,
-                               links[i].packets_received, links[i].packets_sent,
-                               links[i].bytes_received, links[i].bytes_sent);
+                               links[i].packets_received, links[i].packets_sent);
                     }
-
-                    // Calculate total bandwidth
-                    double elapsed = (current_time - last_print_time) / 1000000.0;
-                    unsigned long total_bytes = 0;
-                    for (int i = 0; i < NUM_LINKS; i++) {
-                        total_bytes += links[i].bytes_received + links[i].bytes_sent;
-                    }
-                    double bandwidth_mbps = (total_bytes * 8) / (elapsed * 1000000.0);
-                    printf("    Bandwidth: %.2f Mbps (%.2f MB/s)\n\n",
-                           bandwidth_mbps, bandwidth_mbps / 8.0);
-
-                    // Reset byte counters
-                    for (int i = 0; i < NUM_LINKS; i++) {
-                        links[i].bytes_received = 0;
-                        links[i].bytes_sent = 0;
-                    }
+                    printf("\n");
                 }
                 last_print_time = current_time;
             }
@@ -209,7 +189,6 @@ int main(int argc, char *argv[]) {
                 }
 
                 links[i].packets_received++;
-                links[i].bytes_received += recv_len;
 
                 // Echo back immediately
                 ssize_t sent = sendto(links[i].sockfd, buffer, recv_len, 0,
@@ -219,7 +198,6 @@ int main(int argc, char *argv[]) {
                     perror("sendto failed");
                 } else {
                     links[i].packets_sent++;
-                    links[i].bytes_sent += sent;
                 }
 
                 total_packets++;
