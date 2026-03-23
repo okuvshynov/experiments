@@ -11,3 +11,4 @@ tags
 pdfq/pdfq
 vega/build/**
 udp/build/**
+gguf-inspect/build/**
