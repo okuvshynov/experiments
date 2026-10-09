@@ -1,3 +1,0 @@
-Answer the following question as concisely as possible, in one sentence if you can:
-
-<{message}>
